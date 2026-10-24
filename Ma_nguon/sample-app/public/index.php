@@ -94,7 +94,217 @@ if (isset($_GET['bug'])) {
 
 // Router API
 // -------------------------------------------------------------
-// GET /api/profile
+// GET /: Trang thông tin và điều hướng cho ứng dụng mục tiêu
+if (($uri === '/' || $uri === '/index.php') && $method === 'GET') {
+    $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+    if (str_contains($acceptHeader, 'text/html')) {
+        header('Content-Type: text/html; charset=utf-8');
+        $idorStatusText = $bugIdor ? 'BẬT (Bản có lỗi IDOR)' : 'TẮT (Bản an toàn / Đã sửa)';
+        $idorBadgeClass = $bugIdor ? 'badge-warn' : 'badge-safe';
+        echo <<<HTML
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Target API - Cổng 8205</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --safe: #16a34a;
+      --warn: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    }
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+    h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+    .status-pill {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: #dcfce7;
+      color: var(--safe);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .info-card {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .info-card p {
+      font-size: 14px;
+      color: #1e40af;
+      margin-bottom: 12px;
+    }
+    .btn-main {
+      display: inline-block;
+      background: var(--primary);
+      color: #ffffff;
+      text-decoration: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.15s ease;
+    }
+    .btn-main:hover { background: var(--primary-hover); }
+    .param-box {
+      margin-bottom: 24px;
+      background: #f1f5f9;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .badge-warn { color: var(--warn); font-weight: 700; }
+    .badge-safe { color: var(--safe); font-weight: 700; }
+    h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th { background: #f8fafc; font-weight: 600; color: var(--muted); }
+    code {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-row">
+      <div>
+        <h1>Sample Target API - Cổng 8205</h1>
+        <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">Ứng dụng mẫu Quản lý ghi chú (Đối tượng kiểm thử của Đề tài 4)</div>
+      </div>
+      <div class="status-pill">ONLINE</div>
+    </div>
+
+    <div class="info-card">
+      <p><strong>Lưu ý:</strong> Cổng 8205 là máy chủ API Backend nhận lệnh thử nghiệm. Giao diện Web Dashboard chính của công cụ AccessTester chạy trên cổng <strong>8105</strong>.</p>
+      <a href="http://localhost:8105" class="btn-main">Mở Giao diện Web AccessTester (Cổng 8105)</a>
+    </div>
+
+    <div class="param-box">
+      <strong>Trạng thái lỗi IDOR hiện tại:</strong> <span class="{$idorBadgeClass}">{$idorStatusText}</span><br>
+      <span style="color: var(--muted); font-size: 12px;">Điều khiển bằng lệnh: <code>./lab.sh target:vuln</code> (bật lỗi) hoặc <code>./lab.sh target:safe</code> (tắt lỗi).</span>
+    </div>
+
+    <h2>Danh mục API Backend đang sẵn sàng</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Phương thức</th>
+          <th>Đường dẫn API</th>
+          <th>Xác thực</th>
+          <th>Chức năng</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>GET</code></td>
+          <td><code>/api/profile</code></td>
+          <td>Bearer Token</td>
+          <td>Xem thông tin hồ sơ cá nhân</td>
+        </tr>
+        <tr>
+          <td><code>GET</code></td>
+          <td><code>/api/notes</code></td>
+          <td>Bearer Token</td>
+          <td>Xem danh sách ghi chú</td>
+        </tr>
+        <tr>
+          <td><code>GET</code></td>
+          <td><code>/api/notes/{id}</code></td>
+          <td>Bearer Token</td>
+          <td>Xem chi tiết ghi chú (Trọng tâm IDOR)</td>
+        </tr>
+        <tr>
+          <td><code>PUT</code></td>
+          <td><code>/api/notes/{id}</code></td>
+          <td>Bearer Token</td>
+          <td>Cập nhật ghi chú (Chỉ chủ sở hữu)</td>
+        </tr>
+        <tr>
+          <td><code>GET</code></td>
+          <td><code>/api/announcements</code></td>
+          <td>Bearer Token</td>
+          <td>Xem thông báo hệ thống (Dữ liệu chung)</td>
+        </tr>
+        <tr>
+          <td><code>GET</code></td>
+          <td><code>/api/admin/users</code></td>
+          <td>Admin Token</td>
+          <td>Quản lý tài khoản người dùng</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+HTML;
+        exit;
+    }
+
+    echo json_encode([
+        'status' => 'ONLINE',
+        'service' => 'Sample Target API',
+        'port' => 8205,
+        'bug_idor' => $bugIdor,
+        'dashboard_ui' => 'http://localhost:8105',
+        'available_endpoints' => [
+            'GET /api/profile',
+            'GET /api/notes',
+            'GET /api/notes/{id}',
+            'PUT /api/notes/{id}',
+            'GET /api/announcements',
+            'GET /api/admin/users',
+        ]
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
+
 if ($uri === '/api/profile' && $method === 'GET') {
     if ($currentUser === null) {
         http_response_code(401);
