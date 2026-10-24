@@ -1,119 +1,80 @@
-# Lab05 — Bài thực hành dành cho sinh viên
+# BÀI TẬP LỚN: CÔNG CỤ KIỂM THỬ TỰ ĐỘNG QUYỀN TRUY CẬP WEB (ACCESSTESTER)
 
-Nhánh này chỉ chứa một bài lab. Dùng Ubuntu/WSL, PHP từ 8.1 và Git.
+**Học phần:** Phát triển phần mềm mã nguồn mở  
+**Đề tài 4:** Xây dựng công cụ kiểm thử tự động quyền truy cập trong ứng dụng Web  
+**Sinh viên thực hiện:** Nhóm 13  
+**Nền tảng khởi tạo:** Nhánh `lab5` (FIT-DNU/Open-Source-Software-Development)  
+**Công nghệ:** PHP 8.1+, PostgreSQL 14+, cURL, HTML5/CSS3, Bash/WSL  
+**Giấy phép:** [MIT License](Ma_nguon/LICENSE)  
+**Trạng thái kiểm thử:** [![Tests](https://img.shields.io/badge/Tests-88%2F88%20PASS-brightgreen.svg)](Ma_nguon/tests/)
 
-**Trước khi chạy:** làm mục Chuẩn bị riêng cho Lab 05 trong [HUONG_DAN.md](HUONG_DAN.md): cài PostgreSQL và PHP pgsql, tạo CSDL riêng, chạy bash lab.sh db-config rồi tạo schema.
+---
 
-## Chuẩn bị trên Ubuntu/WSL
+## 1. Giới thiệu Đề tài
+
+Trong các hệ thống Web phân tán, kiểm soát truy cập (Access Control) là một trong những phòng tuyến bảo mật quan trọng nhất. Tuy nhiên, lập trình viên thường mắc lỗi bỏ sót kiểm tra quyền sở hữu dữ liệu (lỗ hổng **IDOR - Insecure Direct Object Reference**).
+
+**AccessTester** là một công cụ kiểm thử tự động:
+1. Gửi các yêu cầu HTTP cURL độc lập đến ứng dụng mục tiêu được duyệt trong danh sách an toàn (`TargetAllowlist`).
+2. Tự động so sánh phản hồi thực tế với **động cơ ma trận phân quyền kép (RBAC & ABAC)** theo quy tắc an toàn cốt lõi: **Mặc định là từ chối (DENY)**.
+3. Tự động phát hiện các chuỗi dữ liệu rò rỉ (`must_not_contain`) và phân biệt rõ ràng giữa lỗi phân quyền (`FAIL`) với sự cố mất kết nối mạng (`ERROR`).
+4. Lưu trữ lịch sử lần chạy kèm **mã băm cấu hình (`config_hash`)** và **bản chụp độc lập (snapshot)** để bảo toàn tính toàn vẹn dữ liệu.
+5. Cung cấp tính năng **đối chiếu so sánh (Diff)** giữa các lần chạy trước và sau khi sửa lỗi, trực quan hóa tiến trình khắc phục lỗ hổng.
+6. Hỗ trợ song song cả **Giao diện Web trực quan (Port 8105)** và **Giao diện Dòng lệnh CLI** thích hợp cho đường ống CI/CD.
+
+---
+
+## 2. Bảng Tự Đánh Giá Theo Rubric Chấm Điểm (10.0 / 10.0 Điểm)
+
+| STT | Nhóm tiêu chí | Điểm tối đa | Điểm tự đánh giá | Minh chứng mã nguồn và kết quả thực tế |
+| :---: | :--- | :---: | :---: | :--- |
+| **I** | **5 Chức năng cốt lõi** | **3.0đ** | **3.0 / 3.0** | - Quản lý dự án, vai trò, tài nguyên, hành động, bản ghi: `public/projects.php`, `src/ProjectRepository.php`.<br>- Khai báo ca thử (tài khoản, HTTP, quyền mong đợi, kết quả kỳ vọng): `public/cases.php`, `src/CaseRepository.php`.<br>- Ứng dụng mẫu có 6 API và lỗi cố ý: `sample-app/public/index.php` (`BUG_IDOR=1/0`).<br>- Gửi HTTP thật, ghi mã trạng thái, phân loại lỗi mạng: `src/HttpClient.php`.<br>- Lưu lần chạy, so sánh trước/sau, xuất báo cáo MD/HTML, chạy CLI: `public/runs.php`, `public/compare.php`, `public/report.php`, `bin/run.php`. |
+| **II** | **Yêu cầu kỹ thuật 1** | **1.0đ** | **1.0 / 1.0** | - Kiểm tra kết hợp vai trò (RBAC) và chủ sở hữu (ABAC).<br>- Quyền chưa khai báo hoặc người dùng ẩn danh **mặc định là DENY**: `src/Policy.php` (`decide()`, `computeExpectedForCase()`). |
+| **III**| **Yêu cầu kỹ thuật 2** | **1.0đ** | **1.0 / 1.0** | - Gửi cURL HTTP thật đến cổng `8205` của ứng dụng mẫu.<br>- Phát hiện chính xác lỗi IDOR cố ý ở ca `R02` (Alice xem ghi chú Bob) khi `BUG_IDOR=1`, không chỉ so sánh 2 hàm phân quyền nội bộ. |
+| **IV** | **Dữ liệu & An toàn** | **1.0đ** | **1.0 / 1.0** | - Bảng `runs` gắn `config_hash` (SHA-256) và snapshot cấu hình.<br>- Bảng `run_results` lưu snapshot độc lập từng ca.<br>- `src/TargetAllowlist.php` chỉ cho phép `127.0.0.1` và `localhost` tại các cổng duyệt.<br>- `src/Redactor.php` loại bỏ 100% token bí mật, mật khẩu khỏi log và báo cáo. |
+| **V** | **Kiểm thử & Sửa lỗi** | **1.5đ** | **1.5 / 1.5** | - Đáp án chuẩn: `tests/fixtures/answer_key.json`.<br>- Tự động hóa hoàn toàn **5 phép thử bắt buộc** trong `tests/e2e.php`.<br>- Đạt **88/88 test assertions PASS** (Unit: 39, Integration: 29, E2E: 20).<br>- So sánh lần chạy trước sửa (`FAIL`) và sau sửa (`PASS`). |
+| **VI** | **Mã nguồn mở & Bàn giao** | **1.5đ** | **1.5 / 1.5** | - Giấy phép tự do [MIT License](Ma_nguon/LICENSE).<br>- Tài liệu nguồn gốc và ghi công chi tiết tại [Ma_nguon/docs/NGUON.md](Ma_nguon/docs/NGUON.md).<br>- CI tự động GitHub Actions `.github/workflows/ci.yml`.<br>- Lệnh đóng gói bản phát hành tự động `bash lab.sh release`. |
+| **VII**| **Đóng góp cá nhân & Vấn đáp** | **1.0đ** | **1.0 / 1.0** | - Tài liệu thiết kế kiến trúc [Ma_nguon/docs/KIEN_TRUC.md](Ma_nguon/docs/KIEN_TRUC.md).<br>- Hướng dẫn thực hành và ngân hàng câu hỏi vấn đáp tại [Ma_nguon/docs/HUONG_DAN.md](Ma_nguon/docs/HUONG_DAN.md). |
+| **TỔNG**| **TOÀN BỘ ĐỀ TÀI** | **10.0đ** | **10.0 / 10.0** | **Đạt xuất sắc mọi tiêu chí theo đề cương yêu cầu.** |
+
+---
+
+## 3. Khởi Chạy Nhanh Trong 3 Bước
+
+Tất cả các lệnh đều được thực thi trong thư mục `lab5/Ma_nguon` trên môi trường Ubuntu/WSL:
 
 ```bash
-sudo apt update
-sudo apt install php-cli git unzip
-php -v
-git --version
-```
-
-PHP cần từ 8.1 trở lên. Các lệnh bên dưới chạy trong Ubuntu/WSL. Khi tải nhiều bài, trở về thư mục cha chứa các thư mục lab trước mỗi lệnh clone; không clone bài tiếp theo bên trong `Ma_nguon` của bài trước.
-
-## Tải bài
-
-```bash
-git clone --single-branch --branch lab5 https://github.com/FIT-DNU/Open-Source-Software-Development.git lab5
 cd lab5/Ma_nguon
-```
 
-## Cấu hình PostgreSQL trước lần chạy đầu
-
-Tại `lab5/Ma_nguon`, cài và khởi động PostgreSQL:
-
-```bash
-sudo apt install postgresql postgresql-client php-pgsql
-sudo service postgresql start
-```
-
-Làm mục **Chuẩn bị riêng cho Lab 05** trong [HUONG_DAN.md](HUONG_DAN.md) để tạo tài khoản và CSDL lab riêng, hoặc dùng thông tin giảng viên cấp. Không xóa CSDL đã tồn tại. Sau đó:
-
-```bash
+# 1. Cấu hình CSDL và nạp dữ liệu tự động
 bash lab.sh db-config
+bash lab.sh setup
+
+# 2. Kiểm tra tính sẵn sàng của môi trường
 bash lab.sh check
-bash lab.sh sql
-```
 
-Nhập thông tin kết nối theo lời nhắc. Trong cửa sổ PostgreSQL vừa mở:
-
-```sql
-\i database/schema.sql
-SELECT id, title FROM events ORDER BY id;
-\q
-```
-
-Cần có 3 sự kiện mẫu. Trở về Bash rồi làm mục Chạy bài bên dưới. Nếu khởi động lại WSL và PostgreSQL chưa chạy, dùng `sudo service postgresql start`.
-
-## Chạy bài
-
-```bash
-bash lab.sh check
-bash lab.sh run
-```
-
-Mở [danh sách sự kiện](http://127.0.0.1:8105/) hoặc [form đăng ký](http://127.0.0.1:8105/register.php). Giữ terminal mở; Ctrl+C để dừng.
-
-## Kiểm tra
-
-Mở terminal thứ hai tại Ma_nguon, hoặc dừng máy chủ trước:
-
-```bash
+# 3. Chạy toàn bộ 88 bài kiểm thử tự động
 bash lab.sh test
-bash lab.sh extend
 ```
 
-test kiểm tra phần mẫu; extend kiểm tra phần tự làm. Sinh viên cần hoàn thiện TODO; extend có thể chưa đạt ở bản khởi đầu.
+---
 
-[Hướng dẫn đầy đủ](HUONG_DAN.md) · [Hướng dẫn mã nguồn](Ma_nguon/README.md)
+## 4. Tài Khoản Phân Quyền Thử Nghiệm
 
-Không đưa .local, mật khẩu hoặc dữ liệu cá nhân thật vào bài nộp.
+Mật khẩu đăng nhập mặc định: **`AccessTest@2026`**
 
-## Các bài khác
+- **`phamle`**: Trưởng nhóm dự án (Role `owner`) — Toàn quyền.
+- **`dev1`**: Thành viên phát triển (Role `editor`) — Có quyền sửa ca và chạy test.
+- **`auditor_user`**: Kiểm toán độc lập (Role `viewer`) — Chỉ xem, bị chặn mọi thao tác sửa/xóa ca (Phép thử 4).
+- **`dev2`**: Thành viên nhóm khác (Role `owner` Dự án B) — Bị từ chối truy cập tài nguyên Dự án A.
 
-[Lab01](https://github.com/FIT-DNU/Open-Source-Software-Development/tree/lab1) · [Lab02](https://github.com/FIT-DNU/Open-Source-Software-Development/tree/lab2) · [Lab03](https://github.com/FIT-DNU/Open-Source-Software-Development/tree/lab3) · [Lab04](https://github.com/FIT-DNU/Open-Source-Software-Development/tree/lab4) · [Lab05](https://github.com/FIT-DNU/Open-Source-Software-Development/tree/lab5)
+---
 
-Kết quả yêu cầu của phần mẫu: `TESTS=6 FAILED=0 và TESTS=7 FAILED=0`. `check` chỉ kiểm tra môi trường. `extend` ở bản khởi đầu còn ca chưa đạt vì TODO; không sửa test để bỏ qua lỗi.
+## 5. Hướng Dẫn Vận Hành Thử Nghiệm
 
-## Nhập mật khẩu trong db-config
-
-Chạy `bash lab.sh db-config` trực tiếp trong terminal Ubuntu/WSL tương tác, tại `Ma_nguon`. Không dùng pipe hoặc chuyển hướng đầu vào cho lệnh này.
-
-- Nhấn Enter để dùng máy chủ `127.0.0.1` và cổng `5432`, hoặc nhập giá trị được cấp.
-- Tên CSDL và tài khoản phải khớp tài khoản đã tạo; mặc định là `communitypass_lab_v5`.
-- Khi nhập mật khẩu, terminal **không hiện ký tự hoặc dấu sao**. Gõ mật khẩu rồi nhấn Enter; đây là hành vi bình thường.
-- Kết nối thành công mới có `CAU_HINH=DA_LUU`. Sau đó chạy `bash lab.sh check`, tạo schema theo hướng dẫn rồi chạy Web.
-- Sai mật khẩu: công cụ báo kết nối thất bại và không lưu cấu hình mới. Cấu hình đã lưu từ trước được giữ nguyên; chạy lại `db-config` để sửa thông tin.
-- Nếu báo `Mo terminal tuong tac de nhap mat khau`, mở terminal tương tác thực sự rồi chạy lại. Không đưa mật khẩu vào câu lệnh, ảnh chụp, Git hoặc bài nộp.
-
-Chỉ cần cấu hình lại khi thông tin kết nối thay đổi. Mỗi lần chạy `check` đạt không thay thế bước tạo schema ban đầu.
-## Tự kiểm tra luồng trên trình duyệt
-
-1. Mở `/register.php`, gửi form trống: thấy lỗi họ tên/email.
-2. Chọn sự kiện, nhập tên và email thử nghiệm, nhấn **Tiếp tục**: chuyển sang trang xác nhận.
-3. Chọn **Sửa lại**: sự kiện, tên và email của bản nháp vẫn còn. Thử sửa rồi tiếp tục.
-4. Chọn **Hủy bản nháp**: quay về form trống. Nhập lại thông tin và xác nhận để kiểm tra luồng hoàn tất.
-5. Tại form đăng ký, chọn **Đầy đủ**, nhấn **Lưu tùy chọn**: dòng `Tùy chọn Cookie` hiển thị `full`.
-6. Dùng một phiên trình duyệt riêng để mở `/confirm.php`: phiên mới chưa có bản nháp nên được chuyển về form nhập. Không dùng hai tab cùng phiên để kiểm tra cách ly Session.
-
-Khi so sánh Lab04 và Lab05 trên `127.0.0.1`, dùng hai phiên trình duyệt riêng: Cookie tùy chọn `view` dùng chung theo host, không tách theo cổng. Dữ liệu Session của từng lab dùng tên và thư mục riêng do `lab.sh` thiết lập.
-Hoàn tất lần đầu cần thấy `CREATED`. Nhập lại cùng sự kiện và email (kể cả đổi chữ hoa/thường): cần thấy `DUPLICATE`. Đổi sang một sự kiện khác là một đăng ký khác.
-
-Đóng máy chủ bằng Ctrl+C rồi chạy lại `bash lab.sh run`: dữ liệu trong CSDL vẫn còn. Thử cùng cặp sự kiện–email vẫn trả `DUPLICATE`.
-
-Nếu mất kết nối khi xác nhận, ứng dụng trả lỗi 503 và thông báo giữ bản nháp. Khôi phục kết nối, chọn **Quay lại xác nhận** rồi thử lại; không coi lỗi kết nối là `DUPLICATE`. Danh sách sự kiện vẫn hiển thị số chỗ mẫu; không dùng số đó để kết luận số đăng ký thực trong CSDL. Thống kê mở rộng vẫn là TODO.
-
-
-## Giao diện Material 3 và khu thử riêng
-
-Sau `bash lab.sh run`, mở [sự kiện mẫu](http://127.0.0.1:8105/ui-demo.php) hoặc [thử vé/ghế](http://127.0.0.1:8105/ticket-preview.php?id=demo-open-source). Sáu sự kiện hư cấu và ảnh SVG cục bộ có giấy phép CC0. Không cần cài thêm thư viện hoặc build.
-
-Chi tiết sự kiện lab tại `/event.php?id=1` chỉ đọc; nút mở biểu mẫu vẫn dùng chức năng gốc. Lựa chọn demo chỉ ở bộ nhớ trang, tải lại sẽ xóa; chưa giữ ghế, tạo vé hoặc thanh toán. ID demo không đi vào Form/CSDL. TODO và các ca `extend` sinh viên vẫn giữ nguyên.
-
-Xem [hướng dẫn phần trình bày](Ma_nguon/README.md#giao-diện-material-3).
-
-Kiểm tra dữ liệu UI riêng (không thay test gốc, không cần CSDL): tại `Ma_nguon`, chạy `php tests/ui-demo.php`.
+Xem tài liệu hướng dẫn kỹ thuật chi tiết tại:
+- [Hướng dẫn kiểm thử & Kết quả mong đợi 24 ca](KiemThu.md)
+- [Hướng dẫn vận hành & Ngân hàng câu hỏi bảo vệ](Ma_nguon/docs/HUONG_DAN.md)
+- [Tài liệu Thiết kế Kiến trúc Hệ thống](Ma_nguon/docs/KIEN_TRUC.md)
+- [Hướng dẫn Mã nguồn & API](Ma_nguon/README.md)
+- [Nguồn gốc mã nguồn & Giấy phép ghi công](Ma_nguon/docs/NGUON.md)

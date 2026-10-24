@@ -1,0 +1,66 @@
+name: AccessTester CI (Lab05)
+
+on:
+  push:
+    branches: [ main, master, lab5 ]
+  pull_request:
+    branches: [ main, master, lab5 ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: accesstest_lab
+          POSTGRES_USER: accesstest_lab
+          POSTGRES_PASSWORD: testpassword123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pgsql, pdo_pgsql, curl
+
+      - name: Setup Database Configuration & Environment
+        run: |
+          mkdir -p .local
+          cat << 'EOF' > .local/db.json
+          {
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "5432",
+            "PGDATABASE": "accesstest_lab",
+            "PGUSER": "accesstest_lab",
+            "PGPASSWORD": "testpassword123"
+          }
+          EOF
+          chmod 600 .local/db.json
+          cp env.local.sh.example env.local.sh
+
+      - name: Initialize Database Schema and Seed
+        env:
+          PGPASSWORD: testpassword123
+        run: |
+          psql -h 127.0.0.1 -U accesstest_lab -d accesstest_lab -f database/schema.sql
+          psql -h 127.0.0.1 -U accesstest_lab -d accesstest_lab -f database/seed.sql
+
+      - name: Run Environment Check
+        run: bash lab.sh check
+
+      - name: Run Full Automated Test Suite (Unit, Integration, E2E)
+        run: |
+          source env.local.sh
+          bash lab.sh test

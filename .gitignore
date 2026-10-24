@@ -4,3 +4,5 @@ env.local.sh
 .DS_Store
 runtime/
 evidence/private/
+~$*
+.local/

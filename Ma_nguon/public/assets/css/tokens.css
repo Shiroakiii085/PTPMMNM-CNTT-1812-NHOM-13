@@ -1,30 +1,74 @@
-/* Material 3 role tokens. No image changes the application palette. */
+/* AccessTester Light Security Design Tokens - Clean, High Contrast, No Icon */
 :root {
- --primary: #245d78;
- --on-primary: #ffffff;
- --primary-container: #cce6f5;
- --on-primary-container: #092f43;
- --secondary-container: #e0e8ed;
- --on-secondary-container: #253e4b;
- --surface: #f8f9fc;
- --on-surface: #191c20;
- --surface-container-low: #f0f3f7;
- --surface-container-high: #e5eaf0;
- --on-surface-variant: #444b53;
- --outline: #737b84;
- --outline-variant: #c3cbd3;
- --error: #ba1a1a;
- --on-error: #ffffff;
- --error-container: #ffdad6;
- --on-error-container: #410002;
- --vip-container: #f4e4c2;
- --on-vip-container: #503d15;
- --warning-container: #ffedc1;
- --on-warning-container: #553d00;
- --success-container: #d7efdf;
- --on-success-container: #173c29;
- --headline: 1.875rem;
- --title: 1.25rem;
- --body: 1rem;
- --label: .875rem;
+  /* Color Palette - Authority, Trust & Security */
+  --color-brand-primary: #1e3a8a;       /* Deep Navy */
+  --color-brand-accent: #2563eb;        /* Security Blue */
+  --color-brand-light: #eff6ff;         /* Light Blue Tint */
+  --color-brand-border: #bfdbfe;
+
+  /* Surfaces & Backgrounds */
+  --color-bg-app: #f8fafc;              /* Slate-50 Crisp Canvas */
+  --color-bg-card: #ffffff;             /* Pure White */
+  --color-bg-subtle: #f1f5f9;           /* Slate-100 */
+  --color-bg-muted: #e2e8f0;            /* Slate-200 */
+
+  /* Text & Typography */
+  --color-text-main: #0f172a;           /* Slate-900 High Contrast */
+  --color-text-body: #334155;           /* Slate-700 */
+  --color-text-muted: #64748b;          /* Slate-500 */
+  --color-text-inverse: #ffffff;
+
+  /* Borders & Dividers */
+  --color-border-light: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-border-focus: #3b82f6;
+
+  /* Security Status Tokens */
+  --color-pass-bg: #ecfdf5;
+  --color-pass-text: #065f46;
+  --color-pass-border: #a7f3d0;
+  --color-pass-accent: #10b981;
+
+  --color-fail-bg: #fef2f2;
+  --color-fail-text: #991b1b;
+  --color-fail-border: #fecaca;
+  --color-fail-accent: #ef4444;
+
+  --color-warn-bg: #fffbeb;
+  --color-warn-text: #92400e;
+  --color-warn-border: #fde68a;
+  --color-warn-accent: #f59e0b;
+
+  --color-info-bg: #f0f9ff;
+  --color-info-text: #075985;
+  --color-info-border: #bae6fd;
+  --color-info-accent: #0284c7;
+
+  /* HTTP Method Specific Colors */
+  --color-method-get: #0284c7;
+  --color-method-get-bg: #e0f2fe;
+  --color-method-post: #059669;
+  --color-method-post-bg: #dcfce7;
+  --color-method-put: #d97706;
+  --color-method-put-bg: #fef3c7;
+  --color-method-delete: #dc2626;
+  --color-method-delete-bg: #fee2e2;
+
+  /* Elevation Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-highlight: 0 0 0 2px rgba(37, 99, 235, 0.2);
+
+  /* Animation Timings */
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
 }

@@ -1,0 +1,48 @@
+{
+  "project_name": "Hệ thống quản lý ghi chú (Sample App)",
+  "total_cases": 24,
+  "roles": ["admin", "member", "auditor"],
+  "endpoints": [
+    "GET /api/profile",
+    "GET /api/notes",
+    "GET /api/notes/{id}",
+    "PUT /api/notes/{id}",
+    "GET /api/announcements",
+    "GET /api/admin/users"
+  ],
+  "expected_outcomes": {
+    "before_fix_bug_idor_1": {
+      "summary": { "PASS": 23, "FAIL": 1, "ERROR": 0 },
+      "failing_case": "R02",
+      "reason": "Phát hiện lỗ hổng IDOR: Alice đọc trộm ghi chú số 3 của Bob chứa 'Bi mat cua Bob 3'",
+      "cases": {
+        "P01": "PASS", "P02": "PASS", "P03": "PASS", "P04": "PASS",
+        "N01": "PASS", "N02": "PASS", "N03": "PASS", "N04": "PASS",
+        "R01": "PASS", "R02": "FAIL", "R03": "PASS", "R04": "PASS",
+        "U01": "PASS", "U02": "PASS", "U03": "PASS", "U04": "PASS",
+        "A01": "PASS", "A02": "PASS", "A03": "PASS", "A04": "PASS",
+        "M01": "PASS", "M02": "PASS", "M03": "PASS", "M04": "PASS"
+      }
+    },
+    "after_fix_bug_idor_0": {
+      "summary": { "PASS": 24, "FAIL": 0, "ERROR": 0 },
+      "fixed_case": "R02",
+      "transition": "FAIL -> PASS",
+      "cases": {
+        "P01": "PASS", "P02": "PASS", "P03": "PASS", "P04": "PASS",
+        "N01": "PASS", "N02": "PASS", "N03": "PASS", "N04": "PASS",
+        "R01": "PASS", "R02": "PASS", "R03": "PASS", "R04": "PASS",
+        "U01": "PASS", "U02": "PASS", "U03": "PASS", "U04": "PASS",
+        "A01": "PASS", "A02": "PASS", "A03": "PASS", "A04": "PASS",
+        "M01": "PASS", "M02": "PASS", "M03": "PASS", "M04": "PASS"
+      }
+    }
+  },
+  "mandatory_tests": {
+    "test_1": "Phát hiện API mẫu cố ý cho người dùng đọc dữ liệu riêng của người khác (Ca R02 fail do leak check).",
+    "test_2": "Sau khi sửa API (BUG_IDOR=0), cùng ca truy cập trái quyền R02 cho kết quả PASS theo đúng quy định.",
+    "test_3": "Không kết nối được hoặc timeout phải ghi nhận là ERROR, không bao giờ coi là PASS.",
+    "test_4": "Tài khoản viewer chỉ được xem báo cáo, không sửa được bộ ca của nhóm khác (HTTP 403 / Exception).",
+    "test_5": "Báo cáo và nhật ký tuyệt đối không chứa mật khẩu hoặc Bearer token nguyên văn."
+  }
+}

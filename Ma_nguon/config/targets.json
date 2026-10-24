@@ -1,0 +1,6 @@
+{
+  "_comment": "Danh sách đích được phép gọi. Chỉ dịch vụ cục bộ do nhóm quản lý. 8205 = ứng dụng mẫu demo; 8295-8298 dành riêng cho kiểm thử tự động (tests/e2e.php). Không thêm máy chủ bên ngoài.",
+  "allowed_schemes": ["http"],
+  "allowed_hosts": ["127.0.0.1", "localhost", "::1"],
+  "allowed_ports": [8205, 8295, 8296, 8297, 8298]
+}
