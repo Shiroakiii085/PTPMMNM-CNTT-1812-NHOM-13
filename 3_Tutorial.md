@@ -139,14 +139,14 @@ if (!$canRead) {
 
 ### Biểu hiện trực quan trên Trình duyệt:
 - **Khi BẬT LỖI (`BUG_IDOR=1`):**
-  - Bệnh nhân An bấm nút `[Cố tình mở Bệnh án số 03 (của Bình)]`.
-  - Màn hình hiển thị đầy đủ thông tin bệnh lý ung bướu và phác đồ hóa trị của Bình.
-  - Phía trên hồ sơ xuất hiện **Hộp Cảnh Báo Bảo Mật Đỏ Rực (Pulsing Red Leak Alert Box)**:
+  - Bệnh nhân An nhập số `3` vào Hộp **"TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID"** và bấm **`Tra Cứu Bệnh Án`** (hoặc truy cập `?view=record&id=3`).
+  - Màn hình hiển thị đầy đủ thông tin bệnh lý ung bướu và phác đồ hóa trị của Bình kèm **Hộp Cảnh Báo Bảo Mật Đỏ Rực (Pulsing Red Leak Alert Box)**:
     `[CẢNH BÁO BẢO MẬT] PHÁT HIỆN LỖ HỔNG IDOR / BOLA (CWE-639) ĐANG BỊ KHAI THÁC!`
     `Tài khoản hiện tại: bn_an (Bệnh nhân Nguyễn Văn An) | Chủ sở hữu thực sự: bn_binh (Bệnh nhân Trần Thị Bình)`
     `Máy chủ đã bỏ qua kiểm tra quan hệ sở hữu đối tượng và làm rò rỉ dữ liệu y tế nhạy cảm!`
+  - **Can thiệp sửa đổi trái phép (IDOR on Update):** An có thể bấm **`Chỉnh Sửa Bệnh Án`** (hoặc `?view=edit_record&id=3`), thay đổi phác đồ chẩn đoán và bấm lưu. Hệ thống cảnh báo đỏ rực: `[CẢNH BÁO VI PHẠM BẢO MẬT] KHAI THÁC LỖ HỔNG IDOR / BOLA THÀNH CÔNG!`.
 - **Khi TẮT LỖI (`BUG_IDOR=0`):**
-  - Bệnh nhân An bấm xem bệnh án số 03 của Bình.
+  - Bệnh nhân An nhập ID 3 và bấm tra cứu hoặc chỉnh sửa.
   - Hệ thống lập tức từ chối và chuyển hướng sang **Trang Trả Về Lỗi HTTP 403 Forbidden chuyên biệt**.
 
 ---
@@ -156,31 +156,49 @@ if (!$canRead) {
 Khi vi phạm phân quyền, hệ thống trả về mã trạng thái **HTTP 403 Forbidden** và hiển thị giao diện báo lỗi an ninh mạng chuyên nghiệp:
 - **Huy hiệu:** `MÃ LỖI BẢO MẬT: HTTP 403`
 - **Tiêu đề:** `TRUY CẬP BỊ TỪ CHỐI (ACCESS DENIED)`
-- **Thông điệp hệ thống:** *"Truy cập bị từ chối: Bệnh nhân Nguyễn Văn An (bn_an) không có quyền xem bệnh án số 03 của Bệnh nhân Trần Thị Bình (bn_binh)!"*
-- **Nguyên tắc bảo vệ:** Giải thích chi tiết cơ chế ABAC (Attribute-Based Access Control) chỉ cho phép bệnh nhân sở hữu hoặc bác sĩ điều trị tra cứu.
+- **Thông điệp hệ thống:** *"Truy cập bị từ chối: Bệnh nhân Nguyễn Văn An (bn_an) không có quyền xem hoặc sửa bệnh án số 03 của Bệnh nhân Trần Thị Bình (bn_binh)!"*
+- **Nguyên tắc bảo vệ:** Giải thích chi tiết cơ chế ABAC (Attribute-Based Access Control) chỉ cho phép bệnh nhân sở hữu hoặc bác sĩ điều trị thao tác.
 - **Các nút điều hướng nhanh:**
   - `[Quay lại Bệnh án của tôi]` -> Về danh sách hồ sơ cá nhân.
   - `[Đổi sang Bác sĩ Minh để xem]` -> Bác sĩ có thẩm quyền xem hợp lệ.
-  - `[Mở Terminal để bật lại lỗi]` -> Trải nghiệm lại chế độ có lỗi.
+  - `[Bấm nút tròn Terminal ở góc dưới phải để bật lại lỗi]` -> Trải nghiệm lại chế độ có lỗi.
 
 ---
 
-## 7. MÀN HÌNH TERMINAL TƯƠNG TÁC TẠO LỖI & VÁ LỖI DÒNG LỆNH
+## 7. NÚT TRÒN NỔI TERMINAL (FAB) & ĐIỀU KHIỂN DÒNG LỆNH
 
-Tại đường dẫn `http://127.0.0.1:8205/?view=terminal` tích hợp một màn hình Console dòng lệnh tương tác trực tiếp:
+Giao diện tích hợp một **Nút Tròn Nổi FAB (Floating Action Button)** cố định ở góc dưới bên phải màn hình:
+- **Biểu tượng:** Nút tròn màu tối với ký hiệu dòng lệnh `>_` xanh neon và chấm đèn trạng thái (Đỏ khi lỗi IDOR đang bật, Xanh khi an toàn).
+- **Cửa sổ Drawer Terminal Popup:** Bấm vào nút tròn -> Cửa sổ terminal trượt lên mượt mà ngay tại chỗ, không làm gián đoạn hay reload trang.
 - **Nút bấm thao tác nhanh:**
   - `[Lệnh: Tạo Lỗi (set BUG_IDOR=1)]`: Kích hoạt lỗ hổng IDOR.
   - `[Lệnh: Vá Lỗi (set BUG_IDOR=0)]`: Khắc phục lỗi bảo mật.
   - `[Lệnh: status]`: Kiểm tra trạng thái cờ bảo mật và phiên đăng nhập.
   - `[Lệnh: curl /api/notes/3]`: Chạy giả lập request cURL và in ra mã HTTP trả về kèm dữ liệu thô ngay trên terminal.
 - **Hỗ trợ gõ lệnh tùy ý bằng phím Enter:**
-  - Gõ `help` để xem hướng dẫn lệnh.
-  - Gõ `switch bs_minh` để đổi tài khoản qua terminal.
+  - Gõ `help` để xem danh sách lệnh hỗ trợ.
+  - Gõ `switch bs_minh` hoặc `switch admin_bv` để chuyển đổi tài khoản dòng lệnh.
   - Gõ `clear` để dọn dẹp màn hình console.
 
 ---
 
-## 8. HƯỚNG DẪN TỪNG BƯỚC VẬN HÀNH & KHAI THÁC THỬ NGHIỆM
+## 8. MODULE QUẢN TRỊ NGƯỜI DÙNG TOÀN DIỆN CHO ADMIN (CRUD + SEARCH)
+
+Dành riêng cho Quản trị viên (`admin_bv`) tại đường dẫn `http://localhost:8205/?view=users`:
+1. **Tìm kiếm tức thì (Live Search Filter):**
+   - Ô nhập tìm kiếm lọc trực tiếp danh sách theo tên tài khoản, họ tên đầy đủ, vai trò hoặc khoa phòng làm việc theo thời gian thực (không cần reload trang).
+2. **Thêm người dùng mới (Create):**
+   - Modal pop-up form điền tên đăng nhập, mật khẩu, họ tên, vai trò (`doctor`, `member`, `admin`, `auditor`) và khoa phòng. Lưu ngay vào hệ thống.
+3. **Chỉnh sửa người dùng (Update):**
+   - Modal chỉnh sửa thông tin họ tên, chức vụ, vai trò và chuyên khoa của từng cán bộ/bệnh nhân.
+4. **Xóa người dùng (Delete):**
+   - Nút xóa với hộp thoại xác nhận an toàn. Tích hợp cơ chế bảo vệ: Tuyệt đối không cho phép Quản trị viên tự xóa chính tài khoản mình đang đăng nhập.
+5. **Kiểm soát phân quyền nghiêm ngặt:**
+   - Chỉ tài khoản có vai trò `admin` mới được truy cập. Bệnh nhân hoặc Bác sĩ nếu cố tình nhập URL `/?view=users` sẽ bị chặn lập tức bằng trang lỗi HTTP 403 Forbidden!
+
+---
+
+## 9. HƯỚNG DẪN TỪNG BƯỚC VẬN HÀNH & KHAI THÁC THỬ NGHIỆM
 
 ### Bước 1: Khởi động Ứng dụng Bệnh án MediRecord trên cổng 8205
 ```bash
@@ -204,12 +222,13 @@ Mở trình duyệt truy cập: **`http://localhost:8205`** hoặc **`http://127
 ---
 
 ### Bước 3: Thử nghiệm Lỗ hổng IDOR (Phép thử 1)
-1. Mở menu **`Màn Hình Terminal`** (`/?view=terminal`).
-2. Nhấn nút **`Lệnh: Tạo Lỗi (set BUG_IDOR=1)`** (Banner trên cùng chuyển sang màu đỏ: *LỖI IDOR: ĐANG BẬT*).
+1. Bấm vào **Nút tròn nổi FAB** ở góc dưới bên phải màn hình.
+2. Nhấn nút **`Lệnh: Tạo Lỗi (set BUG_IDOR=1)`** (Đèn FAB chuyển đỏ, banner trên cùng chuyển đỏ: *LỖI IDOR: ĐANG BẬT*).
 3. Nhấn vào tài khoản **`Bệnh nhân An (Patient)`**.
-4. Tại hộp thử nghiệm, bấm nút **`Cố tình mở Bệnh án số 03 (của Bình)`**.
+4. Tại ô **"TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID"**, gõ số `3` và bấm **`Tra Cứu Bệnh Án`**.
 5. **Kết quả quan sát được:** Bệnh nhân An đọc được toàn bộ bệnh án số 03 của Bình kèm Hộp cảnh báo IDOR nhấp nháy đỏ rực.
-6. Chạy công cụ kiểm thử tự động AccessTester qua CLI:
+6. Thử bấm **`Chỉnh Sửa Bệnh Án`** -> An được phép sửa chẩn đoán bệnh án số 03 của Bình và lưu thành công (IDOR on Update).
+7. Chạy công cụ kiểm thử tự động AccessTester qua CLI:
    ```bash
    php bin/run.php --project=1 --target=http://127.0.0.1:8205
    ```
@@ -218,8 +237,8 @@ Mở trình duyệt truy cập: **`http://localhost:8205`** hoặc **`http://127
 ---
 
 ### Bước 4: Vá Lỗi và Xác Thực An Toàn (Phép thử 2)
-1. Mở **`Màn Hình Terminal`**, nhấn nút **`Lệnh: Vá Lỗi (set BUG_IDOR=0)`**.
-2. Đang là **`Bệnh nhân An`**, bấm lại nút **`Cố tình mở Bệnh án số 03 (của Bình)`**.
+1. Bấm vào **Nút tròn nổi FAB**, nhấn nút **`Lệnh: Vá Lỗi (set BUG_IDOR=0)`**.
+2. Đang là **`Bệnh nhân An`**, tiếp tục gõ số `3` và bấm **`Tra Cứu Bệnh Án`** hoặc **`Chỉnh Sửa Bệnh Án`**.
 3. **Kết quả quan sát được:** Bệnh nhân An bị chặn hoàn toàn, hệ thống render ra **Trang Lỗi HTTP 403 Forbidden chuyên biệt**.
 4. Chạy lại công cụ kiểm thử tự động:
    ```bash

@@ -162,10 +162,11 @@ def build_demo_document():
         ("Ứng dụng Mục tiêu (Target App)\nMediRecord EMR", "http://localhost:8205\n(127.0.0.1:8205)", 
          "- Hệ thống quản lý bệnh án điện tử y tế thực tế.\n"
          "- Bác sĩ Lê Hoàng Minh gửi bệnh án cho Bệnh nhân An, Bệnh nhân Bình.\n"
-         "- Thanh chuyển đổi tài khoản 1-Click Fast Switch.\n"
-         "- Trực quan hóa lỗ hổng IDOR rò rỉ dữ liệu ung bướu tuyệt mật.\n"
-         "- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt.\n"
-         "- Màn hình Terminal Console tương tác dòng lệnh trực tiếp."),
+         "- Thanh chuyển đổi tài khoản 1-Click Fast Switch Bar.\n"
+         "- Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do (Test IDOR trực tiếp cả Xem và Sửa).\n"
+         "- Nút tròn nổi FAB Terminal ở góc dưới bên phải màn hình điều khiển trạng thái lỗi.\n"
+         "- Module Quản Trị Người Dùng Toàn Diện (Thêm, Sửa, Xóa, Tìm kiếm) cho Quản trị viên.\n"
+         "- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt."),
         ("Công cụ Kiểm thử Tự động\nAccessTester Engine & Web UI", "http://localhost:8105\n(127.0.0.1:8105)", 
          "- Quản trị ma trận phân quyền RBAC & ABAC (Ownership scope).\n"
          "- Khai báo và thực thi tự động 24 ca kiểm thử HTTP chuẩn.\n"
@@ -267,25 +268,40 @@ def build_demo_document():
     )
 
     demo_steps_8205 = [
-        ("Bước 2.1: Giới thiệu giao diện & Thanh chuyển đổi tài khoản 1-Click",
-         "Chỉ vào thanh đen Fast Switch Bar trên cùng: Giới thiệu hệ thống có 5 tài khoản thật: Bác sĩ Minh, Bệnh nhân An, "
-         "Bệnh nhân Bình, Quản trị viên và Kỹ sư Kiểm thử. Nhấn thử vào từng nút để chứng minh hệ thống chuyển đổi góc nhìn tức thì mà không cần gõ mật khẩu thủ công."),
+        ("Bước 2.1: Giới thiệu giao diện, Fast Switch Bar và Nút tròn nổi FAB Terminal",
+         "Chỉ vào thanh đen Fast Switch Bar trên cùng: Giới thiệu hệ thống có 5 tài khoản thật (Bác sĩ Minh, Bệnh nhân An, "
+         "Bệnh nhân Bình, Quản trị viên và Kỹ sư Kiểm thử). Nhấn thử vào từng nút để chuyển đổi tức thì góc nhìn người dùng.\n"
+         "Đặc biệt, chỉ vào Nút tròn nổi FAB ở góc dưới bên phải màn hình (Floating Action Button với biểu tượng '>_'). "
+         "Bấm vào nút tròn: Một cửa sổ Terminal trượt lên ngay tại chỗ giúp điều khiển trạng thái cờ lỗi và chạy lệnh trực tiếp."),
         
         ("Bước 2.2: Bác sĩ Lê Hoàng Minh lập & gửi bệnh án mới cho Bệnh nhân",
-         "Bấm chọn 'Bác sĩ Minh (Doctor)' -> Nhấn nút 'Bác Sĩ Gửi Bệnh Án' trên menu. Điền tiêu đề, chọn bệnh nhân nhận là Bệnh nhân An, "
+         "Bấm chọn 'Bác sĩ Minh (Doctor)' -> Nhấn nút 'Bác Sĩ Gửi Bệnh Án' trên menu. Chọn người nhận là Bệnh nhân An, "
          "nhập chẩn đoán và bấm 'Lập & Gửi Bệnh Án'. Hồ sơ mới được ghi nhận ngay lập tức vào cơ sở dữ liệu."),
         
-        ("Bước 2.3: Trực quan hóa Lỗ hổng IDOR (Khai thác khi bật lỗi BUG_IDOR=1)",
-         "1. Bấm vào menu 'Màn Hình Terminal' (hoặc dùng nút đỏ góc phải), nhấn 'Lệnh: Tạo Lỗi (set BUG_IDOR=1)'. Màn hình báo trạng thái đỏ rực: 'LỖI IDOR: ĐANG BẬT'.\n"
-         "2. Nhấn chuyển sang 'Bệnh nhân An (Patient)' -> Tại bảng kịch bản thử nghiệm, bấm nút: 'Cố tình mở Bệnh án số 03 (của Bình)'.\n"
-         "3. KẾT QUẢ SHOW GIẢNG VIÊN: Màn hình hiển thị toàn bộ hồ sơ bệnh án ung bướu tuyệt mật của Bình kèm Hộp Cảnh Báo Bảo Mật Đỏ Rực (Pulsing Red Leak Alert Box) "
-         "thông báo: Bệnh nhân An đang xem trái phép dữ liệu của Bệnh nhân Bình!"),
+        ("Bước 2.3: Bật lỗi IDOR bằng Nút tròn nổi FAB Terminal",
+         "Bấm vào Nút tròn nổi FAB ở góc dưới bên phải màn hình -> Cửa sổ Drawer Terminal mở ra -> Bấm nút 'Lệnh: Tạo Lỗi (set BUG_IDOR=1)'. "
+         "Hệ thống cập nhật ngay lập tức: Đèn tín hiệu trên nút tròn chuyển sang màu đỏ và thanh thông báo báo đỏ rực: 'LỖI IDOR: ĐANG BẬT'."),
 
-        ("Bước 2.4: Trực quan hóa Khắc phục Lỗ hổng & Trang Lỗi HTTP 403 Forbidden",
-         "1. Mở lại Terminal Console, nhấn nút 'Lệnh: Vá Lỗi (set BUG_IDOR=0)'. Trạng thái chuyển xanh an toàn.\n"
-         "2. Vẫn trong vai Bệnh nhân An, bấm lại nút mở Bệnh án số 03 của Bình.\n"
-         "3. KẾT QUẢ SHOW GIẢNG VIÊN: Hệ thống lập tức chặn đứng hành vi truy cập chéo và chuyển sang Trang Trả Về Lỗi HTTP 403 Forbidden chuyên biệt, "
-         "giải thích cơ chế ABAC từ chối quyền truy cập do không phải chủ sở hữu.")
+        ("Bước 2.4: Trực quan hóa Lỗ hổng IDOR qua Hộp Tra Cứu & Can Thiệp Theo Mã ID Tự Do",
+         "1. Chuyển sang góc nhìn 'Bệnh nhân An (Patient)' (An chỉ sở hữu hồ sơ số 01 và 02).\n"
+         "2. Tại Hộp Tra Cứu 'TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID', sinh viên nhập tự do số '3' (Mã bệnh án ung bướu của Bình) và bấm 'Tra Cứu Bệnh Án'.\n"
+         "3. KẾT QUẢ XEM TRÁI PHÉP: Màn hình hiển thị toàn bộ hồ sơ bệnh án ung bướu tuyệt mật của Bình kèm Hộp Cảnh Báo Bảo Mật Đỏ Rực "
+         "thông báo: Bệnh nhân An đang xem trái phép dữ liệu của Bệnh nhân Bình!\n"
+         "4. KẾT QUẢ SỬA TRÁI PHÉP (IDOR on Update): An tiếp tục bấm nút 'Chỉnh Sửa Bệnh Án' (hoặc truy cập ?view=edit_record&id=3) -> "
+         "Mở form sửa đổi chẩn đoán của Bình -> Sửa thành công và hệ thống cảnh báo đỏ rực: '[CẢNH BÁO VI PHẠM BẢO MẬT] KHAI THÁC LỖ HỔNG IDOR / BOLA THÀNH CÔNG!'."),
+
+        ("Bước 2.5: Trực quan hóa Khắc phục Lỗ hổng & Trang Lỗi HTTP 403 Forbidden",
+         "1. Bấm vào Nút tròn nổi FAB góc dưới bên phải, nhấn nút 'Lệnh: Vá Lỗi (set BUG_IDOR=0)'. Đèn trạng thái chuyển xanh an toàn.\n"
+         "2. Vẫn trong vai Bệnh nhân An, tiếp tục gõ ID '3' và bấm 'Tra Cứu' hoặc 'Chỉnh Sửa'.\n"
+         "3. KẾT QUẢ SHOW GIẢNG VIÊN: Hệ thống lập tức chặn đứng và chuyển sang Trang Trả Về Lỗi HTTP 403 Forbidden chuyên biệt, "
+         "giải thích cơ chế ABAC từ chối quyền truy cập do không phải chủ sở hữu."),
+
+        ("Bước 2.6: Phân quyền Quản Trị Viên (admin_bv) & Module Quản Trị Người Dùng Toàn Diện",
+         "1. Chuyển sang tài khoản 'Quản trị viên (Admin)' -> Bấm vào menu 'Quản Trị Người Dùng' (/?view=users).\n"
+         "2. Tìm kiếm tức thì: Gõ từ khóa vào ô tìm kiếm (ví dụ 'Minh' hoặc 'Bác sĩ') -> Danh sách lọc kết quả ngay lập tức mà không cần reload trang.\n"
+         "3. Thêm người dùng: Bấm 'Thêm Người Dùng Mới', điền tài khoản, vai trò, khoa phòng -> Lưu thành công vào hệ thống.\n"
+         "4. Sửa & Xóa người dùng: Thử bấm nút Sửa thông tin và nút Xóa tài khoản (có hộp thoại xác nhận an toàn, có cơ chế cấm tự xóa chính mình).\n"
+         "5. Kiểm soát truy cập: Nếu chuyển sang Bệnh nhân An mà cố tình gõ URL ?view=users, hệ thống sẽ trả về ngay trang lỗi HTTP 403 Forbidden!")
     ]
 
     for s_title, s_desc in demo_steps_8205:
@@ -297,10 +313,14 @@ def build_demo_document():
         p.paragraph_format.space_after = Pt(4)
 
     # Chèn ảnh minh họa cổng 8205
-    add_image_if_exists(doc, os.path.join(img_dir, "main_page_1792814402228.png"), "Giao diện chính MediRecord EMR cổng 8205 với thanh Fast Switch Bar")
-    add_image_if_exists(doc, os.path.join(img_dir, "patient_an_idor_success_1792814466998.png"), "Trực quan hóa cảnh báo đỏ rực rò rỉ dữ liệu y tế nhạy cảm khi bật lỗi IDOR")
-    add_image_if_exists(doc, os.path.join(img_dir, "patient_an_403_1792814420387.png"), "Trang lỗi bảo mật HTTP 403 Forbidden chuyên biệt khi đã vá lỗi")
+    add_image_if_exists(doc, os.path.join(img_dir, "fab_and_lookup_main.png"), "Giao diện chính MediRecord EMR với Hộp tra cứu ID bệnh án tự do và Nút tròn nổi FAB Terminal góc dưới bên phải")
+    add_image_if_exists(doc, os.path.join(img_dir, "terminal_fab_drawer.png"), "Cửa sổ Terminal Console trượt lên từ Nút tròn nổi FAB ở góc dưới bên phải màn hình")
+    add_image_if_exists(doc, os.path.join(img_dir, "idor_lookup_patient_an.png"), "Bệnh nhân An nhập ID 3 tra cứu và khai thác IDOR thành công kèm cảnh báo đỏ rực rò rỉ dữ liệu y tế")
+    add_image_if_exists(doc, os.path.join(img_dir, "idor_edit_record_form.png"), "Giao diện can thiệp chỉnh sửa bệnh án trái phép (IDOR on Update) khi bật lỗi bảo mật")
+    add_image_if_exists(doc, os.path.join(img_dir, "patient_an_403_1792814420387.png"), "Trang lỗi bảo mật HTTP 403 Forbidden chuyên biệt khi đã vá lỗi bảo mật")
     add_image_if_exists(doc, os.path.join(img_dir, "doctor_minh_create_form_1792814504352.png"), "Giao diện Bác sĩ Lê Hoàng Minh lập và gửi hồ sơ bệnh án cho bệnh nhân")
+    add_image_if_exists(doc, os.path.join(img_dir, "admin_user_crud.png"), "Giao diện Quản Trị Người Dùng toàn diện (Thêm, Sửa, Xóa, Tìm kiếm) dành riêng cho Quản trị viên")
+    add_image_if_exists(doc, os.path.join(img_dir, "admin_user_search.png"), "Tính năng tìm kiếm tài khoản người dùng thời gian thực trên giao diện Quản trị viên")
 
     # Giai đoạn 3
     h3_3 = doc.add_heading("Giai đoạn 3 (5:00 - 8:30): Trình diễn Công cụ Kiểm thử Tự động AccessTester (Cổng 8105)", level=2)
@@ -469,8 +489,13 @@ def build_demo_document():
     r_end.font.color.rgb = RGBColor(2, 132, 199)
 
     out_docx = r"C:\University\Nam_3_K1\PTPMMNM\btvn\lab5\Huong_Dan_Demo_Bao_Cao.docx"
-    doc.save(out_docx)
-    print(f"SUCCESS: Generated {out_docx}")
+    try:
+        doc.save(out_docx)
+        print(f"SUCCESS: Generated {out_docx}")
+    except PermissionError:
+        alt_docx = r"C:\University\Nam_3_K1\PTPMMNM\btvn\lab5\Huong_Dan_Demo_Bao_Cao_v2.docx"
+        doc.save(alt_docx)
+        print(f"NOTE: {out_docx} is locked (e.g. by WPS/Word). Successfully saved to {alt_docx}!")
 
 if __name__ == "__main__":
     build_demo_document()
