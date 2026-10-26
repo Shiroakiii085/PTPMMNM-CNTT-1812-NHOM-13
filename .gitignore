@@ -6,3 +6,5 @@ runtime/
 evidence/private/
 ~$*
 .local/
+*.docx
+Huong_Dan_Demo_Bao_Cao.md
