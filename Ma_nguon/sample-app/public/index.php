@@ -416,7 +416,13 @@ if ($action === 'simulate_security_alert') {
 
 // Chạy test suite 88/88 qua CLI
 if ($action === 'run_full_test_suite') {
-    $cmd = 'wsl bash -c "cd /mnt/c/University/Nam_3_K1/PTPMMNM/btvn/lab5/Ma_nguon && bash lab.sh test" 2>&1';
+    $baseDir = realpath(__DIR__ . '/../..') ?: '/mnt/c/University/Nam_3_K1/PTPMMNM/btvn/lab5/Ma_nguon';
+    if (PHP_OS_FAMILY === 'Windows') {
+        $cmd = 'wsl.exe bash -c "cd /mnt/c/University/Nam_3_K1/PTPMMNM/btvn/lab5/Ma_nguon && bash lab.sh test" 2>&1';
+    } else {
+        // Đang chạy trong môi trường Linux / WSL: gọi trực tiếp bash lab.sh test
+        $cmd = 'cd ' . escapeshellarg($baseDir) . ' && bash lab.sh test 2>&1';
+    }
     $output = @shell_exec($cmd);
     $_SESSION['last_full_test_output'] = $output ?: "Không thể thực thi lệnh kiểm thử.";
     header('Location: /?view=tester&tab=full_tests');
