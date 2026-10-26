@@ -27,7 +27,7 @@
 
 | Thành phần | Địa chỉ / Cổng | Vai trò & Tính năng cốt lõi |
 | :--- | :--- | :--- |
-| **Ứng dụng Mục tiêu (Target App)<br>MediRecord EMR** | `http://localhost:8205`<br>*(127.0.0.1:8205)* | - Hệ thống quản lý bệnh án điện tử y tế thực tế.<br>- Bác sĩ Lê Hoàng Minh (`bs_minh`) lập và gửi bệnh án cho Bệnh nhân An, Bệnh nhân Bình.<br>- Thanh chuyển đổi tài khoản 1-Click Fast Switch Bar.<br>- Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do (Test IDOR trực tiếp cả Xem và Sửa).<br>- Nút tròn nổi FAB Terminal ở góc dưới bên phải màn hình điều khiển trạng thái lỗi.<br>- Module Quản Trị Người Dùng Toàn Diện (Thêm, Sửa, Xóa, Tìm kiếm) dành riêng cho Quản trị viên.<br>- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt. |
+| **Ứng dụng Mục tiêu (Target App)<br>MediRecord EMR** | `http://localhost:8205`<br>*(127.0.0.1:8205)* | - Hệ thống quản lý bệnh án điện tử y tế thực tế.<br>- **Bộ đôi Nút tròn nổi FAB ở góc dưới bên phải màn hình**: Nút tròn xanh chuyển đổi tài khoản 1-Click popup (đặt bên trên) và Nút tròn đen Terminal điều khiển cờ lỗi bảo mật (đặt bên dưới).<br>- **Quy trình Đăng Nhập & Đăng Ký** tài khoản y tế hoàn chỉnh với các nút điền nhanh tài khoản kiểm thử.<br>- Bác sĩ Lê Hoàng Minh (`bs_minh`) lập và gửi bệnh án cho Bệnh nhân An, Bệnh nhân Bình.<br>- Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do (Test IDOR trực tiếp cả Xem và Sửa).<br>- Module Quản Trị Người Dùng Toàn Diện (Thêm, Sửa, Xóa, Tìm kiếm) dành riêng cho Quản trị viên.<br>- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt. |
 | **Công cụ Kiểm thử Tự động<br>AccessTester Engine & Web UI** | `http://localhost:8105`<br>*(127.0.0.1:8105)* | - Quản trị ma trận phân quyền RBAC & ABAC (Ownership scope).<br>- Khai báo và thực thi tự động 24 ca kiểm thử HTTP chuẩn.<br>- Cơ chế phân loại 3 trạng thái: PASS, FAIL (Lỗ hổng), ERROR (Mạng/kỹ thuật).<br>- Bộ lọc địa chỉ an toàn (Target Allowlist) chống tấn công SSRF.<br>- Cơ chế Redactor tự động khử thông tin nhạy cảm (token, mật khẩu).<br>- Giao diện Đối chiếu 2 Đợt Chạy (Compare Runs) kèm biểu đồ Chart.js trực quan. |
 
 ---
@@ -75,27 +75,32 @@ Trước khi giảng viên yêu cầu demo, sinh viên thực hiện mở sẵn 
 ### Giai đoạn 2 (1:30 - 5:00): Trình diễn Ứng dụng Y tế MediRecord EMR (Cổng 8205)
 *Mở tab trình duyệt tại `http://localhost:8205`:*
 
-1. **Bước 2.1: Giới thiệu giao diện, Fast Switch Bar và Nút tròn nổi FAB Terminal:**
-   - Chỉ vào thanh đen **Fast Switch Bar** trên cùng: Giới thiệu hệ thống có 5 tài khoản thật (Bác sĩ Minh, Bệnh nhân An, Bệnh nhân Bình, Quản trị viên và Kỹ sư Kiểm thử). Nhấn thử vào từng nút để chuyển đổi tức thì góc nhìn người dùng.
-   - Đặc biệt, chỉ vào **Nút tròn nổi FAB ở góc dưới bên phải màn hình** (Floating Action Button với biểu tượng `>_`). Bấm vào nút tròn: Một cửa sổ Terminal trượt lên ngay tại chỗ giúp điều khiển trạng thái cờ lỗi và chạy lệnh trực tiếp.
+1. **Bước 2.1: Giới thiệu giao diện, Bộ đôi Nút tròn nổi FABs & Đăng Nhập / Đăng Ký:**
+   - Chỉ vào giao diện tối ưu: Thanh điều hướng gọn gàng, hiển thị trạng thái bảo mật, thông tin tài khoản hiện tại và các chức năng chính.
+   - Giới thiệu **Bộ đôi Nút tròn nổi FAB ở góc dưới bên phải màn hình**:
+     - **Nút tròn xanh (ở trên):** Nút Chuyển Đổi Nhanh Tài Khoản (1-Click Switcher). Bấm vào sẽ mở popup chọn nhanh 5 tài khoản thật (`admin_bv`, `bs_minh`, `bn_an`, `bn_binh`, `tester_sec`) và Khách vãng lai, kèm liên kết nhanh đến Đăng nhập, Đăng ký.
+     - **Nút tròn đen (ở dưới):** Nút Terminal Console (ký hiệu `>_`) điều khiển trạng thái cờ bảo mật.
+   - Thử bấm **`Đăng Nhập`**: Trình diễn trang đăng nhập với các nút **Điền nhanh tài khoản kiểm thử**, giúp đăng nhập tức thì chỉ với 1 click.
+   - Thử bấm **`Đăng Ký`**: Trình diễn biểu mẫu đăng ký thành viên mới (Bệnh nhân/Bác sĩ) có xác thực trùng lặp và tự động đăng nhập.
 2. **Bước 2.2: Bác sĩ Lê Hoàng Minh lập & gửi bệnh án mới cho Bệnh nhân:**
-   - Bấm chọn **`Bác sĩ Minh (Doctor)`** -> Nhấn nút **`Bác Sĩ Gửi Bệnh Án`** trên menu.
+   - Bấm nút tròn xanh FAB -> chọn **`BS. CKI Lê Hoàng Minh`** (hoặc đăng nhập bằng `bs_minh`).
+   - Nhấn nút **`Bác Sĩ Gửi Bệnh Án`** trên menu (`/?view=create_record`).
    - Chọn bệnh nhân nhận là `bn_an` (Bệnh nhân An), nhập chẩn đoán lâm sàng và bấm **`Lập & Gửi Bệnh Án Cho Bệnh Nhân`**.
    - Hồ sơ mới được ghi nhận ngay lập tức vào cơ sở dữ liệu và hiển thị trong danh sách.
 3. **Bước 2.3: Bật lỗi IDOR bằng Nút tròn nổi FAB Terminal:**
-   - Bấm vào Nút tròn nổi FAB ở góc dưới bên phải màn hình -> Cửa sổ Drawer Terminal mở ra -> Bấm nút **`Lệnh: Tạo Lỗi (set BUG_IDOR=1)`**.
+   - Bấm vào **Nút tròn đen FAB Terminal** ở góc dưới cùng bên phải -> Cửa sổ Drawer Terminal mở ra -> Bấm nút **`Lệnh: Tạo Lỗi (set BUG_IDOR=1)`**.
    - Hệ thống cập nhật ngay lập tức: Đèn tín hiệu trên nút tròn chuyển sang màu đỏ và thanh thông báo báo đỏ rực: *LỖI IDOR: ĐANG BẬT*.
 4. **Bước 2.4: Trực quan hóa Lỗ hổng IDOR qua Hộp Tra Cứu & Can Thiệp Theo Mã ID Tự Do:**
-   - Chuyển sang góc nhìn **`Bệnh nhân An (Patient)`** (An chỉ sở hữu hồ sơ số 01 và 02).
+   - Bấm nút tròn xanh FAB -> chuyển sang **`Bệnh nhân An (bn_an)`** (An chỉ sở hữu hồ sơ số 01 và 02).
    - Tại Hộp Tra Cứu **"TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID"**, sinh viên nhập tự do số `3` (Mã bệnh án ung bướu của Bình) và bấm **`Tra Cứu Bệnh Án`**.
    - **KẾT QUẢ XEM TRÁI PHÉP:** Màn hình hiển thị toàn bộ hồ sơ bệnh án ung bướu tuyệt mật của Bình kèm **Hộp Cảnh Báo Bảo Mật Đỏ Rực** thông báo: *Bệnh nhân An đang xem trái phép dữ liệu của Bệnh nhân Bình!*
    - **KẾT QUẢ SỬA TRÁI PHÉP (IDOR on Update):** An tiếp tục bấm nút **`Chỉnh Sửa Bệnh Án`** (hoặc truy cập `?view=edit_record&id=3`) -> Mở form sửa đổi chẩn đoán của Bình -> Sửa thành công và hệ thống cảnh báo đỏ rực: *`[CẢNH BÁO VI PHẠM BẢO MẬT] KHAI THÁC LỖ HỔNG IDOR / BOLA THÀNH CÔNG!`*.
 5. **Bước 2.5: Trực quan hóa Khắc phục Lỗ hổng & Trang Lỗi HTTP 403 Forbidden:**
-   - Bấm vào Nút tròn nổi FAB góc dưới bên phải, nhấn nút **`Lệnh: Vá Lỗi (set BUG_IDOR=0)`**. Đèn trạng thái chuyển xanh an toàn.
+   - Bấm vào Nút tròn đen FAB Terminal, nhấn nút **`Lệnh: Vá Lỗi (set BUG_IDOR=0)`**. Đèn trạng thái chuyển xanh an toàn.
    - Vẫn trong vai Bệnh nhân An, tiếp tục gõ ID `3` và bấm **`Tra Cứu Bệnh Án`** hoặc **`Chỉnh Sửa Bệnh Án`**.
    - **KẾT QUẢ SHOW GIẢNG VIÊN:** Hệ thống lập tức chặn đứng và chuyển sang **Trang Trả Về Lỗi HTTP 403 Forbidden chuyên biệt**, giải thích cơ chế ABAC từ chối quyền truy cập do không phải chủ sở hữu.
 6. **Bước 2.6: Phân quyền Quản Trị Viên (admin_bv) & Module Quản Trị Người Dùng Toàn Diện:**
-   - Chuyển sang tài khoản **`Quản trị viên (Admin)`** -> Bấm vào menu **`Quản Trị Người Dùng`** (`/?view=users`).
+   - Bấm nút tròn xanh FAB -> chuyển sang **`Quản trị viên (admin_bv)`** -> Bấm vào menu **`Quản Trị Người Dùng`** (`/?view=users`).
    - **Tìm kiếm tức thì:** Gõ từ khóa vào ô tìm kiếm (ví dụ 'Minh' hoặc 'Bác sĩ') -> Danh sách lọc kết quả ngay lập tức mà không cần reload trang.
    - **Thêm người dùng:** Bấm *`Thêm Người Dùng Mới`*, điền tài khoản, vai trò, khoa phòng -> Lưu thành công vào hệ thống.
    - **Sửa & Xóa người dùng:** Thử bấm nút *Sửa* thông tin và nút *Xóa* tài khoản (có hộp thoại xác nhận an toàn, có cơ chế cấm tự xóa chính mình).

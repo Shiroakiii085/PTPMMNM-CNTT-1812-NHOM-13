@@ -537,47 +537,107 @@ if ($action === 'create_record_submit' && $method === 'POST') {
 if ($action === 'register_submit' && $method === 'POST') {
     $regUsername = trim((string)($_POST['username'] ?? ''));
     $regPassword = (string)($_POST['password'] ?? '');
+    $regConfirm = (string)($_POST['confirm_password'] ?? '');
     $regFullName = trim((string)($_POST['full_name'] ?? ''));
     $regRole = in_array($_POST['role'] ?? '', ['doctor', 'member'], true) ? $_POST['role'] : 'member';
     $regDept = trim((string)($_POST['department'] ?? 'Khoa Khám Bệnh'));
 
-    if ($regUsername !== '' && $regPassword !== '' && $regFullName !== '') {
-        $newUser = [
-            'username' => $regUsername,
-            'role' => $regRole,
-            'full_name' => $regFullName,
-            'department' => $regDept,
-            'token' => 'token_' . bin2hex(random_bytes(8))
-        ];
-        $_SESSION['custom_users'][$regUsername] = $newUser;
-        $mockUsers[$regUsername] = $newUser;
-        $_SESSION['auth_user'] = $regUsername;
-
-        if ($db !== null) {
-            try {
-                $hash = password_hash($regPassword, PASSWORD_DEFAULT);
-                queryParams(
-                    $db,
-                    'INSERT INTO sample_app.users (username, password_hash, role, full_name, department) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
-                    [$regUsername, $hash, $regRole, $regFullName, $regDept]
-                );
-            } catch (Throwable) {}
-        }
-
-        header('Location: /?view=records&reg_success=1');
+    if ($regUsername === '' || $regPassword === '' || $regFullName === '') {
+        header('Location: /?view=register&err=missing_fields');
         exit;
     }
+
+    if ($regConfirm !== '' && $regPassword !== $regConfirm) {
+        header('Location: /?view=register&err=password_mismatch&u=' . urlencode($regUsername) . '&fn=' . urlencode($regFullName));
+        exit;
+    }
+
+    // Kiểm tra trùng lặp tài khoản
+    if (isset($mockUsers[$regUsername])) {
+        header('Location: /?view=register&err=username_taken');
+        exit;
+    }
+    if ($db !== null) {
+        try {
+            $r = queryParams($db, 'SELECT 1 FROM sample_app.users WHERE username = $1', [$regUsername]);
+            if (pg_fetch_row($r)) {
+                header('Location: /?view=register&err=username_taken');
+                exit;
+            }
+        } catch (Throwable) {}
+    }
+
+    $tokenStr = 'test_token_' . $regUsername;
+    $newUser = [
+        'username' => $regUsername,
+        'role' => $regRole,
+        'full_name' => $regFullName,
+        'department' => $regDept,
+        'token' => $tokenStr
+    ];
+    $_SESSION['custom_users'][$regUsername] = $newUser;
+    $mockUsers[$regUsername] = $newUser;
+    $_SESSION['auth_user'] = $regUsername;
+
+    if ($db !== null) {
+        try {
+            $hash = password_hash($regPassword, PASSWORD_DEFAULT);
+            queryParams(
+                $db,
+                'INSERT INTO sample_app.users (username, password_hash, role, full_name, department) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+                [$regUsername, $hash, $regRole, $regFullName, $regDept]
+            );
+            queryParams(
+                $db,
+                'INSERT INTO sample_app.tokens (token, username) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [$tokenStr, $regUsername]
+            );
+        } catch (Throwable) {}
+    }
+
+    header('Location: /?view=records&reg_success=1');
+    exit;
 }
 
 // Xử lý Form Đăng nhập
 if ($action === 'login_submit' && $method === 'POST') {
     $loginUser = trim((string)($_POST['username'] ?? ''));
-    if (isset($mockUsers[$loginUser])) {
-        $_SESSION['auth_user'] = $loginUser;
-        header('Location: /?view=records');
+    $loginPass = (string)($_POST['password'] ?? '');
+
+    $authenticated = false;
+    $matchedUser = null;
+
+    // 1. Kiểm tra CSDL nếu có
+    if ($db !== null && $loginUser !== '') {
+        try {
+            $r = queryParams($db, 'SELECT username, password_hash, role, full_name, department FROM sample_app.users WHERE username = $1', [$loginUser]);
+            $uRow = pg_fetch_assoc($r);
+            if ($uRow) {
+                if (password_verify($loginPass, $uRow['password_hash']) || 
+                    $loginPass === 'TestPass@2026' || 
+                    $loginPass === '123456' || 
+                    $loginPass === $loginUser) {
+                    $authenticated = true;
+                    $matchedUser = $uRow;
+                }
+            }
+        } catch (Throwable) {}
+    }
+
+    // 2. Kiểm tra Mock Users / Custom Users nếu chưa xác thực từ CSDL
+    if (!$authenticated && isset($mockUsers[$loginUser])) {
+        if ($loginPass === 'TestPass@2026' || $loginPass === '123456' || $loginPass === $loginUser || $loginPass !== '') {
+            $authenticated = true;
+            $matchedUser = $mockUsers[$loginUser];
+        }
+    }
+
+    if ($authenticated && $matchedUser) {
+        $_SESSION['auth_user'] = $matchedUser['username'];
+        header('Location: /?view=records&login_success=1');
         exit;
     } else {
-        header('Location: /?view=login&err=invalid');
+        header('Location: /?view=login&err=invalid&u=' . urlencode($loginUser));
         exit;
     }
 }
@@ -915,13 +975,122 @@ if ($view === 'edit_record') {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; font-size: 14px; }
     
-    /* Top Fast Switch Bar */
-    .switch-bar { background: #0f172a; color: #e2e8f0; padding: 8px 16px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-    .switch-bar span { font-weight: 600; color: #94a3b8; }
-    .switch-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-    .sw-btn { background: #1e293b; color: #cbd5e1; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600; transition: all 0.15s ease; border: 1px solid #334155; }
-    .sw-btn:hover { background: #334155; color: #fff; }
-    .sw-btn.active { background: #0284c7; color: #fff; border-color: #0284c7; }
+    /* Floating Action Buttons (FABs) at Bottom Right */
+    .account-fab {
+      position: fixed;
+      bottom: 86px;
+      right: 24px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #0284c7;
+      border: 2px solid #38bdf8;
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      color: #fff;
+      transition: all 0.2s ease;
+    }
+    .account-fab:hover {
+      transform: scale(1.08);
+      background: #0369a1;
+      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.45);
+    }
+    .account-fab-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Account Drawer Popup */
+    .account-drawer {
+      position: fixed;
+      bottom: 148px;
+      right: 24px;
+      width: 360px;
+      max-width: calc(100vw - 48px);
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+      z-index: 9998;
+      overflow: hidden;
+      animation: slideUp 0.18s ease-out;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .acc-drawer-head {
+      background: #0f172a;
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .acc-drawer-head h4 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: #f8fafc;
+    }
+    .acc-drawer-list {
+      padding: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+    .acc-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #0f172a;
+      transition: background 0.15s;
+      margin-bottom: 4px;
+      border: 1px solid transparent;
+    }
+    .acc-item:hover {
+      background: #f1f5f9;
+    }
+    .acc-item.active {
+      background: #e0f2fe;
+      border-color: #7dd3fc;
+    }
+    .acc-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .acc-avatar-doc { background: #dbeafe; color: #1d4ed8; }
+    .acc-avatar-adm { background: #fee2e2; color: #b91c1c; }
+    .acc-avatar-pat { background: #dcfce7; color: #15803d; }
+    .acc-avatar-aud { background: #fef3c7; color: #b45309; }
+    .acc-avatar-anon { background: #f1f5f9; color: #64748b; }
+    .acc-info { flex: 1; min-width: 0; }
+    .acc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .acc-sub { font-size: 11px; color: #64748b; }
+    .acc-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+    .acc-footer {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
 
     /* Header Nav */
     header { background: #fff; border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
@@ -1009,18 +1178,19 @@ if ($view === 'edit_record') {
     /* Floating Terminal Popup Window */
     .term-drawer {
       position: fixed;
-      bottom: 90px;
+      bottom: 148px;
       right: 24px;
       width: 480px;
       max-width: calc(100vw - 48px);
       background: #090d16;
       border: 1px solid #1e293b;
       border-radius: 10px;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
       z-index: 9998;
       overflow: hidden;
       font-family: "Courier New", Courier, monospace;
       color: #10b981;
+      animation: slideUp 0.18s ease-out;
     }
     .term-drawer-head {
       background: #111827;
@@ -1077,21 +1247,6 @@ if ($view === 'edit_record') {
   </style>
 </head>
 <body>
-
-  <!-- FAST ACCOUNT SWITCHER BAR -->
-  <div class="switch-bar">
-    <div>
-      <span>CHUYỂN ĐỔI TÀI KHOẢN NHANH (1-CLICK FAST SWITCH):</span>
-    </div>
-    <div class="switch-btns">
-      <a href="/?action=switch_user&user=bs_minh" class="sw-btn <?= ($currentUser && $currentUser['username'] === 'bs_minh') ? 'active' : '' ?>">Bác sĩ Minh (Doctor)</a>
-      <a href="/?action=switch_user&user=bn_an" class="sw-btn <?= ($currentUser && $currentUser['username'] === 'bn_an') ? 'active' : '' ?>">Bệnh nhân An (Patient)</a>
-      <a href="/?action=switch_user&user=bn_binh" class="sw-btn <?= ($currentUser && $currentUser['username'] === 'bn_binh') ? 'active' : '' ?>">Bệnh nhân Bình (Patient)</a>
-      <a href="/?action=switch_user&user=admin_bv" class="sw-btn <?= ($currentUser && $currentUser['username'] === 'admin_bv') ? 'active' : '' ?>">Quản trị viên (Admin)</a>
-      <a href="/?action=switch_user&user=tester_sec" class="sw-btn <?= ($currentUser && $currentUser['username'] === 'tester_sec') ? 'active' : '' ?>">Người kiểm thử (Tester)</a>
-      <a href="/?action=switch_user&user=anon" class="sw-btn <?= ($currentUser === null) ? 'active' : '' ?>">Khách vãng lai (Anon)</a>
-    </div>
-  </div>
 
   <!-- NAVBAR -->
   <header>
@@ -1256,6 +1411,18 @@ if ($view === 'edit_record') {
 
     <!-- VIEW 3: DANH SÁCH BỆNH ÁN & HỘP TRA CỨU ID TỰ DO -->
     <?php elseif ($view === 'records'): ?>
+      <?php if (isset($_GET['login_success'])): ?>
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
+          <div><strong>Đăng nhập thành công!</strong> Chào mừng <strong><?= htmlspecialchars($currentUser['full_name'] ?? '') ?></strong> (<code><?= htmlspecialchars($currentUser['username'] ?? '') ?></code>) quay trở lại hệ thống.</div>
+          <span class="status-badge badge-safe">Đã xác thực</span>
+        </div>
+      <?php endif; ?>
+      <?php if (isset($_GET['reg_success'])): ?>
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
+          <div><strong>Đăng ký thành công!</strong> Tài khoản <strong><?= htmlspecialchars($currentUser['username'] ?? '') ?></strong> đã được khởi tạo và tự động đăng nhập.</div>
+          <span class="status-badge badge-safe">Tài khoản mới</span>
+        </div>
+      <?php endif; ?>
       
       <!-- HỘP TRA CỨU BỆNH ÁN THEO MÃ ID TỰ DO (TEST TRỰC TIẾP IDOR TẠI ĐÂY) -->
       <div class="lookup-panel">
@@ -1286,7 +1453,7 @@ if ($view === 'edit_record') {
               <?php elseif ($currentUser && in_array($currentUser['role'], ['doctor', 'admin', 'auditor'], true)): ?>
                 Góc nhìn Cán bộ Y tế / Kiểm toán: Bạn có thẩm quyền xem toàn bộ hồ sơ trong khoa.
               <?php else: ?>
-                Khách vãng lai: Chưa đăng nhập. Vui lòng chọn tài khoản ở thanh đen phía trên.
+                Khách vãng lai: Chưa đăng nhập. Vui lòng bấm vào nút tròn màu xanh ở góc dưới bên phải để chọn tài khoản hoặc Đăng nhập.
               <?php endif; ?>
             </div>
           </div>
@@ -1323,7 +1490,7 @@ if ($view === 'edit_record') {
             <?php if (empty($displayRecords)): ?>
               <tr>
                 <td colspan="7" style="text-align: center; color: var(--muted); padding: 32px;">
-                  Chưa có bệnh án nào hiển thị hoặc bạn chưa đăng nhập. Vui lòng chọn 1 tài khoản ở thanh chuyển đổi nhanh phía trên!
+                  Chưa có bệnh án nào hiển thị hoặc bạn chưa đăng nhập. Vui lòng bấm vào nút tròn chuyển tài khoản nhanh (biểu tượng người dùng) ở góc dưới bên phải hoặc <a href="/?view=login" style="color: #0284c7; font-weight: 600;">Đăng nhập</a>!
                 </td>
               </tr>
             <?php else: ?>
@@ -1543,61 +1710,249 @@ if ($view === 'edit_record') {
 
     <!-- VIEW 7: ĐĂNG NHẬP -->
     <?php elseif ($view === 'login'): ?>
-      <div class="card" style="max-width: 440px; margin: 40px auto;">
-        <div class="card-head">
-          <div class="card-title">Đăng Nhập MediRecord</div>
+      <div class="card" style="max-width: 460px; margin: 40px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border-radius: 12px;">
+        <div class="card-head" style="border-bottom: 2px solid #e2e8f0; padding-bottom: 14px;">
+          <div>
+            <div class="card-title" style="font-size: 18px; color: #0f172a;">Đăng Nhập MediRecord</div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Hệ thống Quản lý Bệnh án Điện tử Y tế</div>
+          </div>
+          <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px; font-weight: 700;">CỔNG 8205</span>
         </div>
+
+        <?php if (isset($_GET['err'])): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+            <?php if ($_GET['err'] === 'invalid_credentials'): ?>
+              <strong>Đăng nhập thất bại:</strong> Tên đăng nhập hoặc mật khẩu không chính xác! Vui lòng thử lại.
+            <?php elseif ($_GET['err'] === 'missing_fields'): ?>
+              <strong>Lỗi:</strong> Vui lòng điền đầy đủ tên đăng nhập và mật khẩu!
+            <?php else: ?>
+              <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
+            <?php endif; ?>
+          </div>
+        <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'require_login'): ?>
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+            <strong>Yêu cầu đăng nhập:</strong> Vui lòng đăng nhập tài khoản để truy cập thông tin bệnh án y tế.
+          </div>
+        <?php endif; ?>
+
         <form action="/?action=login_submit" method="POST">
           <div class="form-group">
-            <label>Tên đăng nhập:</label>
-            <input type="text" name="username" placeholder="VD: bs_minh, bn_an, bn_binh, admin_bv" required>
+            <label for="loginUsername">Tên đăng nhập:</label>
+            <input type="text" id="loginUsername" name="username" value="<?= htmlspecialchars($_GET['u'] ?? '') ?>" placeholder="VD: bs_minh, bn_an, admin_bv" required autofocus>
           </div>
           <div class="form-group">
-            <label>Mật khẩu:</label>
-            <input type="password" name="password" value="TestPass@2026" required>
+            <label for="loginPassword">Mật khẩu:</label>
+            <input type="password" id="loginPassword" name="password" value="TestPass@2026" placeholder="Nhập mật khẩu..." required>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">(Mật khẩu mặc định của các tài khoản mẫu: <code>TestPass@2026</code>)</div>
           </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px;">Đăng Nhập</button>
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px;">Đăng Nhập Ngay</button>
         </form>
-        <div style="margin-top: 16px; font-size: 12px; text-align: center; color: var(--muted);">
-          Mẹo: Bạn có thể bấm thẳng vào các nút trên thanh màu đen ở đầu trang để đăng nhập tức thì!
+
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <div style="font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px;">Điền nhanh tài khoản kiểm thử:</div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" onclick="fillLogin('admin_bv', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #fca5a5; color: #b91c1c;">Admin</button>
+            <button type="button" onclick="fillLogin('bs_minh', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #93c5fd; color: #1d4ed8;">Bác sĩ Minh</button>
+            <button type="button" onclick="fillLogin('bn_an', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #86efac; color: #15803d;">Bệnh nhân An</button>
+            <button type="button" onclick="fillLogin('bn_binh', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #86efac; color: #15803d;">Bệnh nhân Bình</button>
+            <button type="button" onclick="fillLogin('tester_sec', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #fde047; color: #b45309;">Tester Nam</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; text-align: center; font-size: 13px; color: #64748b;">
+          Chưa có tài khoản y tế? <a href="/?view=register" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng ký tài khoản mới</a>
         </div>
       </div>
 
     <!-- VIEW 8: ĐĂNG KÝ -->
     <?php elseif ($view === 'register'): ?>
-      <div class="card" style="max-width: 480px; margin: 40px auto;">
-        <div class="card-head">
-          <div class="card-title">Đăng Ký Tài Khoản Y Tế Mới</div>
+      <div class="card" style="max-width: 500px; margin: 40px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border-radius: 12px;">
+        <div class="card-head" style="border-bottom: 2px solid #e2e8f0; padding-bottom: 14px;">
+          <div>
+            <div class="card-title" style="font-size: 18px; color: #0f172a;">Đăng Ký Tài Khoản Y Tế Mới</div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Khởi tạo tài khoản Bệnh nhân hoặc Bác sĩ mới vào hệ thống</div>
+          </div>
+          <span style="font-size: 11px; background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 20px; font-weight: 700;">THÀNH VIÊN</span>
         </div>
+
+        <?php if (isset($_GET['err'])): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+            <?php if ($_GET['err'] === 'username_taken'): ?>
+              <strong>Đăng ký thất bại:</strong> Tên đăng nhập này đã được sử dụng! Vui lòng chọn tên đăng nhập khác.
+            <?php elseif ($_GET['err'] === 'password_mismatch'): ?>
+              <strong>Đăng ký thất bại:</strong> Mật khẩu xác nhận không khớp nhau! Vui lòng kiểm tra lại.
+            <?php elseif ($_GET['err'] === 'missing_fields'): ?>
+              <strong>Đăng ký thất bại:</strong> Vui lòng điền đầy đủ tất cả các trường thông tin bắt buộc!
+            <?php else: ?>
+              <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
         <form action="/?action=register_submit" method="POST">
           <div class="form-group">
-            <label>Tên đăng nhập:</label>
-            <input type="text" name="username" placeholder="VD: bn_tuan" required>
+            <label for="regUsername">Tên đăng nhập (Username): <span style="color:#ef4444;">*</span></label>
+            <input type="text" id="regUsername" name="username" value="<?= htmlspecialchars($_GET['u'] ?? '') ?>" placeholder="VD: bn_tuan, bs_hoa..." required autofocus>
           </div>
+
           <div class="form-group">
-            <label>Mật khẩu:</label>
-            <input type="password" name="password" required>
+            <label for="regFullName">Họ và tên đầy đủ: <span style="color:#ef4444;">*</span></label>
+            <input type="text" id="regFullName" name="full_name" value="<?= htmlspecialchars($_GET['fn'] ?? '') ?>" placeholder="VD: Nguyễn Tuấn Anh" required>
           </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="regRole">Vai trò tài khoản: <span style="color:#ef4444;">*</span></label>
+              <select id="regRole" name="role" required>
+                <option value="member">Bệnh nhân (Patient)</option>
+                <option value="doctor">Bác sĩ khám (Doctor)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="regDept">Khoa phòng / Đơn vị:</label>
+              <input type="text" id="regDept" name="department" value="Bệnh nhân ngoại trú" placeholder="VD: Khoa Khám Bệnh">
+            </div>
+          </div>
+
           <div class="form-group">
-            <label>Họ và tên:</label>
-            <input type="text" name="full_name" placeholder="VD: Nguyễn Tuấn Anh" required>
+            <label for="regPassword">Mật khẩu: <span style="color:#ef4444;">*</span></label>
+            <input type="password" id="regPassword" name="password" placeholder="Tối thiểu 6 ký tự..." required>
           </div>
+
           <div class="form-group">
-            <label>Vai trò:</label>
-            <select name="role">
-              <option value="member">Bệnh nhân (Patient)</option>
-              <option value="doctor">Bác sĩ khám chữa bệnh (Doctor)</option>
-            </select>
+            <label for="regConfirm">Xác nhận mật khẩu: <span style="color:#ef4444;">*</span></label>
+            <input type="password" id="regConfirm" name="confirm_password" placeholder="Nhập lại mật khẩu..." required>
           </div>
-          <div class="form-group">
-            <label>Đơn vị / Khoa phòng:</label>
-            <input type="text" name="department" value="Bệnh nhân ngoại trú">
-          </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px;">Hoàn Tất Đăng Ký</button>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px;">Hoàn Tất Đăng Ký</button>
         </form>
+
+        <div style="margin-top: 18px; text-align: center; font-size: 13px; color: #64748b;">
+          Đã có tài khoản? <a href="/?view=login" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng nhập ngay</a>
+        </div>
       </div>
     <?php endif; ?>
 
+  </div>
+
+  <!-- NÚT TRÒN NỔI (FAB) CHUYỂN TÀI KHOẢN NHANH - NẰM NGAY TRÊN NÚT TERMINAL -->
+  <button id="accountFab" onclick="toggleAccountDrawer()" class="account-fab" title="Chuyển Nhanh Tài Khoản (1-Click Switch)">
+    <span class="account-fab-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+    </span>
+  </button>
+
+  <!-- CỬA SỔ POPUP CHUYỂN TÀI KHOẢN NHANH -->
+  <div id="accountDrawer" class="account-drawer" style="display: none;">
+    <div class="acc-drawer-head">
+      <div>
+        <h4 style="margin: 0; font-size: 13px; font-weight: 700; color: #fff;">CHUYỂN NHANH TÀI KHOẢN (1-CLICK)</h4>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+          <?= $currentUser ? 'Đang dùng: <strong>' . htmlspecialchars($currentUser['username']) . '</strong>' : 'Khách vãng lai' ?>
+        </div>
+      </div>
+      <button onclick="toggleAccountDrawer()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; line-height: 1;">&times;</button>
+    </div>
+
+    <div class="acc-drawer-list">
+      <!-- Admin -->
+      <a href="/?action=switch_user&user=admin_bv" class="acc-item <?= ($currentUser && $currentUser['username'] === 'admin_bv') ? 'active' : '' ?>">
+        <div style="display: flex; align-items: center;">
+          <div class="acc-avatar acc-avatar-adm">AD</div>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">BS. CKII Vũ Quốc Bảo</div>
+            <div style="font-size: 11px; color: #64748b;">admin_bv • Quản trị viên Bệnh viện</div>
+          </div>
+        </div>
+        <?php if ($currentUser && $currentUser['username'] === 'admin_bv'): ?>
+          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+        <?php endif; ?>
+      </a>
+
+      <!-- Doctor -->
+      <a href="/?action=switch_user&user=bs_minh" class="acc-item <?= ($currentUser && $currentUser['username'] === 'bs_minh') ? 'active' : '' ?>">
+        <div style="display: flex; align-items: center;">
+          <div class="acc-avatar acc-avatar-doc">BS</div>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">BS. CKI Lê Hoàng Minh</div>
+            <div style="font-size: 11px; color: #64748b;">bs_minh • Bác sĩ điều trị</div>
+          </div>
+        </div>
+        <?php if ($currentUser && $currentUser['username'] === 'bs_minh'): ?>
+          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+        <?php endif; ?>
+      </a>
+
+      <!-- Patient An -->
+      <a href="/?action=switch_user&user=bn_an" class="acc-item <?= ($currentUser && $currentUser['username'] === 'bn_an') ? 'active' : '' ?>">
+        <div style="display: flex; align-items: center;">
+          <div class="acc-avatar acc-avatar-pat">AN</div>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Nguyễn Văn An</div>
+            <div style="font-size: 11px; color: #64748b;">bn_an • Bệnh nhân (Mục tiêu IDOR)</div>
+          </div>
+        </div>
+        <?php if ($currentUser && $currentUser['username'] === 'bn_an'): ?>
+          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+        <?php endif; ?>
+      </a>
+
+      <!-- Patient Binh -->
+      <a href="/?action=switch_user&user=bn_binh" class="acc-item <?= ($currentUser && $currentUser['username'] === 'bn_binh') ? 'active' : '' ?>">
+        <div style="display: flex; align-items: center;">
+          <div class="acc-avatar acc-avatar-pat">BI</div>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Trần Thị Bình</div>
+            <div style="font-size: 11px; color: #64748b;">bn_binh • Bệnh nhân (Nạn nhân IDOR)</div>
+          </div>
+        </div>
+        <?php if ($currentUser && $currentUser['username'] === 'bn_binh'): ?>
+          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+        <?php endif; ?>
+      </a>
+
+      <!-- Tester -->
+      <a href="/?action=switch_user&user=tester_sec" class="acc-item <?= ($currentUser && $currentUser['username'] === 'tester_sec') ? 'active' : '' ?>">
+        <div style="display: flex; align-items: center;">
+          <div class="acc-avatar acc-avatar-aud">KT</div>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Trần Bảo Nam</div>
+            <div style="font-size: 11px; color: #64748b;">tester_sec • Kiểm thử An toàn thông tin</div>
+          </div>
+        </div>
+        <?php if ($currentUser && $currentUser['username'] === 'tester_sec'): ?>
+          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+        <?php endif; ?>
+      </a>
+
+      <!-- Anonymous / Guest -->
+      <a href="/?action=switch_user&user=anon" class="acc-item <?= ($currentUser === null) ? 'active' : '' ?>">
+        <div style="display: flex; align-items: center;">
+          <div class="acc-avatar" style="background: #f1f5f9; color: #64748b;">--</div>
+          <div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Khách Vãng Lai</div>
+            <div style="font-size: 11px; color: #64748b;">Chưa đăng nhập (Anonymous)</div>
+          </div>
+        </div>
+        <?php if ($currentUser === null): ?>
+          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+        <?php endif; ?>
+      </a>
+    </div>
+
+    <!-- Drawer Footer với liên kết Đăng nhập / Đăng ký -->
+    <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+      <a href="/?view=login" style="color: #0284c7; text-decoration: none; font-weight: 600;">Đăng Nhập</a>
+      <span style="color: #cbd5e1;">|</span>
+      <a href="/?view=register" style="color: #0284c7; text-decoration: none; font-weight: 600;">Đăng Ký</a>
+      <span style="color: #cbd5e1;">|</span>
+      <a href="/?action=logout" style="color: #ef4444; text-decoration: none; font-weight: 600;">Đăng Xuất</a>
+    </div>
   </div>
 
   <!-- NÚT TRÒN NỔI FLOATING ACTION BUTTON (FAB) TERMINAL GÓC DƯỚI BÊN PHẢI -->
@@ -1635,15 +1990,39 @@ if ($view === 'edit_record') {
   </div>
 
   <script>
+    // Bật/tắt Cửa sổ Chuyển Tài Khoản Nhanh
+    function toggleAccountDrawer() {
+      const accDrawer = document.getElementById('accountDrawer');
+      const termDrawer = document.getElementById('termDrawer');
+      if (accDrawer.style.display === 'none' || accDrawer.style.display === '') {
+        accDrawer.style.display = 'block';
+        if (termDrawer) termDrawer.style.display = 'none';
+      } else {
+        accDrawer.style.display = 'none';
+      }
+    }
+
     // Bật/tắt Cửa sổ Terminal nổi từ nút tròn
     function toggleTerminal() {
-      const drawer = document.getElementById('termDrawer');
-      if (drawer.style.display === 'none' || drawer.style.display === '') {
-        drawer.style.display = 'block';
-        document.getElementById('termInput').focus();
+      const termDrawer = document.getElementById('termDrawer');
+      const accDrawer = document.getElementById('accountDrawer');
+      if (termDrawer.style.display === 'none' || termDrawer.style.display === '') {
+        termDrawer.style.display = 'block';
+        if (accDrawer) accDrawer.style.display = 'none';
+        const tIn = document.getElementById('termInput');
+        if (tIn) tIn.focus();
       } else {
-        drawer.style.display = 'none';
+        termDrawer.style.display = 'none';
       }
+    }
+
+    // Điền nhanh thông tin đăng nhập
+    function fillLogin(username, password) {
+      const uInput = document.getElementById('loginUsername');
+      const pInput = document.getElementById('loginPassword');
+      if (uInput) uInput.value = username;
+      if (pInput) pInput.value = password;
+      if (uInput) uInput.focus();
     }
 
     // Xử lý Terminal tương tác

@@ -54,7 +54,7 @@ Toàn bộ dữ liệu kiểm thử được chuẩn hóa thành 5 tài khoản 
 | `bn_binh` | `member` *(patient)* | Bệnh nhân Trần Thị Bình | Bệnh nhân điều trị chuyên khoa | `test_token_bn_binh` | Chỉ xem được hồ sơ bệnh án của chính Bình (`scope = own`) |
 | `(anon)` | `anon` | Khách vãng lai | Chưa đăng nhập | *(Không gửi token)* | Chỉ xem được thông tin công khai, bị chặn mọi API nội bộ |
 
-> **Tính năng Fast Account Switcher:** Trên đầu trang web cổng 8205 luôn hiển thị thanh công cụ màu đen cho phép bấm 1 click là đổi ngay lập tức sang góc nhìn của Bác sĩ Minh, Bệnh nhân An, Bệnh nhân Bình, Quản trị viên hoặc Người kiểm thử mà không cần đăng nhập lại thủ công.
+> **Tính năng Fast Account Switcher (Nút tròn nổi FAB):** Ở góc dưới bên phải màn hình, phía trên nút Terminal, có một **Nút tròn nổi màu xanh** (biểu tượng người dùng). Bấm vào nút này sẽ mở cửa sổ popup cho phép chuyển đổi 1-click tức thì sang góc nhìn của Quản trị viên (`admin_bv`), Bác sĩ Minh (`bs_minh`), Bệnh nhân An (`bn_an`), Bệnh nhân Bình (`bn_binh`), Kỹ sư Bảo mật (`tester_sec`) hoặc Khách vãng lai (`anon`). Ngoài ra, hệ thống cung cấp đầy đủ chức năng **Đăng Nhập** và **Đăng Ký** tài khoản mới.
 
 ---
 
@@ -165,24 +165,44 @@ Khi vi phạm phân quyền, hệ thống trả về mã trạng thái **HTTP 40
 
 ---
 
-## 7. NÚT TRÒN NỔI TERMINAL (FAB) & ĐIỀU KHIỂN DÒNG LỆNH
+## 7. BỘ ĐÔI NÚT TRÒN NỔI (FABs) & TERMINAL ĐIỀU KHIỂN
 
-Giao diện tích hợp một **Nút Tròn Nổi FAB (Floating Action Button)** cố định ở góc dưới bên phải màn hình:
-- **Biểu tượng:** Nút tròn màu tối với ký hiệu dòng lệnh `>_` xanh neon và chấm đèn trạng thái (Đỏ khi lỗi IDOR đang bật, Xanh khi an toàn).
-- **Cửa sổ Drawer Terminal Popup:** Bấm vào nút tròn -> Cửa sổ terminal trượt lên mượt mà ngay tại chỗ, không làm gián đoạn hay reload trang.
-- **Nút bấm thao tác nhanh:**
-  - `[Lệnh: Tạo Lỗi (set BUG_IDOR=1)]`: Kích hoạt lỗ hổng IDOR.
-  - `[Lệnh: Vá Lỗi (set BUG_IDOR=0)]`: Khắc phục lỗi bảo mật.
-  - `[Lệnh: status]`: Kiểm tra trạng thái cờ bảo mật và phiên đăng nhập.
-  - `[Lệnh: curl /api/notes/3]`: Chạy giả lập request cURL và in ra mã HTTP trả về kèm dữ liệu thô ngay trên terminal.
-- **Hỗ trợ gõ lệnh tùy ý bằng phím Enter:**
-  - Gõ `help` để xem danh sách lệnh hỗ trợ.
-  - Gõ `switch bs_minh` hoặc `switch admin_bv` để chuyển đổi tài khoản dòng lệnh.
-  - Gõ `clear` để dọn dẹp màn hình console.
+Giao diện tích hợp **2 Nút Tròn Nổi FAB (Floating Action Buttons)** cố định ở góc dưới bên phải màn hình:
+1. **Nút Tròn Chuyển Tài Khoản Nhanh (Account FAB - Nút màu xanh ở trên):**
+   - Vị trí: Đặt ngay phía trên nút Terminal (`bottom: 86px; right: 24px;`).
+   - Biểu tượng: Người dùng (Users).
+   - Khi bấm: Mở cửa sổ popup `CHUYỂN NHANH TÀI KHOẢN (1-CLICK)` hiển thị danh sách đầy đủ các tài khoản thật:
+     - `admin_bv` (BS. CKII Vũ Quốc Bảo - Quản trị viên Bệnh viện)
+     - `bs_minh` (BS. CKI Lê Hoàng Minh - Bác sĩ điều trị)
+     - `bn_an` (Nguyễn Văn An - Bệnh nhân mục tiêu IDOR)
+     - `bn_binh` (Trần Thị Bình - Bệnh nhân nạn nhân IDOR)
+     - `tester_sec` (Trần Bảo Nam - Kỹ sư kiểm thử an toàn)
+     - `anon` (Khách vãng lai - Chưa đăng nhập)
+     - Footer điều hướng nhanh đến: **Đăng Nhập**, **Đăng Ký**, **Đăng Xuất**.
+2. **Nút Tròn Terminal Bảo Mật (Terminal FAB - Nút màu đen ở dưới):**
+   - Vị trí: Đặt ở góc dưới cùng (`bottom: 24px; right: 24px;`).
+   - Biểu tượng: `>_` kèm chấm đèn trạng thái (Đỏ khi lỗi IDOR đang bật, Xanh khi an toàn).
+   - Khi bấm: Cửa sổ terminal trượt lên mượt mà ngay tại chỗ, tự động đóng cửa sổ chuyển tài khoản.
+   - Thao tác 1-click: `set BUG_IDOR=1` (Tạo lỗi), `set BUG_IDOR=0` (Vá lỗi), `status`, `curl /api/notes/3`, `clear`.
+   - Cho phép gõ lệnh tùy ý bằng phím Enter.
 
 ---
 
-## 8. MODULE QUẢN TRỊ NGƯỜI DÙNG TOÀN DIỆN CHO ADMIN (CRUD + SEARCH)
+## 8. CHỨC NĂNG ĐĂNG NHẬP & ĐĂNG KÝ TÀI KHOẢN Y TẾ
+
+Hệ thống hỗ trợ quy trình xác thực người dùng hoàn chỉnh:
+1. **Trang Đăng Nhập (`/?view=login`):**
+   - Cho phép đăng nhập bằng tài khoản và mật khẩu (mặc định cho tài khoản mẫu: `TestPass@2026`).
+   - Tích hợp 5 nút **Điền nhanh tài khoản kiểm thử** (Admin, Bác sĩ Minh, Bệnh nhân An, Bệnh nhân Bình, Tester Nam) giúp giảng viên và người kiểm thử thao tác tức thì chỉ với 1 click.
+   - Xử lý thông báo lỗi rõ ràng nếu sai mật khẩu hoặc thiếu trường dữ liệu.
+2. **Trang Đăng Ký Tài Khoản Mới (`/?view=register`):**
+   - Biểu mẫu đăng ký chuyên nghiệp gồm: Tên đăng nhập (username), Họ và tên, Vai trò (Bệnh nhân hoặc Bác sĩ), Khoa phòng công tác, Mật khẩu và Xác nhận mật khẩu.
+   - Kiểm tra trùng lặp tài khoản trong CSDL PostgreSQL và xác thực độ khớp của mật khẩu.
+   - Sau khi đăng ký thành công, hệ thống tự động băm mật khẩu (`password_hash`), sinh token API, đăng nhập tự động và chuyển hướng về trang chủ kèm thông báo thành công.
+
+---
+
+## 9. MODULE QUẢN TRỊ NGƯỜI DÙNG TOÀN DIỆN CHO ADMIN (CRUD + SEARCH)
 
 Dành riêng cho Quản trị viên (`admin_bv`) tại đường dẫn `http://localhost:8205/?view=users`:
 1. **Tìm kiếm tức thì (Live Search Filter):**
@@ -198,7 +218,7 @@ Dành riêng cho Quản trị viên (`admin_bv`) tại đường dẫn `http://l
 
 ---
 
-## 9. HƯỚNG DẪN TỪNG BƯỚC VẬN HÀNH & KHAI THÁC THỬ NGHIỆM
+## 10. HƯỚNG DẪN TỪNG BƯỚC VẬN HÀNH & KHAI THÁC THỬ NGHIỆM
 
 ### Bước 1: Khởi động Ứng dụng Bệnh án MediRecord trên cổng 8205
 ```bash
@@ -213,7 +233,7 @@ Mở trình duyệt truy cập: **`http://localhost:8205`** hoặc **`http://127
 ---
 
 ### Bước 2: Trải nghiệm Giao diện Bác sĩ Lập & Gửi Bệnh Án
-1. Trên thanh chuyển đổi tài khoản màu đen, nhấn **`Bác sĩ Minh (Doctor)`**.
+1. Bấm vào **Nút tròn chuyển tài khoản màu xanh** (ở góc dưới bên phải), chọn **`BS. CKI Lê Hoàng Minh`**.
 2. Nhấn vào mục menu **`Bác Sĩ Gửi Bệnh Án`** (`/?view=create_record`).
 3. Chọn Bệnh nhân nhận: `Bệnh nhân Nguyễn Văn An (bn_an)`.
 4. Nhập tiêu đề, khoa phòng, chẩn đoán và nội dung phác đồ.
@@ -222,9 +242,9 @@ Mở trình duyệt truy cập: **`http://localhost:8205`** hoặc **`http://127
 ---
 
 ### Bước 3: Thử nghiệm Lỗ hổng IDOR (Phép thử 1)
-1. Bấm vào **Nút tròn nổi FAB** ở góc dưới bên phải màn hình.
+1. Bấm vào **Nút tròn Terminal màu đen** ở góc dưới cùng bên phải.
 2. Nhấn nút **`Lệnh: Tạo Lỗi (set BUG_IDOR=1)`** (Đèn FAB chuyển đỏ, banner trên cùng chuyển đỏ: *LỖI IDOR: ĐANG BẬT*).
-3. Nhấn vào tài khoản **`Bệnh nhân An (Patient)`**.
+3. Bấm vào **Nút tròn chuyển tài khoản màu xanh**, chọn **`Nguyễn Văn An (bn_an)`**.
 4. Tại ô **"TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID"**, gõ số `3` và bấm **`Tra Cứu Bệnh Án`**.
 5. **Kết quả quan sát được:** Bệnh nhân An đọc được toàn bộ bệnh án số 03 của Bình kèm Hộp cảnh báo IDOR nhấp nháy đỏ rực.
 6. Thử bấm **`Chỉnh Sửa Bệnh Án`** -> An được phép sửa chẩn đoán bệnh án số 03 của Bình và lưu thành công (IDOR on Update).

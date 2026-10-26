@@ -488,14 +488,19 @@ def build_demo_document():
     r_end.font.size = Pt(11)
     r_end.font.color.rgb = RGBColor(2, 132, 199)
 
-    out_docx = r"C:\University\Nam_3_K1\PTPMMNM\btvn\lab5\Huong_Dan_Demo_Bao_Cao.docx"
-    try:
-        doc.save(out_docx)
-        print(f"SUCCESS: Generated {out_docx}")
-    except PermissionError:
-        alt_docx = r"C:\University\Nam_3_K1\PTPMMNM\btvn\lab5\Huong_Dan_Demo_Bao_Cao_v2.docx"
-        doc.save(alt_docx)
-        print(f"NOTE: {out_docx} is locked (e.g. by WPS/Word). Successfully saved to {alt_docx}!")
+    base_path = r"C:\University\Nam_3_K1\PTPMMNM\btvn\lab5\Huong_Dan_Demo_Bao_Cao"
+    saved = False
+    for suffix in ["", "_v2", "_v3", "_v4", "_v5"]:
+        target = f"{base_path}{suffix}.docx"
+        try:
+            doc.save(target)
+            print(f"SUCCESS: Saved demo document to: {target}")
+            saved = True
+            break
+        except PermissionError:
+            continue
+    if not saved:
+        print("WARNING: All candidate docx files were locked by Word/WPS.")
 
 if __name__ == "__main__":
     build_demo_document()
