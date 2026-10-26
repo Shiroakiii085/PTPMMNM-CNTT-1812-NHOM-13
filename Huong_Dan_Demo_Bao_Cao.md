@@ -14,7 +14,7 @@
 3. [Kịch Bản Trình Diễn Demo Từng Bước (Step-by-Step Script)](#3-kịch-bản-trình-diễn-demo-từng-bước-step-by-step-script)
    - [Giai đoạn 1 (0:00 - 1:30): Mở đầu, Đặt vấn đề & Giới thiệu Kiến trúc](#giai-đoạn-1-000---130-mở-đầu-đặt-vấn-đề--giới-thiệu-kiến-trúc)
    - [Giai đoạn 2 (1:30 - 5:00): Trình diễn Ứng dụng Y tế MediRecord EMR (Cổng 8205)](#giai-đoạn-2-130---500-trình-diễn-ứng-dụng-y-tế-medirecord-emr-cổng-8205)
-   - [Giai đoạn 3 (5:00 - 8:30): Trình diễn Công cụ Kiểm thử Tự động AccessTester (Cổng 8105)](#giai-đoạn-3-500---830-trình-diễn-công-cụ-kiểm-thử-tự-động-accesstester-cổng-8105)
+   - [Giai đoạn 3 (5:00 - 8:30): Trình diễn Trung Tâm Giám Sát An Ninh & Kiểm Thử Phân Quyền (tester_sec)](#giai-đoạn-3-500---830-trình-diễn-trung-tâm-giám-sát-an-ninh--kiểm-thử-phân-quyền-tester_sec)
    - [Giai đoạn 4 (8:30 - 10:00): Trình diễn Kiểm thử Dòng lệnh & Test Suite 88/88 Pass](#giai-đoạn-4-830---1000-trình-diễn-kiểm-thử-dòng-lệnh--test-suite-8888-pass)
 4. [Bộ Câu Hỏi Phản Biện Thường Gặp Của Giảng Viên & Cách Trả Lời Xuất Sắc](#4-bộ-câu-hỏi-phản-biện-thường-gặp-của-giảng-viên--cách-trả-lời-xuất-sắc)
 5. [Bảng Tra Cứu Tài Khoản Thật & Lệnh Điều Khiển Nhanh](#5-bảng-tra-cứu-tài-khoản-thật--lệnh-điều-khiển-nhanh)
@@ -27,16 +27,15 @@
 
 | Thành phần | Địa chỉ / Cổng | Vai trò & Tính năng cốt lõi |
 | :--- | :--- | :--- |
-| **Ứng dụng Mục tiêu (Target App)<br>MediRecord EMR** | `http://localhost:8205`<br>*(127.0.0.1:8205)* | - Hệ thống quản lý bệnh án điện tử y tế thực tế.<br>- **Bộ đôi Nút tròn nổi FAB ở góc dưới bên phải màn hình**: Nút tròn xanh chuyển đổi tài khoản 1-Click popup (đặt bên trên) và Nút tròn đen Terminal điều khiển cờ lỗi bảo mật (đặt bên dưới).<br>- **Quy trình Đăng Nhập & Đăng Ký** tài khoản y tế hoàn chỉnh với các nút điền nhanh tài khoản kiểm thử.<br>- Bác sĩ Lê Hoàng Minh (`bs_minh`) lập và gửi bệnh án cho Bệnh nhân An, Bệnh nhân Bình.<br>- Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do (Test IDOR trực tiếp cả Xem và Sửa).<br>- Module Quản Trị Người Dùng Toàn Diện (Thêm, Sửa, Xóa, Tìm kiếm) dành riêng cho Quản trị viên.<br>- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt. |
-| **Công cụ Kiểm thử Tự động<br>AccessTester Engine & Web UI** | `http://localhost:8105`<br>*(127.0.0.1:8105)* | - Quản trị ma trận phân quyền RBAC & ABAC (Ownership scope).<br>- Khai báo và thực thi tự động 24 ca kiểm thử HTTP chuẩn.<br>- Cơ chế phân loại 3 trạng thái: PASS, FAIL (Lỗ hổng), ERROR (Mạng/kỹ thuật).<br>- Bộ lọc địa chỉ an toàn (Target Allowlist) chống tấn công SSRF.<br>- Cơ chế Redactor tự động khử thông tin nhạy cảm (token, mật khẩu).<br>- Giao diện Đối chiếu 2 Đợt Chạy (Compare Runs) kèm biểu đồ Chart.js trực quan. |
+| **Ứng dụng Y Tế & Trung Tâm Kiểm Thử Tích Hợp<br>MediRecord EMR (Cổng 8205)** | `http://localhost:8205`<br>*(127.0.0.1:8205)* | - **Nghiệp vụ Y tế thực tế:** Bác sĩ Lê Hoàng Minh (`bs_minh`) lập & gửi bệnh án cho Bệnh nhân An, Bình.<br>- **Hệ thống xác thực:** Đăng Nhập & Đăng Ký thành viên mới có nút điền nhanh tài khoản kiểm thử.<br>- **Bộ đôi Nút tròn nổi FAB ở góc dưới bên phải màn hình:** Nút tròn xanh đổi tài khoản 1-Click (ở trên) và Nút tròn đen Terminal điều khiển lỗi bảo mật (ở dưới).<br>- **Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do:** Trực quan hóa lỗi IDOR cả Xem và Sửa chéo bệnh án.<br>- **Module Quản Trị Người Dùng Cho Admin:** Thêm, Sửa, Xóa và Tìm kiếm nhân sự y tế tức thì.<br>- **Trung Tâm Giám Sát An Ninh & Kiểm Thử Cho Tester (`tester_sec`):** Bắt và cảnh báo vi phạm thời gian thực (Live Incident Feed), Ma trận 24 ca kiểm thử tự động (Access Matrix) và Bộ chạy 88 bài test hệ thống (Đã chuyển toàn bộ từ cổng 8105 sang cổng 8205). |
 
 ---
 
 ## 2. DANH MỤC CHUẨN BỊ MÔI TRƯỜNG TRƯỚC KHI BÁO CÁO
 
-Trước khi giảng viên yêu cầu demo, sinh viên thực hiện mở sẵn các dịch vụ nền:
+Trước khi giảng viên yêu cầu demo, sinh viên thực hiện mở sẵn môi trường:
 
-> 📌 **MẸO PHÒNG BÁO CÁO:** Mở sẵn 2 tab trình duyệt: Tab 1 tại `http://localhost:8205` (MediRecord EMR) và Tab 2 tại `http://localhost:8105` (AccessTester) để chuyển đổi nhanh khi thuyết trình.
+> 📌 **MẸO PHÒNG BÁO CÁO:** Chỉ cần 1 tab trình duyệt duy nhất tại **`http://localhost:8205`** vì toàn bộ chức năng nghiệp vụ và công cụ kiểm thử an ninh đã được tích hợp tập trung hoàn chỉnh tại cổng 8205!
 
 - **Bước 1: Khởi động CSDL PostgreSQL (WSL/Linux):**
   ```bash
@@ -52,14 +51,10 @@ Trước khi giảng viên yêu cầu demo, sinh viên thực hiện mở sẵn 
   bash lab.sh check
   # Kết quả: MOI_TRUONG=SAN_SANG
   ```
-- **Bước 4: Khởi động Ứng dụng Y tế MediRecord (Cổng 8205):**
+- **Bước 4: Khởi động Ứng dụng Y tế & Kiểm thử MediRecord (Cổng 8205 duy nhất):**
   ```bash
   bash lab.sh target:start
   # Hoặc: php -S 127.0.0.1:8205 -t sample-app/public
-  ```
-- **Bước 5: Khởi động Công cụ AccessTester Web UI (Cổng 8105):**
-  ```bash
-  php -S 127.0.0.1:8105 -t public
   ```
 
 ---
@@ -108,26 +103,27 @@ Trước khi giảng viên yêu cầu demo, sinh viên thực hiện mở sẵn 
 
 ---
 
-### Giai đoạn 3 (5:00 - 8:30): Trình diễn Công cụ Kiểm thử Tự động AccessTester (Cổng 8105)
-*Chuyển sang tab trình duyệt tại `http://localhost:8105`:*
+### Giai đoạn 3 (5:00 - 8:30): Trình diễn Trung Tâm Giám Sát An Ninh & Kiểm Thử Phân Quyền (tester_sec)
+*Toàn bộ chức năng kiểm thử phân quyền đã được chuyển dời và tích hợp tập trung vào cổng 8205 cho Kỹ sư Bảo mật (`tester_sec` - Trần Bảo Nam), loại bỏ hoàn toàn việc phải vận hành cổng 8105 riêng biệt:*
 
-1. **Bước 3.1: Giới thiệu Quản lý Dự án & Danh mục 24 Ca kiểm thử HTTP:**
-   - Mở mục **Dự án** và **Bộ ca thử**: Giải thích ma trận 24 ca kiểm thử bao quát đầy đủ 6 API x 4 ca thử nghiệm (`P01-P04`, `N01-N04`, `R01-R04`, `U01-U04`, `A01-A04`, `M01-M04`).
-   - Nhấn mạnh ca kiểm thử **`R02`** chính là ca thử nghiệm bẫy phát hiện IDOR.
-2. **Bước 3.2: Chạy kiểm thử Đợt 1 (Khi ứng dụng còn Lỗi `BUG_IDOR=1`):**
-   - Nhấn nút **Chạy kiểm thử ngay** (chọn Dự án #1). Hệ thống gửi 24 yêu cầu HTTP song song.
-   - **KẾT QUẢ SHOW GIẢNG VIÊN:** Đợt chạy ghi nhận: **23 PASS, 1 FAIL, 0 ERROR**. Bấm vào chi tiết ca `R02`: Hiển thị cờ `leak_detected = true` do máy chủ trả về HTTP 200 kèm chuỗi nhạy cảm của Bob/Bình.
-3. **Bước 3.3: Chạy kiểm thử Đợt 2 (Sau khi đã vá lỗi `BUG_IDOR=0`):**
-   - Sau khi ứng dụng mục tiêu được vá lỗi, bấm chạy đợt kiểm thử mới.
-   - **KẾT QUẢ SHOW GIẢNG VIÊN:** Đợt chạy ghi nhận hoàn hảo: **24 PASS, 0 FAIL, 0 ERROR (100% ĐẠT CHUẨN)**. Ca `R02` đã chuyển sang trạng thái PASS vì máy chủ đã chặn đúng mã HTTP 403 Forbidden.
-4. **Bước 3.4: Trình diễn Tính năng "Đối chiếu 2 Đợt Chạy" (Compare Runs):**
-   - Mở menu **Đối chiếu** tại thanh điều hướng:
-     - Chọn Đợt chạy A: Đợt có lỗi (23 PASS, 1 FAIL).
-     - Chọn Đợt chạy B: Đợt an toàn (24 PASS, 0 FAIL).
-     - Bấm nút **Đối chiếu 2 đợt chạy**.
-   - **KẾT QUẢ SHOW GIẢNG VIÊN:** Màn hình hiển thị Biểu đồ cột so sánh tỉ lệ PASS/FAIL và bảng chi tiết làm nổi bật duy nhất ca `R02` với nhãn: **`[LỖ HỔNG -> ĐÃ KHẮC PHỤC] SỬA THÀNH CÔNG`**.
-5. **Bước 3.5: Trình diễn Báo cáo Kiểm thử & Cơ chế Redactor Khử Dữ liệu Nhạy Cảm:**
-   - Mở Báo cáo kiểm thử: Chỉ cho giảng viên thấy toàn bộ mã Bearer Token và mật khẩu CSDL đã được bộ lọc Redactor tự động băm che chắn (chỉ hiện dấu sao hoặc mã giả lập), đảm bảo an toàn tuyệt đối khi gửi báo cáo cho các bên liên quan.
+1. **Bước 3.1: Chuyển sang góc nhìn Kỹ sư Kiểm thử `tester_sec` (Trần Bảo Nam):**
+   - Bấm nút tròn xanh FAB -> chọn **Trần Bảo Nam (tester_sec)** (chú ý huy hiệu số lượng sự cố vi phạm màu đỏ ngay cạnh tên).
+   - Hệ thống tự động chuyển hướng vào **Trung Tâm Giám Sát An Ninh & Kiểm Thử** (/?view=tester).
+   - Giới thiệu bảng điều khiển an ninh: 4 Thẻ KPI (Tổng số sự cố vi phạm, Trạng thái lỗ hổng IDOR, Kết quả 24 ca kiểm thử ma trận, Bộ 88 test suite tích hợp).
+
+2. **Bước 3.2: Trình diễn Tab 1 - Nhật Ký Cảnh Báo Xâm Phạm Thời Gian Thực (Live Security Incidents Feed):**
+   - **Bắt quả tang vi phạm tự động:** Chỉ cho giảng viên thấy dòng sự kiện vừa được ghi nhận khi Bệnh nhân An (`bn_an`) vừa cố tình đọc trộm hoặc chỉnh sửa bệnh án #03 của Bình ở Bước 2.4. Dòng cảnh báo màu đỏ mức độ **CRITICAL**, có đầy đủ thông tin thời gian, đối tượng (`bn_an`), mục tiêu (Bệnh án #03) và mã HTTP 200.
+   - Thử bấm nút **⚡ Mô Phỏng Tấn Công IDOR**: Hệ thống giả lập ngay một sự cố tấn công mới để kiểm thử cơ chế phát hiện.
+   - Giới thiệu các nút tác vụ an ninh: *Xóa nhật ký*, *Chuyển sang BN An để thử tấn công*, *Vá lỗi / Bật lỗi tức thì*.
+
+3. **Bước 3.3: Trình diễn Tab 2 - Ma Trận 24 Ca Kiểm Thử Phân Quyền Tự Động (Access Matrix):**
+   - Chuyển sang Tab 2: Giới thiệu ma trận 24 ca kiểm thử bao quát đầy đủ 5 phân hệ API (P01-P04, N01-N04, R01-R04, U01-U04, A01-A04, M01-M04).
+   - **Khi còn Lỗi IDOR (BUG_IDOR=1):** Ca kiểm thử **R02** báo màu đỏ **FAIL** (kết quả toàn hệ thống: **23 PASS / 1 FAIL**).
+   - **Khi đã Vá Lỗi IDOR (BUG_IDOR=0):** Ca kiểm thử **R02** tự động chuyển xanh **PASS** (kết quả toàn hệ thống: **24 PASS / 0 FAIL - 100% Đạt chuẩn**).
+
+4. **Bước 3.4: Trình diễn Tab 3 - Chạy Toàn Bộ Test Suite Hệ Thống (88 Tests CLI):**
+   - Chuyển sang Tab 3: Bấm nút **▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)**.
+   - Máy chủ thực thi lệnh kiểm thử CLI ngầm và hiển thị trực tiếp đầu ra console 88/88 test cases pass ngay trên giao diện web của Kỹ sư bảo mật mà không cần mở terminal bên ngoài.
 
 ---
 

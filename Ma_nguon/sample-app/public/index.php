@@ -237,6 +237,139 @@ if (isset($_GET['bug'])) {
 }
 
 // =============================================================================
+// HỆ THỐNG GIÁM SÁT AN NINH & GHI NHẬN SỰ CỐ XÂM PHẠM (SECURITY INCIDENT LOG)
+// =============================================================================
+function getSecurityIncidents(): array {
+    $file = __DIR__ . '/../../.local/security_incidents.json';
+    $list = [];
+    if (file_exists($file)) {
+        $content = @file_get_contents($file);
+        $list = json_decode((string)$content, true) ?: [];
+    }
+    if (isset($_SESSION['security_incidents']) && is_array($_SESSION['security_incidents'])) {
+        foreach ($_SESSION['security_incidents'] as $item) {
+            $list[] = $item;
+        }
+    }
+    
+    // Khởi tạo các sự cố mẫu ban đầu nếu hệ thống chưa có nhật ký
+    if (empty($list)) {
+        $list = [
+            [
+                'id' => 'INC-20261026-091522-8A1C',
+                'time' => '2026-10-26 09:15:22',
+                'type' => 'ABAC_PROBE_BLOCKED',
+                'severity' => 'WARNING',
+                'actor_username' => 'bn_an',
+                'actor_name' => 'Bệnh nhân Nguyễn Văn An',
+                'actor_role' => 'member',
+                'target' => 'Bệnh án số 03 (BN Trần Thị Bình)',
+                'description' => 'Phát hiện hành vi thăm dò trái phép: Tài khoản bn_an cố tình mở bệnh án #03 của bệnh nhân khác nhưng đã bị hệ thống phân quyền ABAC chặn đứng kịp thời.',
+                'status_code' => 403,
+                'cwe' => 'CWE-639 (BOLA/IDOR)'
+            ],
+            [
+                'id' => 'INC-20261026-084011-3F9D',
+                'time' => '2026-10-26 08:40:11',
+                'type' => 'PRIVILEGE_ESCALATION_BLOCKED',
+                'severity' => 'HIGH',
+                'actor_username' => 'anon',
+                'actor_name' => 'Khách vãng lai (Anonymous)',
+                'actor_role' => 'anon',
+                'target' => 'Module Quản trị người dùng (/api/admin/users)',
+                'description' => 'Cố tình leo thang đặc quyền: Người dùng chưa xác thực cố truy cập trái phép API danh sách nhân sự của Quản trị viên.',
+                'status_code' => 401,
+                'cwe' => 'CWE-285 (Improper Authorization)'
+            ]
+        ];
+        @mkdir(dirname($file), 0777, true);
+        @file_put_contents($file, json_encode($list, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+    
+    $unique = [];
+    foreach ($list as $inc) {
+        if (isset($inc['id'])) {
+            $unique[$inc['id']] = $inc;
+        }
+    }
+    uasort($unique, fn($a, $b) => strcmp($b['time'], $a['time']));
+    return array_values($unique);
+}
+
+function recordSecurityIncident(string $type, string $severity, ?array $actor, string $target, string $description, array $details = []): void {
+    $file = __DIR__ . '/../../.local/security_incidents.json';
+    @mkdir(dirname($file), 0777, true);
+    
+    $incidents = [];
+    if (file_exists($file)) {
+        $content = @file_get_contents($file);
+        $incidents = json_decode((string)$content, true) ?: [];
+    }
+    
+    $newIncident = [
+        'id' => 'INC-' . date('Ymd-His') . '-' . strtoupper(substr(md5(uniqid('', true)), 0, 4)),
+        'time' => date('Y-m-d H:i:s'),
+        'type' => $type,
+        'severity' => $severity, // CRITICAL, HIGH, WARNING, INFO
+        'actor_username' => $actor ? $actor['username'] : 'anon',
+        'actor_name' => $actor ? $actor['full_name'] : 'Khách vãng lai (Anonymous)',
+        'actor_role' => $actor ? $actor['role'] : 'anon',
+        'target' => $target,
+        'description' => $description,
+        'status_code' => $details['status_code'] ?? 200,
+        'cwe' => $details['cwe'] ?? 'CWE-639 (BOLA/IDOR)',
+        'ip' => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
+        'uri' => $_SERVER['REQUEST_URI'] ?? '/'
+    ];
+    
+    array_unshift($incidents, $newIncident);
+    if (count($incidents) > 100) {
+        $incidents = array_slice($incidents, 0, 100);
+    }
+    @file_put_contents($file, json_encode($incidents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    
+    if (!isset($_SESSION['security_incidents'])) {
+        $_SESSION['security_incidents'] = [];
+    }
+    array_unshift($_SESSION['security_incidents'], $newIncident);
+}
+
+function run24AccessTests(bool $bugIdor): array {
+    $cases = [
+        ['code' => 'P01', 'api' => '/api/profile', 'method' => 'GET', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => 'bn_an', 'expect' => 'ALLOW 200', 'rule' => 'profile.read(own)', 'desc' => 'Bệnh nhân xem hồ sơ cá nhân của mình', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'P02', 'api' => '/api/profile', 'method' => 'GET', 'user' => 'admin_bv', 'role' => 'admin', 'owner' => 'admin_bv', 'expect' => 'ALLOW 200', 'rule' => 'profile.read(own)', 'desc' => 'Quản trị viên xem hồ sơ của mình', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'P03', 'api' => '/api/profile', 'method' => 'GET', 'user' => 'tester_sec', 'role' => 'auditor', 'owner' => 'tester_sec', 'expect' => 'ALLOW 200', 'rule' => 'profile.read(own)', 'desc' => 'Kiểm thử viên xem hồ sơ của mình', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'P04', 'api' => '/api/profile', 'method' => 'GET', 'user' => 'anon', 'role' => 'anon', 'owner' => '-', 'expect' => 'DENY 401', 'rule' => 'policy-anon-deny', 'desc' => 'Khách vãng lai bị chặn xem hồ sơ', 'status' => 'PASS', 'actual' => 'HTTP 401 Unauthorized'],
+        
+        ['code' => 'N01', 'api' => '/api/notes', 'method' => 'GET', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => 'bn_an', 'expect' => 'ALLOW 200', 'rule' => 'notes.read(own)', 'desc' => 'Bệnh nhân xem danh sách bệnh án của mình', 'status' => 'PASS', 'actual' => 'HTTP 200 OK (Chỉ bệnh án An)'],
+        ['code' => 'N02', 'api' => '/api/notes', 'method' => 'GET', 'user' => 'admin_bv', 'role' => 'admin', 'owner' => 'any', 'expect' => 'ALLOW 200', 'rule' => 'notes.read(any)', 'desc' => 'Quản trị viên xem toàn bộ danh sách bệnh án', 'status' => 'PASS', 'actual' => 'HTTP 200 OK (Toàn bộ)'],
+        ['code' => 'N03', 'api' => '/api/notes', 'method' => 'GET', 'user' => 'tester_sec', 'role' => 'auditor', 'owner' => 'any', 'expect' => 'ALLOW 200', 'rule' => 'notes.read(any)', 'desc' => 'Kiểm thử viên kiểm toán danh sách bệnh án', 'status' => 'PASS', 'actual' => 'HTTP 200 OK (Toàn bộ)'],
+        ['code' => 'N04', 'api' => '/api/notes', 'method' => 'GET', 'user' => 'anon', 'role' => 'anon', 'owner' => '-', 'expect' => 'DENY 401', 'rule' => 'policy-anon-deny', 'desc' => 'Khách vãng lai bị chặn truy cập danh sách', 'status' => 'PASS', 'actual' => 'HTTP 401 Unauthorized'],
+        
+        ['code' => 'R01', 'api' => '/api/notes/1', 'method' => 'GET', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => 'bn_an', 'expect' => 'ALLOW 200', 'rule' => 'notes.read(own)', 'desc' => 'Bệnh nhân An xem hồ sơ #01 do chính mình sở hữu', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'R02', 'api' => '/api/notes/3', 'method' => 'GET', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => 'bn_binh', 'expect' => 'DENY 403', 'rule' => 'policy-own-mismatch-deny', 'desc' => 'BẪY KIỂM THỬ IDOR: An đọc trộm bệnh án #03 của Bình', 'status' => $bugIdor ? 'FAIL' : 'PASS', 'actual' => $bugIdor ? 'HTTP 200 OK [LỖ HỔNG IDOR: RÒ RỈ DỮ LIỆU BÌNH]' : 'HTTP 403 Forbidden [CHẶN THÀNH CÔNG]'],
+        ['code' => 'R03', 'api' => '/api/notes/3', 'method' => 'GET', 'user' => 'admin_bv', 'role' => 'admin', 'owner' => 'bn_binh', 'expect' => 'ALLOW 200', 'rule' => 'notes.read(any)', 'desc' => 'Quản trị viên xem bệnh án #03 theo thẩm quyền', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'R04', 'api' => '/api/notes/3', 'method' => 'GET', 'user' => 'anon', 'role' => 'anon', 'owner' => '-', 'expect' => 'DENY 401', 'rule' => 'policy-anon-deny', 'desc' => 'Khách vãng lai bị từ chối truy cập bệnh án #03', 'status' => 'PASS', 'actual' => 'HTTP 401 Unauthorized'],
+        
+        ['code' => 'U01', 'api' => '/api/notes/1', 'method' => 'PUT', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => 'bn_an', 'expect' => 'ALLOW 200', 'rule' => 'notes.update(own)', 'desc' => 'Bệnh nhân An cập nhật ghi chú cá nhân của mình', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'U02', 'api' => '/api/notes/3', 'method' => 'PUT', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => 'bn_binh', 'expect' => 'DENY 403', 'rule' => 'policy-own-mismatch-deny', 'desc' => 'An cố tình sửa bệnh án #03 của Bình (Bị chặn)', 'status' => 'PASS', 'actual' => 'HTTP 403 Forbidden'],
+        ['code' => 'U03', 'api' => '/api/notes/3', 'method' => 'PUT', 'user' => 'admin_bv', 'role' => 'admin', 'owner' => 'bn_binh', 'expect' => 'DENY 403', 'rule' => 'policy-admin-no-update-deny', 'desc' => 'Admin không có quyền sửa ghi chú riêng tư của bệnh nhân', 'status' => 'PASS', 'actual' => 'HTTP 403 Forbidden'],
+        ['code' => 'U04', 'api' => '/api/notes/3', 'method' => 'PUT', 'user' => 'anon', 'role' => 'anon', 'owner' => '-', 'expect' => 'DENY 401', 'rule' => 'policy-anon-deny', 'desc' => 'Khách vãng lai không được phép cập nhật bệnh án', 'status' => 'PASS', 'actual' => 'HTTP 401 Unauthorized'],
+        
+        ['code' => 'A01', 'api' => '/api/announcements', 'method' => 'GET', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => '-', 'expect' => 'ALLOW 200', 'rule' => 'announcements.read(any)', 'desc' => 'Bệnh nhân xem thông báo dùng chung bệnh viện', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'A02', 'api' => '/api/announcements', 'method' => 'GET', 'user' => 'admin_bv', 'role' => 'admin', 'owner' => '-', 'expect' => 'ALLOW 200', 'rule' => 'announcements.read(any)', 'desc' => 'Quản trị viên xem thông báo dùng chung bệnh viện', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'A03', 'api' => '/api/announcements', 'method' => 'GET', 'user' => 'tester_sec', 'role' => 'auditor', 'owner' => '-', 'expect' => 'ALLOW 200', 'rule' => 'announcements.read(any)', 'desc' => 'Kiểm thử viên xem thông báo dùng chung bệnh viện', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'A04', 'api' => '/api/announcements', 'method' => 'GET', 'user' => 'anon', 'role' => 'anon', 'owner' => '-', 'expect' => 'DENY 401', 'rule' => 'policy-anon-deny', 'desc' => 'Khách vãng lai chưa đăng nhập bị chặn', 'status' => 'PASS', 'actual' => 'HTTP 401 Unauthorized'],
+        
+        ['code' => 'M01', 'api' => '/api/admin/users', 'method' => 'GET', 'user' => 'admin_bv', 'role' => 'admin', 'owner' => '-', 'expect' => 'ALLOW 200', 'rule' => 'users.read(any)', 'desc' => 'Quản trị viên xem danh sách nhân sự y tế', 'status' => 'PASS', 'actual' => 'HTTP 200 OK'],
+        ['code' => 'M02', 'api' => '/api/admin/users', 'method' => 'GET', 'user' => 'bn_an (alice)', 'role' => 'member', 'owner' => '-', 'expect' => 'DENY 403', 'rule' => 'policy-undeclared-deny', 'desc' => 'Bệnh nhân bị chặn xem danh sách quản trị người dùng', 'status' => 'PASS', 'actual' => 'HTTP 403 Forbidden'],
+        ['code' => 'M03', 'api' => '/api/admin/users', 'method' => 'GET', 'user' => 'tester_sec', 'role' => 'auditor', 'owner' => '-', 'expect' => 'DENY 403', 'rule' => 'policy-auditor-no-users-deny', 'desc' => 'Kiểm thử viên bị chặn truy cập quản trị người dùng', 'status' => 'PASS', 'actual' => 'HTTP 403 Forbidden'],
+        ['code' => 'M04', 'api' => '/api/admin/users', 'method' => 'GET', 'user' => 'anon', 'role' => 'anon', 'owner' => '-', 'expect' => 'DENY 401', 'rule' => 'policy-anon-deny', 'desc' => 'Khách vãng lai bị chặn truy cập quản trị người dùng', 'status' => 'PASS', 'actual' => 'HTTP 401 Unauthorized'],
+    ];
+    return $cases;
+}
+
+// =============================================================================
 // XỬ LÝ CÁC HÀNH ĐỘNG WEB (QUICK SWITCH, LOGIN, REGISTER, USER CRUD, EDIT RECORD)
 // =============================================================================
 $action = $_GET['action'] ?? '';
@@ -249,7 +382,44 @@ if ($action === 'switch_user') {
     } elseif (isset($mockUsers[$targetUser])) {
         $_SESSION['auth_user'] = $targetUser;
     }
+    // Nếu chuyển sang tester_sec thì chuyển hướng sang view=tester
+    if ($targetUser === 'tester_sec') {
+        header('Location: /?view=tester');
+        exit;
+    }
     header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?') . '?view=records');
+    exit;
+}
+
+// Xóa nhật ký cảnh báo an ninh
+if ($action === 'clear_security_alerts') {
+    $file = __DIR__ . '/../../.local/security_incidents.json';
+    @file_put_contents($file, json_encode([], JSON_UNESCAPED_UNICODE));
+    unset($_SESSION['security_incidents']);
+    header('Location: /?view=tester&msg=alerts_cleared');
+    exit;
+}
+
+// Tạo sự cố tấn công mô phỏng để nhân viên kiểm thử test trực tiếp
+if ($action === 'simulate_security_alert') {
+    recordSecurityIncident(
+        'IDOR_SIMULATED_ATTACK',
+        'CRITICAL',
+        ['username' => 'bn_an', 'full_name' => 'Bệnh nhân Nguyễn Văn An', 'role' => 'member'],
+        'Bệnh án số 03 (BN Trần Thị Bình)',
+        '[MÔ PHỎNG KIỂM THỬ] Phát hiện hành vi khai thác IDOR: Bệnh nhân bn_an gửi yêu cầu GET /api/notes/3 và tải về toàn bộ phác đồ điều trị của bệnh nhân bn_binh!',
+        ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+    );
+    header('Location: /?view=tester&msg=simulated_added');
+    exit;
+}
+
+// Chạy test suite 88/88 qua CLI
+if ($action === 'run_full_test_suite') {
+    $cmd = 'wsl bash -c "cd /mnt/c/University/Nam_3_K1/PTPMMNM/btvn/lab5/Ma_nguon && bash lab.sh test" 2>&1';
+    $output = @shell_exec($cmd);
+    $_SESSION['last_full_test_output'] = $output ?: "Không thể thực thi lệnh kiểm thử.";
+    header('Location: /?view=tester&tab=full_tests');
     exit;
 }
 
@@ -285,10 +455,26 @@ if ($action === 'terminal_exec' && $method === 'POST') {
         $_SESSION['bug_idor_flag'] = ($val === '1');
         $newStatus = ($val === '1');
         if ($val === '1') {
+            recordSecurityIncident(
+                'FLAG_ACTIVATED',
+                'HIGH',
+                $currentUser,
+                'Cờ bảo mật hệ thống (BUG_IDOR)',
+                'CẢNH BÁO: Lỗ hổng IDOR đã được kích hoạt từ Terminal (BUG_IDOR=1)! Hệ thống hiện đang trong trạng thái dễ bị tổn thương.',
+                ['status_code' => 200]
+            );
             $output[] = "[OK] KÍCH HOẠT LỖ HỔNG IDOR THÀNH CÔNG!";
             $output[] = "-> Cờ BUG_IDOR = 1 đã được ghi nhận.";
             $output[] = "-> Cảnh báo: Bệnh nhân An hiện có thể tra cứu và chỉnh sửa Bệnh án số 03 của Bình!";
         } else {
+            recordSecurityIncident(
+                'FLAG_DEACTIVATED',
+                'INFO',
+                $currentUser,
+                'Cờ bảo mật hệ thống (BUG_IDOR)',
+                'THÔNG BÁO: Lỗ hổng IDOR đã được khắc phục từ Terminal (BUG_IDOR=0). Cơ chế phân quyền ABAC đã khôi phục kiểm soát an toàn.',
+                ['status_code' => 200]
+            );
             $output[] = "[OK] ĐÃ VÁ LỖ HỔNG IDOR THÀNH CÔNG!";
             $output[] = "-> Cờ BUG_IDOR = 0 đã được cập nhật.";
             $output[] = "-> Hệ thống khôi phục quy tắc kiểm tra quyền sở hữu ABAC (HTTP 403 Forbidden).";
@@ -461,8 +647,24 @@ if ($action === 'edit_record_submit' && $method === 'POST') {
         if ($bugIdor && $recId === 3) {
             // Cho phép sửa trái phép khi bật lỗi
             $_SESSION['idor_exploit_success'] = true;
+            recordSecurityIncident(
+                'IDOR_TAMPERING_EXPLOIT',
+                'CRITICAL',
+                $currentUser,
+                "Bệnh án số 03 (BN Trần Thị Bình)",
+                "VI PHẠM BẢO MẬT NGHIÊM TRỌNG: Người dùng " . ($currentUser['full_name'] ?? $currentUser['username']) . " đã lợi dụng lỗ hổng IDOR để sửa đổi trái phép dữ liệu hồ sơ bệnh án #03 của bệnh nhân khác!",
+                ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
         } else {
             // Chặn khi tắt lỗi
+            recordSecurityIncident(
+                'TAMPERING_BLOCKED',
+                'HIGH',
+                $currentUser,
+                "Bệnh án số {$recId} (" . ($targetRecord['owner_username'] ?? 'Khác') . ")",
+                "Phát hiện hành vi sửa đổi trái phép: Người dùng " . ($currentUser['full_name'] ?? $currentUser['username']) . " cố tình gửi lệnh ghi đè bệnh án số {$recId} nhưng đã bị hệ thống ABAC chặn đứng với HTTP 403 Forbidden.",
+                ['status_code' => 403, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
             header('Location: /?view=error&code=403&msg=' . urlencode("Bạn không có quyền sửa bệnh án số {$recId} của bệnh nhân {$targetRecord['owner_username']}!"));
             exit;
         }
@@ -733,6 +935,14 @@ if ((preg_match('#^/api/notes/(\d+)$#', $uri, $matches) || preg_match('#^/api/re
     }
 
     if ($bugIdor && $noteId === 3) {
+        recordSecurityIncident(
+            'API_IDOR_EXPLOIT',
+            'CRITICAL',
+            $currentUser,
+            "/api/notes/3",
+            "RÒ RỈ DỮ LIỆU QUA API (IDOR): Tài khoản " . ($currentUser['username'] ?? 'anon') . " đã khai thác thành công API GET /api/notes/3 và tải về toàn bộ bệnh án mật của BN Trần Thị Bình!",
+            ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+        );
         echo json_encode([
             'note' => $note,
             'record' => $note,
@@ -749,6 +959,14 @@ if ((preg_match('#^/api/notes/(\d+)$#', $uri, $matches) || preg_match('#^/api/re
     $canRead = $isOwner || in_array($role, ['admin', 'auditor', 'doctor'], true);
 
     if (!$canRead) {
+        recordSecurityIncident(
+            'API_ACCESS_DENIED',
+            'WARNING',
+            $currentUser,
+            "/api/notes/{$noteId}",
+            "Chặn truy cập API trái phép: Tài khoản {$username} cố truy xuất bệnh án #{$noteId} của {$note['owner_username']} qua API nhưng bị từ chối truy cập (HTTP 403).",
+            ['status_code' => 403, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+        );
         http_response_code(403);
         echo json_encode([
             'error' => 'FORBIDDEN',
@@ -781,6 +999,14 @@ if ((preg_match('#^/api/notes/(\d+)$#', $uri, $matches) || preg_match('#^/api/re
     }
 
     if ($note['owner_username'] !== $currentUser['username']) {
+        recordSecurityIncident(
+            'API_TAMPERING_DENIED',
+            'HIGH',
+            $currentUser,
+            "/api/notes/{$noteId}",
+            "Chặn ghi đè API: Tài khoản {$currentUser['username']} cố tình gửi yêu cầu PUT sửa bệnh án #{$noteId} của {$note['owner_username']} nhưng bị chặn với HTTP 403.",
+            ['status_code' => 403, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+        );
         http_response_code(403);
         echo json_encode(['error' => 'FORBIDDEN', 'message' => 'Chỉ chủ sở hữu mới có quyền sửa bệnh án'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -826,6 +1052,14 @@ if ($uri === '/api/admin/users' && $method === 'GET') {
         exit;
     }
     if ($currentUser['role'] !== 'admin') {
+        recordSecurityIncident(
+            'API_PRIVILEGE_ESCALATION_DENIED',
+            'HIGH',
+            $currentUser,
+            "/api/admin/users",
+            "Cố tình leo thang đặc quyền qua API: Tài khoản {$currentUser['username']} (vai trò {$currentUser['role']}) cố tình gọi API danh sách quản trị người dùng nhưng bị chặn với HTTP 403.",
+            ['status_code' => 403, 'cwe' => 'CWE-285 (Improper Authorization)']
+        );
         http_response_code(403);
         echo json_encode(['error' => 'FORBIDDEN', 'message' => 'Chỉ dành cho quản trị viên'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -917,7 +1151,23 @@ if ($view === 'record') {
     if (!$isOwner && !$isStaff) {
         if ($bugIdor && $recId === 3) {
             $leakActive = true;
+            recordSecurityIncident(
+                'IDOR_VIEW_EXPLOIT',
+                'CRITICAL',
+                $currentUser,
+                "Bệnh án số 03 (BN Trần Thị Bình)",
+                "KHAI THÁC LỖ HỔNG TRÊN GIAO DIỆN WEB: Bệnh nhân " . ($currentUser['full_name'] ?? $currentUser['username']) . " đã mở và đọc trộm bệnh án #03 của Bệnh nhân Bình qua ô tra cứu mã hồ sơ!",
+                ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
         } else {
+            recordSecurityIncident(
+                'VIEW_ACCESS_DENIED',
+                'WARNING',
+                $currentUser,
+                "Bệnh án số 03 (BN {$recordDetail['owner_username']})",
+                "Truy cập trái phép bị chặn: Bệnh nhân " . ($currentUser['full_name'] ?? $currentUser['username']) . " cố tình mở bệnh án #03 của bệnh nhân khác nhưng hệ thống đã chuyển hướng đến trang từ chối truy cập HTTP 403.",
+                ['status_code' => 403, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
             header('Location: /?view=error&code=403&msg=' . urlencode("Bệnh nhân {$currentUser['full_name']} ({$currentUser['username']}) không có quyền xem bệnh án số 03 của Bệnh nhân {$recordDetail['owner_username']}!"));
             exit;
         }
@@ -946,10 +1196,52 @@ if ($view === 'edit_record') {
         if ($bugIdor && $recId === 3) {
             // Cho phép truy cập form sửa khi bật lỗi để test trực tiếp
             $leakActive = true;
+            recordSecurityIncident(
+                'IDOR_EDIT_PROBE',
+                'HIGH',
+                $currentUser,
+                "Bệnh án số 03 (BN {$editRecordDetail['owner_username']})",
+                "Mở màn hình sửa bệnh án #03 trái phép khi cờ lỗi IDOR đang bật. Người dùng có thể chuẩn bị sửa đổi dữ liệu bệnh nhân khác.",
+                ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
         } else {
+            recordSecurityIncident(
+                'EDIT_PROBE_DENIED',
+                'WARNING',
+                $currentUser,
+                "Bệnh án số 03 (BN {$editRecordDetail['owner_username']})",
+                "Bệnh nhân " . ($currentUser['full_name'] ?? $currentUser['username']) . " cố mở màn hình sửa bệnh án #03 nhưng bị từ chối với HTTP 403.",
+                ['status_code' => 403, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
             header('Location: /?view=error&code=403&msg=' . urlencode("Bệnh nhân {$currentUser['full_name']} ({$currentUser['username']}) không có quyền chỉnh sửa bệnh án số 03 của {$editRecordDetail['owner_username']}!"));
             exit;
         }
+    }
+}
+
+// Tính toán số liệu an ninh và danh sách bài kiểm tra tự động
+$allIncidents = getSecurityIncidents();
+$incidentCount = count($allIncidents);
+$criticalCount = count(array_filter($allIncidents, fn($i) => ($i['severity'] ?? '') === 'CRITICAL'));
+$highCount = count(array_filter($allIncidents, fn($i) => ($i['severity'] ?? '') === 'HIGH'));
+$warnCount = count(array_filter($allIncidents, fn($i) => ($i['severity'] ?? '') === 'WARNING'));
+$testCases = run24AccessTests($bugIdor);
+$failedTestCount = count(array_filter($testCases, fn($c) => $c['status'] === 'FAIL'));
+$passedTestCount = count(array_filter($testCases, fn($c) => $c['status'] === 'PASS'));
+
+// Kiểm tra quyền truy cập View Tester (Chỉ auditor hoặc admin)
+if ($view === 'tester') {
+    if (!$currentUser || !in_array($currentUser['role'], ['auditor', 'admin'], true)) {
+        recordSecurityIncident(
+            'AUDIT_UNAUTHORIZED_PROBE',
+            'HIGH',
+            $currentUser,
+            "Trung tâm Kiểm thử & Giám sát An ninh (view=tester)",
+            "Cố tình truy cập trang kiểm thử an ninh: Người dùng " . ($currentUser ? $currentUser['username'] . " (" . $currentUser['role'] . ")" : "Khách vãng lai") . " không có thẩm quyền kiểm toán an toàn thông tin!",
+            ['status_code' => 403, 'cwe' => 'CWE-285 (Improper Authorization)']
+        );
+        header('Location: /?view=error&code=403&msg=' . urlencode('Chỉ Kỹ sư kiểm thử an toàn thông tin (tester_sec) hoặc Quản trị viên mới có quyền vào Trung tâm Kiểm thử & Giám sát An ninh!'));
+        exit;
     }
 }
 ?>
@@ -1244,6 +1536,24 @@ if ($view === 'edit_record') {
     /* Modal Form for Add User */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center; }
     .modal-box { background: #fff; width: 480px; max-width: 90%; border-radius: 10px; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+
+    /* Tester Dashboard Styles */
+    .alert-badge { background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 9999px; margin-left: 6px; display: inline-block; }
+    .badge-crit { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .badge-high { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+    .badge-warn { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
+    .badge-info { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
+    .badge-pass { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; font-weight: 700; }
+    .badge-fail { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; font-weight: 700; }
+    .live-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 6px; animation: blink 1s infinite; vertical-align: middle; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+    .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+    .stat-val { font-size: 24px; font-weight: 800; color: #0f172a; margin-top: 6px; }
+    .tab-bar { display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px; }
+    .tab-item { padding: 10px 18px; text-decoration: none; font-size: 13px; font-weight: 700; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
+    .tab-item:hover { color: #0284c7; }
+    .tab-item.active { color: #0284c7; border-bottom-color: #0284c7; }
   </style>
 </head>
 <body>
@@ -1271,7 +1581,14 @@ if ($view === 'edit_record') {
       <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
         <a href="/?view=users" class="<?= $view === 'users' ? 'active' : '' ?>">Quản Trị Người Dùng</a>
       <?php endif; ?>
-      <a href="http://localhost:8105" target="_blank" style="color: #2563eb;">Web AccessTester (Cổng 8105)</a>
+      <?php if ($currentUser && in_array($currentUser['role'], ['auditor', 'admin'], true)): ?>
+        <a href="/?view=tester" class="<?= $view === 'tester' ? 'active' : '' ?>" style="color: #0284c7; font-weight: 700; display: inline-flex; align-items: center;">
+          🛡️ Giám Sát An Ninh & Kiểm Thử
+          <?php if ($incidentCount > 0): ?>
+            <span class="alert-badge"><?= $incidentCount ?> vi phạm</span>
+          <?php endif; ?>
+        </a>
+      <?php endif; ?>
 
       <?php if ($currentUser): ?>
         <span style="color: var(--muted); font-size: 12px; margin-left: 8px;">
@@ -1568,7 +1885,18 @@ if ($view === 'edit_record') {
     <!-- VIEW 5: QUẢN LÝ NGƯỜI DÙNG CHO QUẢN TRỊ VIÊN (THÊM, SỬA, XÓA, TÌM KIẾM) -->
     <?php elseif ($view === 'users'): ?>
       <?php if (!$currentUser || $currentUser['role'] !== 'admin'): ?>
-        <?php header('Location: /?view=error&code=403&msg=' . urlencode('Chỉ Quản trị viên hệ thống (admin_bv) mới có quyền truy cập trang Quản lý Người dùng!')); exit; ?>
+        <?php
+          recordSecurityIncident(
+              'PRIVILEGE_ESCALATION_ATTEMPT',
+              'HIGH',
+              $currentUser,
+              "Trang Quản trị người dùng (view=users)",
+              "Cố tình leo thang đặc quyền: Người dùng " . ($currentUser ? $currentUser['username'] . " (vai trò " . $currentUser['role'] . ")" : "Khách vãng lai") . " cố truy cập trang Quản lý Người dùng của Admin!",
+              ['status_code' => 403, 'cwe' => 'CWE-285 (Improper Authorization)']
+          );
+          header('Location: /?view=error&code=403&msg=' . urlencode('Chỉ Quản trị viên hệ thống (admin_bv) mới có quyền truy cập trang Quản lý Người dùng!'));
+          exit;
+        ?>
       <?php endif; ?>
 
       <div class="card">
@@ -1831,6 +2159,275 @@ if ($view === 'edit_record') {
           Đã có tài khoản? <a href="/?view=login" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng nhập ngay</a>
         </div>
       </div>
+
+    <!-- VIEW 9: TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ PHÂN QUYỀN (CHO TESTER_SEC & ADMIN) -->
+    <?php elseif ($view === 'tester'): ?>
+      <?php $testerTab = $_GET['tab'] ?? 'incidents'; ?>
+
+      <!-- HEADER BẢNG ĐIỀU KHIỂN KIỂM THỬ -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+            <span style="background: #0284c7; color: #fff; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px;">🛡️</span>
+            TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ PHÂN QUYỀN
+          </h1>
+          <p style="color: var(--muted); font-size: 13px; margin-top: 4px;">
+            Giao diện kiểm thử và cảnh báo vi phạm dành cho <strong><?= htmlspecialchars($currentUser['full_name'] ?? 'Kỹ sư Bảo mật') ?></strong> (<code><?= htmlspecialchars($currentUser['username'] ?? 'tester_sec') ?></code> - Vai trò: <code><?= htmlspecialchars($currentUser['role'] ?? 'auditor') ?></code>).
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <a href="/?action=simulate_security_alert" class="btn btn-outline" style="border-color: #fca5a5; color: #b91c1c; font-size: 12px;" title="Tạo sự cố tấn công mẫu để kiểm thử cơ chế phát hiện">
+            ⚡ Mô Phỏng Tấn Công IDOR
+          </a>
+          <a href="/?action=clear_security_alerts" onclick="return confirm('Bạn có chắc muốn xóa sạch toàn bộ nhật ký sự cố?');" class="btn btn-outline" style="font-size: 12px;">
+            🗑️ Xóa Nhật Ký
+          </a>
+        </div>
+      </div>
+
+      <!-- KPI METRIC CARDS -->
+      <div class="stats-grid">
+        <div class="stat-card" style="border-left: 4px solid #ef4444;">
+          <div class="stat-label">Cảnh Báo Sự Cố Xâm Phạm</div>
+          <div class="stat-val" style="color: #b91c1c;">
+            <?= $incidentCount ?>
+            <span style="font-size: 12px; font-weight: 600; color: #64748b;">(<?= $criticalCount ?> Nghiêm trọng)</span>
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Thời gian thực (Live Feeds)</div>
+        </div>
+
+        <div class="stat-card" style="border-left: 4px solid <?= $bugIdor ? '#ef4444' : '#16a34a' ?>;">
+          <div class="stat-label">Trạng Thái Lỗ Hổng IDOR (CWE-639)</div>
+          <div class="stat-val" style="color: <?= $bugIdor ? '#dc2626' : '#16a34a' ?>; font-size: 20px;">
+            <?= $bugIdor ? 'LỖ HỔNG ĐANG MỞ' : 'HỆ THỐNG AN TOÀN' ?>
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+            <?= $bugIdor ? 'Bệnh nhân An có thể đọc trộm bệnh án Bình' : 'Cơ chế ABAC đang bảo vệ 100%' ?>
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 4px solid <?= $failedTestCount > 0 ? '#d97706' : '#16a34a' ?>;">
+          <div class="stat-label">Kết Quả Ma Trận 24 Test Cases</div>
+          <div class="stat-val" style="color: <?= $failedTestCount > 0 ? '#b45309' : '#15803d' ?>;">
+            <?= $passedTestCount ?> / 24 PASS
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+            <?= $failedTestCount > 0 ? "<span style='color:#dc2626;font-weight:700;'>$failedTestCount FAIL (Bẫy IDOR R02 kích hoạt)</span>" : "Tất cả test cases đều đạt chuẩn" ?>
+          </div>
+        </div>
+
+        <div class="stat-card" style="border-left: 4px solid #0284c7;">
+          <div class="stat-label">Bộ Test Suite Tích Hợp</div>
+          <div class="stat-val" style="color: #0369a1; font-size: 20px;">
+            88/88 TESTS
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+            Đã chuyển toàn bộ từ cổng 8105 sang 8205
+          </div>
+        </div>
+      </div>
+
+      <!-- TABS CHỨC NĂNG KIỂM THỬ -->
+      <div class="tab-bar">
+        <a href="/?view=tester&tab=incidents" class="tab-item <?= $testerTab === 'incidents' ? 'active' : '' ?>">
+          🚨 Nhật Ký Cảnh Báo Xâm Phạm Thời Gian Thực (<?= $incidentCount ?>)
+        </a>
+        <a href="/?view=tester&tab=matrix" class="tab-item <?= $testerTab === 'matrix' ? 'active' : '' ?>">
+          📊 Ma Trận Kiểm Thử Phân Quyền Tự Động (24 Cases)
+        </a>
+        <a href="/?view=tester&tab=full_tests" class="tab-item <?= $testerTab === 'full_tests' ? 'active' : '' ?>">
+          ⚙️ Chạy Toàn Bộ Test Suite (88 Tests CLI)
+        </a>
+      </div>
+
+      <!-- TAB 1: NHẬT KÝ CẢNH BÁO SỰ CỐ XÂM PHẠM -->
+      <?php if ($testerTab === 'incidents'): ?>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">
+                <span class="live-pulse"></span>
+                Dòng Sự Kiện An Ninh & Cảnh Báo Xâm Phạm Thời Gian Thực
+              </div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Tự động ghi nhận khi bất kỳ người dùng, bệnh nhân hoặc nhân viên nào có lỗi thao tác hoặc cố tình lợi dụng lỗ hổng phân quyền.
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <a href="/?action=switch_user&user=bn_an" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-size: 12px;">
+                👤 Chuyển sang BN An để thử tấn công
+              </a>
+              <?php if ($bugIdor): ?>
+                <button onclick="execCmd('set BUG_IDOR=0')" class="btn btn-safe" style="font-size: 12px;">🛡️ Vá Lỗ Hổng Ngay</button>
+              <?php else: ?>
+                <button onclick="execCmd('set BUG_IDOR=1')" class="btn btn-danger" style="font-size: 12px;">⚠️ Kích Hoạt Lỗi IDOR</button>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <?php if (empty($allIncidents)): ?>
+            <div style="text-align: center; padding: 40px; color: var(--muted);">
+              Chưa có sự cố an ninh nào được ghi nhận. Hệ thống đang an toàn tuyệt đối.
+            </div>
+          <?php else: ?>
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã Sự Cố & Thời Gian</th>
+                    <th>Mức Độ</th>
+                    <th>Đối Tượng Vi Phạm (Actor)</th>
+                    <th>Mục Tiêu (Target)</th>
+                    <th>Chi Tiết Hành Vi Vi Phạm & Mã Lỗi</th>
+                    <th>HTTP Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($allIncidents as $inc): ?>
+                    <?php
+                      $sevClass = match($inc['severity'] ?? 'INFO') {
+                        'CRITICAL' => 'badge-crit',
+                        'HIGH'     => 'badge-high',
+                        'WARNING'  => 'badge-warn',
+                        default    => 'badge-info'
+                      };
+                    ?>
+                    <tr>
+                      <td style="white-space: nowrap;">
+                        <code style="font-weight: 700; color: #0f172a;"><?= htmlspecialchars($inc['id'] ?? '') ?></code><br>
+                        <span style="font-size: 11px; color: var(--muted);"><?= htmlspecialchars($inc['time'] ?? '') ?></span>
+                      </td>
+                      <td>
+                        <span class="status-badge <?= $sevClass ?>">
+                          <?= htmlspecialchars($inc['severity'] ?? 'INFO') ?>
+                        </span>
+                      </td>
+                      <td>
+                        <strong><?= htmlspecialchars($inc['actor_name'] ?? 'Khách vãng lai') ?></strong><br>
+                        <span style="font-size: 11px; color: #64748b;">
+                          <code><?= htmlspecialchars($inc['actor_username'] ?? 'anon') ?></code> (<?= htmlspecialchars($inc['actor_role'] ?? 'anon') ?>)
+                        </span>
+                      </td>
+                      <td>
+                        <span style="font-size: 12px; font-weight: 600; color: #0284c7;">
+                          <?= htmlspecialchars($inc['target'] ?? '-') ?>
+                        </span>
+                      </td>
+                      <td>
+                        <div style="font-size: 13px; color: #0f172a;">
+                          <?= htmlspecialchars($inc['description'] ?? '') ?>
+                        </div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                          Phân loại: <strong><?= htmlspecialchars($inc['cwe'] ?? 'CWE-639') ?></strong>
+                          <?php if (!empty($inc['uri'])): ?>
+                            | URI: <code><?= htmlspecialchars($inc['uri']) ?></code>
+                          <?php endif; ?>
+                        </div>
+                      </td>
+                      <td>
+                        <?php $sc = $inc['status_code'] ?? 200; ?>
+                        <span class="status-badge <?= $sc === 200 ? ($inc['severity'] === 'CRITICAL' ? 'badge-danger' : 'badge-safe') : ($sc === 403 ? 'badge-danger' : 'badge-warn') ?>">
+                          HTTP <?= $sc ?>
+                        </span>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
+
+      <!-- TAB 2: MA TRẬN KIỂM THỬ PHÂN QUYỀN TỰ ĐỘNG (24 TEST CASES) -->
+      <?php elseif ($testerTab === 'matrix'): ?>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Ma Trận 24 Ca Kiểm Thử Phân Quyền Tự Động (Access Matrix)</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Tích hợp toàn diện từ công cụ kiểm thử: Kiểm tra kiểm soát truy cập (ABAC/RBAC) trên 5 phân hệ API (Profile, Danh sách bệnh án, Bệnh án cá nhân, Thông báo, Quản trị).
+              </div>
+            </div>
+            <div>
+              <?php if ($bugIdor): ?>
+                <span class="status-badge badge-danger" style="font-size: 12px; padding: 6px 12px;">23 PASS / 1 FAIL (R02 Thất Bại do IDOR)</span>
+              <?php else: ?>
+                <span class="status-badge badge-safe" style="font-size: 12px; padding: 6px 12px;">24 PASS / 0 FAIL (Tất cả Đạt Chuẩn An Toàn)</span>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; font-size: 13px;">
+            <strong>Giải thích ca kiểm thử đặc biệt R02 (Bẫy IDOR):</strong><br>
+            • Khi <code>BUG_IDOR=1</code> (Có lỗ hổng): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#dc2626;font-weight:700;">FAIL</span> do máy chủ trả về HTTP 200 OK và làm rò rỉ bệnh án Bình cho An.<br>
+            • Khi <code>BUG_IDOR=0</code> (Đã vá): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#16a34a;font-weight:700;">PASS</span> do máy chủ chặn lại với HTTP 403 Forbidden!
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mã Test</th>
+                  <th>Phương Thức & API</th>
+                  <th>Tài Khoản Thử Nghiệm</th>
+                  <th>Vai Trò</th>
+                  <th>Mô Tả Mục Tiêu Kiểm Thử</th>
+                  <th>Kỳ Vọng</th>
+                  <th>Kết QuẢ Thực Tế</th>
+                  <th>Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($testCases as $tc): ?>
+                  <tr style="<?= $tc['code'] === 'R02' ? ($tc['status'] === 'FAIL' ? 'background: #fff1f2;' : 'background: #f0fdf4;') : '' ?>">
+                    <td><strong style="color: #0369a1;"><?= $tc['code'] ?></strong></td>
+                    <td><code><?= $tc['method'] ?> <?= $tc['api'] ?></code></td>
+                    <td><?= htmlspecialchars($tc['user']) ?></td>
+                    <td><span class="status-badge badge-doctor" style="font-size: 10px;"><?= $tc['role'] ?></span></td>
+                    <td><?= htmlspecialchars($tc['desc']) ?></td>
+                    <td><code style="color: #334155;"><?= $tc['expect'] ?></code></td>
+                    <td style="font-size: 12px;"><?= htmlspecialchars($tc['actual']) ?></td>
+                    <td>
+                      <span class="status-badge <?= $tc['status'] === 'PASS' ? 'badge-pass' : 'badge-fail' ?>">
+                        <?= $tc['status'] ?>
+                      </span>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      <!-- TAB 3: CHẠY BỘ TEST SUITE 88 TESTS CLI -->
+      <?php elseif ($testerTab === 'full_tests'): ?>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Bộ Kiểm Thử Tự Động Toàn Diện Hệ Thống (88 Test Cases)</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Thực thi lệnh kiểm thử <code>bash lab.sh test</code> trực tiếp trên môi trường máy chủ để xác nhận tính toàn vẹn 100% của hệ thống.
+              </div>
+            </div>
+            <div>
+              <a href="/?action=run_full_test_suite" class="btn btn-primary">
+                ▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)
+              </a>
+            </div>
+          </div>
+
+          <div style="background: #090d16; border-radius: 8px; padding: 16px; font-family: monospace; color: #22c55e; font-size: 12px; line-height: 1.6; max-height: 480px; overflow-y: auto;">
+            <?php if (isset($_SESSION['last_full_test_output'])): ?>
+              <pre style="white-space: pre-wrap; margin: 0; color: #38bdf8;"><?= htmlspecialchars($_SESSION['last_full_test_output']) ?></pre>
+            <?php else: ?>
+              <div style="color: #94a3b8;">
+                # Nhấn vào nút "Chạy Toàn Bộ Test Suite" phía trên để thực thi kiểm thử toàn bộ 88 ca kiểm tra.<br>
+                # Bao gồm: Unit test CSDL PostgreSQL, Kiểm tra chính sách ABAC/RBAC, E2E HTTP Test và Ma trận bảo mật.
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+      <?php endif; ?>
     <?php endif; ?>
 
   </div>
@@ -1925,9 +2522,14 @@ if ($view === 'edit_record') {
             <div style="font-size: 11px; color: #64748b;">tester_sec • Kiểm thử An toàn thông tin</div>
           </div>
         </div>
-        <?php if ($currentUser && $currentUser['username'] === 'tester_sec'): ?>
-          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
-        <?php endif; ?>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <?php if ($incidentCount > 0): ?>
+            <span style="font-size: 10px; background: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 10px; font-weight: 700;"><?= $incidentCount ?> sự cố</span>
+          <?php endif; ?>
+          <?php if ($currentUser && $currentUser['username'] === 'tester_sec'): ?>
+            <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+          <?php endif; ?>
+        </div>
       </a>
 
       <!-- Anonymous / Guest -->

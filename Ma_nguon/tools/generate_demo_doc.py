@@ -138,12 +138,27 @@ def build_demo_document():
     p_intro = doc.add_paragraph(
         "Đề tài giải quyết bài toán an toàn thông tin cấp thiết: 'Một trang Web có thể khai báo phân quyền đúng "
         "nhưng trong mã nguồn vẫn để lộ dữ liệu nhạy cảm của người này cho người khác xem (Lỗ hổng BOLA / IDOR - CWE-639)'. "
-        "Nhóm 13 đã xây dựng hoàn chỉnh hệ sinh thái kiểm thử độc lập gồm 2 thành phần phần mềm chuyên nghiệp:"
+        "Nhóm 13 đã xây dựng hoàn chỉnh hệ sinh thái phần mềm tích hợp chuyên nghiệp:"
     )
     p_intro.paragraph_format.space_after = Pt(6)
     
-    # Bảng 2 thành phần
-    tbl_comp = doc.add_table(rows=3, cols=3)
+    data_comp = [
+        ("Ứng dụng Y Tế & Kiểm Thử Tích Hợp\nMediRecord EMR (Cổng 8205)", "http://localhost:8205\n(127.0.0.1:8205)", 
+         "- Hệ thống quản lý bệnh án điện tử y tế thực tế.\n"
+         "- Bác sĩ Lê Hoàng Minh gửi bệnh án cho Bệnh nhân An, Bệnh nhân Bình.\n"
+         "- Bộ đôi Nút tròn nổi FAB ở góc dưới bên phải: Chuyển tài khoản 1-Click & Terminal Console.\n"
+         "- Quy trình Đăng Nhập & Đăng Ký thành viên có nút điền nhanh tài khoản kiểm thử.\n"
+         "- Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do (Test IDOR trực tiếp cả Xem và Sửa).\n"
+         "- Module Quản Trị Người Dùng Toàn Diện (Thêm, Sửa, Xóa, Tìm kiếm) cho Quản trị viên.\n"
+         "- Trung Tâm Giám Sát An Ninh & Kiểm Thử Phân Quyền dành cho Tester (tester_sec):\n"
+         "  + Dòng sự kiện bắt quả tang vi phạm thời gian thực (Live Security Incident Feed).\n"
+         "  + Ma trận 24 ca kiểm thử truy cập tự động (Access Matrix).\n"
+         "  + Thực thi toàn bộ bộ kiểm thử 88 test cases trực tiếp trên Web UI.\n"
+         "- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt.")
+    ]
+
+    # Bảng thành phần hệ thống
+    tbl_comp = doc.add_table(rows=len(data_comp) + 1, cols=3)
     tbl_comp.alignment = WD_TABLE_ALIGNMENT.CENTER
     
     headers = ["Thành phần", "Địa chỉ / Cổng", "Mô tả vai trò & Tính năng cốt lõi"]
@@ -157,24 +172,6 @@ def build_demo_document():
         r.bold = True
         r.font.color.rgb = RGBColor(255, 255, 255)
         r.font.size = Pt(10)
-        
-    data_comp = [
-        ("Ứng dụng Mục tiêu (Target App)\nMediRecord EMR", "http://localhost:8205\n(127.0.0.1:8205)", 
-         "- Hệ thống quản lý bệnh án điện tử y tế thực tế.\n"
-         "- Bác sĩ Lê Hoàng Minh gửi bệnh án cho Bệnh nhân An, Bệnh nhân Bình.\n"
-         "- Thanh chuyển đổi tài khoản 1-Click Fast Switch Bar.\n"
-         "- Hộp Tra Cứu & Can Thiệp Bệnh Án Theo ID Tự Do (Test IDOR trực tiếp cả Xem và Sửa).\n"
-         "- Nút tròn nổi FAB Terminal ở góc dưới bên phải màn hình điều khiển trạng thái lỗi.\n"
-         "- Module Quản Trị Người Dùng Toàn Diện (Thêm, Sửa, Xóa, Tìm kiếm) cho Quản trị viên.\n"
-         "- Trang trả về mã lỗi bảo mật HTTP 403 Forbidden chuyên biệt."),
-        ("Công cụ Kiểm thử Tự động\nAccessTester Engine & Web UI", "http://localhost:8105\n(127.0.0.1:8105)", 
-         "- Quản trị ma trận phân quyền RBAC & ABAC (Ownership scope).\n"
-         "- Khai báo và thực thi tự động 24 ca kiểm thử HTTP chuẩn.\n"
-         "- Cơ chế phân loại 3 trạng thái: PASS, FAIL (Lỗ hổng), ERROR (Mạng/kỹ thuật).\n"
-         "- Bộ lọc địa chỉ an toàn (Target Allowlist) chống tấn công SSRF.\n"
-         "- Cơ chế Redactor tự động khử thông tin nhạy cảm (token, mật khẩu).\n"
-         "- Giao diện Đối chiếu 2 Đợt Chạy (Compare Runs) kèm biểu đồ Chart.js trực quan.")
-    ]
     
     for row_idx, data in enumerate(data_comp, start=1):
         for col_idx, text in enumerate(data):
@@ -199,13 +196,13 @@ def build_demo_document():
 
     doc.add_paragraph(
         "Để buổi báo cáo diễn ra trơn tru nhất, trước khi giảng viên yêu cầu demo, sinh viên thực hiện mở sẵn "
-        "các cửa sổ dòng lệnh và khởi động 2 dịch vụ nền:"
+        "các cửa sổ dòng lệnh và khởi động dịch vụ nền:"
     )
     
     add_callout(
         doc,
-        "Nên mở sẵn 2 tab trình duyệt: Tab 1 tại http://localhost:8205 (MediRecord EMR) và Tab 2 tại "
-        "http://localhost:8105 (AccessTester). Điều này giúp thao tác trình diễn diễn ra liền mạch, không bị gián đoạn.",
+        "Chỉ cần mở 1 tab trình duyệt duy nhất tại http://localhost:8205 (MediRecord EMR). "
+        "Toàn bộ chức năng nghiệp vụ lâm sàng và công cụ kiểm thử an ninh tự động đã được tích hợp tập trung hoàn chỉnh tại cổng 8205!",
         title="MẸO PHÒNG BÁO CÁO:"
     )
 
@@ -213,8 +210,7 @@ def build_demo_document():
         ("Bước 1", "Khởi động CSDL PostgreSQL (WSL/Linux):", "sudo service postgresql start"),
         ("Bước 2", "Nạp cấu hình và dữ liệu mẫu sạch sẽ (1 lệnh duy nhất):", "cd /mnt/c/University/Nam_3_K1/PTPMMNM/btvn/lab5/Ma_nguon\nbash lab.sh setup"),
         ("Bước 3", "Kiểm tra tình trạng môi trường:", "bash lab.sh check\n(Kết quả in ra: MOI_TRUONG=SAN_SANG)"),
-        ("Bước 4", "Khởi động Ứng dụng Y tế MediRecord (Cổng 8205):", "bash lab.sh target:start\n(Hoặc: php -S 127.0.0.1:8205 -t sample-app/public)"),
-        ("Bước 5", "Khởi động Công cụ AccessTester Web UI (Cổng 8105):", "php -S 127.0.0.1:8105 -t public")
+        ("Bước 4", "Khởi động Ứng dụng Y tế & Kiểm thử MediRecord (Cổng 8205 duy nhất):", "bash lab.sh target:start\n(Hoặc: php -S 127.0.0.1:8205 -t sample-app/public)")
     ]
     
     for s_step, s_title, s_cmd in steps_prep:
@@ -254,9 +250,10 @@ def build_demo_document():
         "\"Kính thưa Thầy/Cô, trong các hệ thống Web hiện đại, phân quyền vai trò (RBAC) thường được khai báo chặt chẽ, "
         "tuy nhiên lỗi phân quyền cấp đối tượng (BOLA / IDOR) vẫn là lỗ hổng an ninh mạng đứng số 1 theo OWASP API Security. "
         "Một người dùng đã đăng nhập hợp lệ nhưng nếu hệ thống không kiểm tra mối quan hệ sở hữu bản ghi thì người đó hoàn toàn "
-        "có thể xem hoặc đánh cắp dữ liệu riêng tư của người khác. Nhóm 13 đã giải quyết trọn vẹn bài toán này bằng việc xây dựng: "
-        "Thứ nhất là ứng dụng y tế MediRecord (cổng 8205) để mô phỏng dữ liệu bệnh án thật; và Thứ hai là công cụ kiểm thử tự động "
-        "AccessTester (cổng 8105) có khả năng tự động rà quét, phát hiện rò rỉ và đối chiếu kết quả trước/sau khi vá lỗi.\""
+        "có thể xem hoặc đánh cắp dữ liệu riêng tư của người khác. Nhóm 13 đã giải quyết trọn vẹn bài toán này bằng việc xây dựng "
+        "ứng dụng y tế MediRecord EMR tích hợp tập trung tại cổng 8205 duy nhất, kết hợp Trung tâm Giám sát An ninh & Kiểm thử "
+        "phân quyền chuyên biệt cho Kỹ sư Kiểm thử (tester_sec). Hệ thống vừa cho phép thử nghiệm trực quan lỗi IDOR giữa các người dùng "
+        "thật, vừa tự động phát hiện, bắt quả tang và cảnh báo vi phạm thời gian thực khi có người dùng hoặc nhân viên cố tình lợi dụng lỗ hổng.\""
     )
 
     # Giai đoạn 2
@@ -323,43 +320,41 @@ def build_demo_document():
     add_image_if_exists(doc, os.path.join(img_dir, "admin_user_search.png"), "Tính năng tìm kiếm tài khoản người dùng thời gian thực trên giao diện Quản trị viên")
 
     # Giai đoạn 3
-    h3_3 = doc.add_heading("Giai đoạn 3 (5:00 - 8:30): Trình diễn Công cụ Kiểm thử Tự động AccessTester (Cổng 8105)", level=2)
+    h3_3 = doc.add_heading("Giai đoạn 3 (5:00 - 8:30): Trình diễn Trung Tâm Giám Sát An Ninh & Kiểm Thử Phân Quyền (tester_sec)", level=2)
     h3_3.runs[0].font.color.rgb = RGBColor(15, 23, 42)
 
     doc.add_paragraph(
-        "Chuyển sang tab trình duyệt tại http://localhost:8105 để trình diễn sức mạnh kiểm thử tự động của AccessTester:"
+        "Toàn bộ chức năng kiểm thử phân quyền đã được chuyển dời và tích hợp tập trung vào cổng 8205 "
+        "cho Kỹ sư Bảo mật (tester_sec - Trần Bảo Nam), loại bỏ hoàn toàn việc phải vận hành cổng 8105 riêng biệt:"
     )
 
-    demo_steps_8105 = [
-        ("Bước 3.1: Giới thiệu Quản lý Dự án & Danh mục 24 Ca kiểm thử HTTP",
-         "Mở mục 'Dự án' và 'Bộ ca thử': Giải thích ma trận 24 ca kiểm thử bao quát đầy đủ 6 API x 4 ca thử nghiệm (P01-P04 hồ sơ, N01-N04 danh sách bệnh án, "
-         "R01-R04 chi tiết bệnh án, U01-U04 cập nhật bệnh án, A01-A04 thông báo chung, M01-M04 quản trị người dùng). "
-         "Nhấn mạnh ca kiểm thử R02 chính là ca thử nghiệm bẫy phát hiện IDOR."),
+    demo_steps_tester = [
+        ("Bước 3.1: Chuyển sang góc nhìn Kỹ sư Kiểm thử tester_sec (Trần Bảo Nam)",
+         "1. Bấm nút tròn xanh FAB (Account Switcher) ở góc dưới bên phải màn hình -> chọn 'Trần Bảo Nam (tester_sec)'. "
+         "Lưu ý huy hiệu màu đỏ hiển thị số sự cố vi phạm vừa được hệ thống tự động bắt quả tang.\n"
+         "2. Hệ thống tự động chuyển hướng vào 'Trung Tâm Giám Sát An Ninh & Kiểm Thử' (/?view=tester).\n"
+         "3. Giới thiệu bảng điều khiển an ninh với 4 Thẻ KPI: Tổng số sự cố vi phạm, Trạng thái cờ lỗi IDOR, "
+         "Kết quả 24 ca kiểm thử ma trận, Bộ 88 test suite tích hợp."),
 
-        ("Bước 3.2: Chạy kiểm thử Đợt 1 (Khi ứng dụng còn Lỗi BUG_IDOR=1)",
-         "Nhấn nút 'Chạy kiểm thử ngay' (hoặc chọn Dự án #1). Hệ thống gửi 24 yêu cầu HTTP song song.\n"
-         "KẾT QUẢ SHOW GIẢNG VIÊN: Đợt chạy ghi nhận: 23 PASS, 1 FAIL, 0 ERROR. "
-         "Bấm vào chi tiết ca R02: Hiển thị cờ 'leak_detected = true' do máy chủ trả về HTTP 200 kèm chuỗi nhạy cảm của Bob/Bình."),
+        ("Bước 3.2: Trình diễn Tab 1 - Nhật Ký Cảnh Báo Vi Phạm Thời Gian Thực (Live Security Incidents Feed)",
+         "1. Mở Tab 1 'Nhật Ký Cảnh Báo': Chỉ cho giảng viên thấy dòng sự kiện vừa được ghi nhận khi Bệnh nhân An (bn_an) "
+         "vừa cố tình đọc trộm hoặc sửa đổi bệnh án #03 của Bình. Dòng cảnh báo màu đỏ mức độ CRITICAL, hiển thị đầy đủ "
+         "thời gian, đối tượng (bn_an), mục tiêu (Bệnh án #03) và mã HTTP.\n"
+         "2. Bấm nút '⚡ Mô Phỏng Tấn Công IDOR': Hệ thống lập tức tạo thêm 1 sự cố vi phạm giả lập để kiểm thử độ nhạy của chuông cảnh báo.\n"
+         "3. Giới thiệu các nút tác vụ tiện ích: 'Xóa nhật ký', 'Chuyển sang BN An để thử tấn công', 'Vá lỗi / Bật lỗi tức thì'."),
 
-        ("Bước 3.3: Chạy kiểm thử Đợt 2 (Sau khi đã vá lỗi BUG_IDOR=0)",
-         "Sau khi ứng dụng mục tiêu được vá lỗi, bấm chạy đợt kiểm thử mới.\n"
-         "KẾT QUẢ SHOW GIẢNG VIÊN: Đợt chạy ghi nhận hoàn hảo: 24 PASS, 0 FAIL, 0 ERROR (100% ĐẠT CHUẨN). "
-         "Ca R02 đã chuyển sang trạng thái PASS vì máy chủ đã chặn đúng mã HTTP 403 Forbidden."),
+        ("Bước 3.3: Trình diễn Tab 2 - Ma Trận 24 Ca Kiểm Thử Phân Quyền Tự Động (Access Matrix)",
+         "1. Chuyển sang Tab 2: Giới thiệu ma trận 24 ca kiểm thử bao quát đầy đủ 5 phân hệ API (P01-P04, N01-N04, R01-R04, U01-U04, A01-A04, M01-M04).\n"
+         "2. Khi còn Lỗi IDOR (BUG_IDOR=1): Ca kiểm thử R02 báo FAIL màu đỏ rực (kết quả toàn hệ thống: 23 PASS / 1 FAIL).\n"
+         "3. Khi đã Vá Lỗi IDOR (BUG_IDOR=0): Ca kiểm thử R02 tự động chuyển xanh PASS (kết quả: 24 PASS / 0 FAIL - 100% Đạt chuẩn)."),
 
-        ("Bước 3.4: Trình diễn Tính năng 'Đối chiếu 2 Đợt Chạy' (Compare Runs)",
-         "Mở menu 'Đối chiếu' tại thanh điều hướng:\n"
-         "- Chọn Đợt chạy A: Đợt có lỗi (23 PASS, 1 FAIL).\n"
-         "- Chọn Đợt chạy B: Đợt an toàn (24 PASS, 0 FAIL).\n"
-         "- Bấm nút 'Đối chiếu 2 đợt chạy'.\n"
-         "KẾT QUẢ SHOW GIẢNG VIÊN: Màn hình hiển thị Biểu đồ cột so sánh tỉ lệ PASS/FAIL và bảng chi tiết làm nổi bật duy nhất ca R02 với nhãn: "
-         "'[LỖ HỔNG -> ĐÃ KHẮC PHỤC] SỬA THÀNH CÔNG'."),
-
-        ("Bước 3.5: Trình diễn Báo cáo Kiểm thử & Cơ chế Redactor Khử Dữ liệu Nhạy Cảm",
-         "Mở Báo cáo kiểm thử: Chỉ cho giảng viên thấy toàn bộ mã Bearer Token và mật khẩu CSDL đã được bộ lọc Redactor tự động băm che chắn "
-         "(chỉ hiện dấu sao hoặc mã giả lập), đảm bảo an toàn tuyệt đối khi gửi báo cáo cho các bên liên quan.")
+        ("Bước 3.4: Trình diễn Tab 3 - Chạy Toàn Bộ Test Suite Hệ Thống (88 Tests CLI)",
+         "1. Chuyển sang Tab 3: Bấm nút '▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)'.\n"
+         "2. Máy chủ thực thi lệnh kiểm thử CLI ngầm và hiển thị trực tiếp đầu ra console 88/88 test cases pass ngay trên giao diện web "
+         "của Kỹ sư bảo mật mà không cần mở terminal bên ngoài.")
     ]
 
-    for s_title, s_desc in demo_steps_8105:
+    for s_title, s_desc in demo_steps_tester:
         p = doc.add_paragraph()
         r_t = p.add_run(f"👉 {s_title}:\n")
         r_t.bold = True
@@ -367,10 +362,9 @@ def build_demo_document():
         p.add_run(s_desc)
         p.paragraph_format.space_after = Pt(4)
 
-    # Chèn ảnh minh họa cổng 8105
-    add_image_if_exists(doc, os.path.join(img_dir, "cases_page_1792765519850.png"), "Danh mục 24 ca kiểm thử truy cập được quản lý trực quan trên AccessTester")
-    add_image_if_exists(doc, os.path.join(img_dir, "runs_page_1792765622496.png"), "Quản lý lịch sử các đợt chạy kiểm thử tự động")
-    add_image_if_exists(doc, os.path.join(img_dir, "comparison_page_1792806205155.png"), "Tính năng Đối chiếu 2 đợt chạy (Compare Runs) chứng minh việc sửa lỗi IDOR thành công")
+    # Chèn ảnh minh họa cho Tester
+    add_image_if_exists(doc, os.path.join(img_dir, "security_incident_feed_1793019443291.png"), "Trung tâm Giám sát An ninh với Dòng sự kiện bắt quả tang vi phạm bảo mật thời gian thực dành cho Tester")
+    add_image_if_exists(doc, os.path.join(img_dir, "security_test_matrix_1793019452599.png"), "Ma trận 24 ca kiểm thử truy cập tự động phân quyền trực quan trên giao diện Tester")
 
     # Giai đoạn 4
     h3_4 = doc.add_heading("Giai đoạn 4 (8:30 - 10:00): Trình diễn Kiểm thử Dòng lệnh & Bộ Test Suite 100% PASS", level=2)

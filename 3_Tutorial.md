@@ -16,10 +16,13 @@
 4. [Bảng Đặc Tả Chi Tiết Các Địa Chỉ API](#4-bảng-đặc-tả-chi-tiết-các-địa-chỉ-api)
 5. [Cơ Chế Trực Quan Hóa Lỗi Phân Quyền IDOR (CWE-639)](#5-cơ-chế-trực-quan-hóa-lỗi-phân-quyền-idor-cwe-639)
 6. [Trang Trả Về Lỗi HTTP 403 Forbidden Chuyên Biệt](#6-trang-trả-về-lỗi-http-403-forbidden-chuyên-biệt)
-7. [Màn Hình Terminal Tương Tác Tạo Lỗi & Vá Lỗi Dòng Lệnh](#7-màn-hình-terminal-tương-tác-tạo-lỗi--vá-lỗi-dòng-lệnh)
-8. [Hướng Dẫn Từng Bước Vận Hành & Khai Thác Thử Nghiệm](#8-hướng-dẫn-từng-bước-vận-hành--khai-thác-thử-nghiệm)
-9. [Tập Lệnh cURL Kiểm Tra Nhanh Độc Lập](#9-tập-lệnh-curl-kiểm-tra-nhanh-độc-lập)
-10. [Xử Lý Sự Cố Thường Gặp (Troubleshooting)](#10-xử-lý-sự-cố-thường-gặp-troubleshooting)
+7. [Bộ Đôi Nút Tròn Nổi (FABs) & Terminal Điều Khiển](#7-bộ-đôi-nút-tròn-nổi-fabs--terminal-điều-khiển)
+8. [Chức Năng Đăng Nhập & Đăng Ký Tài Khoản Y Tế](#8-chức-năng-đăng-nhập--đăng-ký-tài-khoản-y-tế)
+9. [Module Quản Trị Người Dùng Toàn Diện Cho Admin (CRUD + Search)](#9-module-quản-trị-người-dùng-toàn-diện-cho-admin-crud--search)
+10. [Trung Tâm Giám Sát An Ninh & Kiểm Thử Phân Quyền Cho Tester](#10-trung-tâm-giám-sát-an-ninh--kiểm-thử-phân-quyền-cho-tester)
+11. [Hướng Dẫn Từng Bước Vận Hành & Khai Thác Thử Nghiệm](#11-hướng-dẫn-từng-bước-vận-hành--khai-thác-thử-nghiệm)
+12. [Tập Lệnh cURL Kiểm Tra Nhanh Độc Lập](#12-tập-lệnh-curl-kiểm-tra-nhanh-độc-lập)
+13. [Xử Lý Sự Cố Thường Gặp (Troubleshooting)](#13-xử-lý-sự-cố-thường-gặp-troubleshooting)
 
 ---
 
@@ -31,10 +34,11 @@ Theo đề cương Đề tài 4, yêu cầu số 3 quy định:
 Để đáp ứng tính thực tiễn cao nhất và loại bỏ hoàn toàn các dữ liệu kiểm thử giả định (`alice`, `bob`), hệ thống mẫu được xây dựng thành **Hệ thống Quản lý Bệnh án Điện tử Y tế (MediRecord EMR)** phục vụ khám chữa bệnh thực tế:
 - **Bác sĩ khám bệnh:** Tạo lập chẩn đoán lâm sàng, phác đồ điều trị và gửi bệnh án trực tiếp cho bệnh nhân.
 - **Bệnh nhân điều trị:** Đăng nhập để theo dõi hồ sơ bệnh án của chính mình (dữ liệu riêng tư cá nhân).
-- **Quản trị viên & Kiểm toán an toàn thông tin:** Giám sát người dùng, kiểm thử bảo mật và ngăn chặn rò rỉ dữ liệu y tế.
+- **Quản trị viên & Kỹ sư kiểm thử an toàn:** Giám sát người dùng, kiểm thử bảo mật tự động và theo dõi trực tiếp các vụ rò rỉ dữ liệu y tế qua Trung tâm Giám sát An ninh.
+- **Tích hợp kiểm thử hoàn toàn vào cổng 8205:** Toàn bộ công cụ kiểm thử phân quyền tự động trước đây đã được tích hợp tập trung vào cổng 8205 dưới quyền kiểm soát của Kỹ sư Bảo mật (`tester_sec`), loại bỏ hoàn toàn cổng phụ 8105.
 
 ### Thông số kỹ thuật của MediRecord EMR:
-- **Mã nguồn:** `Ma_nguon/sample-app/public/index.php` (Giao diện Web trực quan + Bộ REST API).
+- **Mã nguồn:** `Ma_nguon/sample-app/public/index.php` (Giao diện Web trực quan + Bộ REST API + Trung tâm Giám sát Kiểm thử An ninh).
 - **Địa chỉ phục vụ:** `http://127.0.0.1:8205`
 - **Cơ chế xác thực:** Hỗ trợ song song **Web Session** (người dùng lướt web trên trình duyệt) và **Bearer Token** (công cụ AccessTester và CLI runner gửi yêu cầu kiểm thử tự động).
 - **Ranh giới an toàn:** Tự động chặn các yêu cầu ngoài loopback (`127.0.0.1`, `::1`, `localhost`), trả về HTTP 403 `FORBIDDEN_HOST`.
@@ -47,14 +51,14 @@ Toàn bộ dữ liệu kiểm thử được chuẩn hóa thành 5 tài khoản 
 
 | Tên tài khoản (`username`) | Vai trò (`role`) | Họ tên hiển thị | Đơn vị / Chuyên khoa | Bearer Token tương ứng | Quyền hạn nghiệp vụ |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `admin_bv` | `admin` | Quản trị viên Bệnh viện Bạch Mai | Phòng CNTT & An Ninh Mạng | `test_token_admin_bv` | Toàn quyền xem mọi bệnh án, quản lý tài khoản người dùng |
-| `tester_sec` | `auditor` | Kỹ sư Bảo mật Nguyễn Kiểm Thử | Ban Kiểm Toán Y Tế | `test_token_tester_sec` | Quyền kiểm toán chỉ đọc (Read-only) toàn bộ hồ sơ y tế |
+| `admin_bv` | `admin` | Quản trị viên Bệnh viện Bạch Mai | Phòng CNTT & An Ninh Mạng | `test_token_admin_bv` | Toàn quyền xem mọi bệnh án, quản lý tài khoản người dùng, giám sát an ninh |
+| `tester_sec` | `auditor` | Kỹ sư Bảo mật Trần Bảo Nam | Ban An Toàn Thông Tin & Kiểm Toán Y Tế | `test_token_tester_sec` | **Toàn quyền Trung tâm Giám sát An ninh & Kiểm thử**: Xem cảnh báo vi phạm thời gian thực, ma trận 24 test cases, chạy toàn bộ test suite |
 | `bs_minh` | `doctor` | BS. CKI Lê Hoàng Minh | Khoa Tim Mạch & Nội Tiết | `test_token_bs_minh` | Lập, gửi bệnh án mới cho bệnh nhân, xem hồ sơ bệnh án |
 | `bn_an` | `member` *(patient)* | Bệnh nhân Nguyễn Văn An | Bệnh nhân điều trị ngoại trú | `test_token_bn_an` | Chỉ xem được hồ sơ bệnh án của chính An (`scope = own`) |
 | `bn_binh` | `member` *(patient)* | Bệnh nhân Trần Thị Bình | Bệnh nhân điều trị chuyên khoa | `test_token_bn_binh` | Chỉ xem được hồ sơ bệnh án của chính Bình (`scope = own`) |
 | `(anon)` | `anon` | Khách vãng lai | Chưa đăng nhập | *(Không gửi token)* | Chỉ xem được thông tin công khai, bị chặn mọi API nội bộ |
 
-> **Tính năng Fast Account Switcher (Nút tròn nổi FAB):** Ở góc dưới bên phải màn hình, phía trên nút Terminal, có một **Nút tròn nổi màu xanh** (biểu tượng người dùng). Bấm vào nút này sẽ mở cửa sổ popup cho phép chuyển đổi 1-click tức thì sang góc nhìn của Quản trị viên (`admin_bv`), Bác sĩ Minh (`bs_minh`), Bệnh nhân An (`bn_an`), Bệnh nhân Bình (`bn_binh`), Kỹ sư Bảo mật (`tester_sec`) hoặc Khách vãng lai (`anon`). Ngoài ra, hệ thống cung cấp đầy đủ chức năng **Đăng Nhập** và **Đăng Ký** tài khoản mới.
+> **Tính năng Fast Account Switcher (Nút tròn nổi FAB):** Ở góc dưới bên phải màn hình, phía trên nút Terminal, có một **Nút tròn nổi màu xanh** (biểu tượng người dùng). Bấm vào nút này sẽ mở cửa sổ popup cho phép chuyển đổi 1-click tức thì sang góc nhìn của Quản trị viên (`admin_bv`), Bác sĩ Minh (`bs_minh`), Bệnh nhân An (`bn_an`), Bệnh nhân Bình (`bn_binh`), Kỹ sư Bảo mật (`tester_sec` - hiển thị huy hiệu số vụ vi phạm) hoặc Khách vãng lai (`anon`). Ngoài ra, hệ thống cung cấp đầy đủ chức năng **Đăng Nhập** và **Đăng Ký** tài khoản mới.
 
 ---
 
@@ -218,7 +222,37 @@ Dành riêng cho Quản trị viên (`admin_bv`) tại đường dẫn `http://l
 
 ---
 
-## 10. HƯỚNG DẪN TỪNG BƯỚC VẬN HÀNH & KHAI THÁC THỬ NGHIỆM
+## 10. TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ PHÂN QUYỀN CHO TESTER
+
+Nhằm chuyển giao toàn bộ chức năng kiểm thử cho Kỹ sư Kiểm thử An toàn thông tin (`tester_sec` - Trần Bảo Nam) và loại bỏ hoàn toàn việc phải vận hành cổng 8105, hệ thống đã tích hợp trực tiếp **Trung Tâm Giám Sát An Ninh & Kiểm Thử Phân Quyền (Security Audit & Testing Center)** ngay tại địa chỉ `http://localhost:8205/?view=tester`:
+
+### 10.1. Cơ chế Tự động Bắt và Cảnh Báo Vi Phạm Thời Gian Thực (Live Security Incident Feed)
+Hệ thống giám sát an ninh (Event-driven Intrusion Detection) tự động lắng nghe và ghi nhận tức thì mọi hành vi lỗi thao tác hoặc cố tình lợi dụng lỗ hổng phân quyền:
+- **Khai thác IDOR Đọc trộm (`IDOR_VIEW_EXPLOIT` / `API_IDOR_EXPLOIT`):** Bệnh nhân An cố tình mở bệnh án #03 của Bình qua hộp tra cứu hoặc API khi cờ lỗi đang bật -> Ghi nhận sự cố mức **`CRITICAL`** (Mã HTTP 200).
+- **Can thiệp Sửa đổi Dữ liệu Trái phép (`IDOR_TAMPERING_EXPLOIT`):** Bệnh nhân An lợi dụng lỗ hổng gửi form sửa đổi phác đồ của Bình -> Ghi nhận sự cố mức **`CRITICAL`** (Ghi đè trái phép).
+- **Thăm dò Trái phép Bị Chặn (`VIEW_ACCESS_DENIED` / `API_ACCESS_DENIED`):** Khi cờ lỗi tắt, An cố mở bệnh án của Bình nhưng bị cơ chế ABAC chặn đứng -> Ghi nhận cảnh báo mức **`WARNING`** (Mã HTTP 403).
+- **Cố tình Leo thang Đặc quyền (`PRIVILEGE_ESCALATION_ATTEMPT` / `API_PRIVILEGE_ESCALATION_DENIED`):** Bệnh nhân hoặc nhân viên không có quyền Admin cố tình mở trang Quản trị người dùng (`/?view=users`) hoặc gọi API danh sách nhân sự -> Ghi nhận sự cố mức **`HIGH`** (Mã HTTP 403).
+- **Thay đổi Cấu hình Cờ Lỗi (`FLAG_ACTIVATED` / `FLAG_DEACTIVATED`):** Ghi nhận thao tác kích hoạt hoặc vá lỗi từ Terminal để phục vụ kiểm toán minh bạch.
+
+### 10.2. Tín hiệu Cảnh báo Trực quan (Alert Badges)
+- Trên thanh điều hướng Header: Tự động hiển thị mục menu **`🛡️ Giám Sát An Ninh & Kiểm Thử`** kèm huy hiệu số lượng vi phạm màu đỏ rực (VD: `3 vi phạm`).
+- Trong Popup Chuyển Tài Khoản (FAB Drawer): Bên cạnh tài khoản `tester_sec` luôn nhấp nháy huy hiệu số sự cố để Kỹ sư kiểm thử nhận biết ngay lập tức.
+- Khi người dùng đổi sang `tester_sec`: Hệ thống tự động chuyển hướng thẳng vào trang kiểm toán trung tâm.
+
+### 10.3. Ba Tab Chức năng Kiểm Thử Tích Hợp Chuyên Nghiệp:
+1. **Tab 1 - Nhật Ký Cảnh Báo Xâm Phạm Thời Gian Thực (Live Incident Feed):**
+   - Bảng nhật ký chi tiết: Mã sự cố (ID), Thời gian, Mức độ (CRITICAL / HIGH / WARNING / INFO), Đối tượng thực hiện (Actor), Mục tiêu nhắm đến (Target), Chi tiết vi phạm và Mã HTTP.
+   - Các nút tác vụ nhanh: `[⚡ Mô Phỏng Tấn Công IDOR]` (sinh sự cố mẫu để test cơ chế phát hiện), `[🗑️ Xóa Nhật Ký]`, `[👤 Chuyển sang BN An để thử tấn công]`, `[🛡️ Vá Lỗi / ⚠️ Bật Lỗi]`.
+2. **Tab 2 - Ma Trận Kiểm Thử Phân Quyền Tự Động (24 Test Cases Matrix):**
+   - Tích hợp toàn diện 24 ca kiểm thử chuẩn (P01-P04, N01-N04, R01-R04, U01-U04, A01-A04, M01-M04).
+   - Khi `BUG_IDOR=1`: Bắt chính xác ca kiểm thử `R02` là **FAIL** (23 PASS / 1 FAIL).
+   - Khi `BUG_IDOR=0`: Toàn bộ 24 ca kiểm thử đều **PASS** (24 PASS / 0 FAIL).
+3. **Tab 3 - Chạy Toàn Bộ Test Suite Hệ Thống (88 Tests CLI):**
+   - Cho phép Kỹ sư kiểm thử nhấn nút `[▶ Chạy Toàn Bộ Test Suite]` để thực thi lệnh `bash lab.sh test` trực tiếp trên máy chủ và xem màn hình kết quả 88/88 tests PASS ngay trên giao diện web.
+
+---
+
+## 11. HƯỚNG DẪN TỪNG BƯỚC VẬN HÀNH & KHAI THÁC THỬ NGHIỆM
 
 ### Bước 1: Khởi động Ứng dụng Bệnh án MediRecord trên cổng 8205
 ```bash
@@ -248,27 +282,29 @@ Mở trình duyệt truy cập: **`http://localhost:8205`** hoặc **`http://127
 4. Tại ô **"TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID"**, gõ số `3` và bấm **`Tra Cứu Bệnh Án`**.
 5. **Kết quả quan sát được:** Bệnh nhân An đọc được toàn bộ bệnh án số 03 của Bình kèm Hộp cảnh báo IDOR nhấp nháy đỏ rực.
 6. Thử bấm **`Chỉnh Sửa Bệnh Án`** -> An được phép sửa chẩn đoán bệnh án số 03 của Bình và lưu thành công (IDOR on Update).
-7. Chạy công cụ kiểm thử tự động AccessTester qua CLI:
-   ```bash
-   php bin/run.php --project=1 --target=http://127.0.0.1:8205
-   ```
-   *Kết quả: 23 PASS / 1 FAIL (Bắt chính xác vi phạm rò rỉ dữ liệu tại ca `R02`).*
 
 ---
 
-### Bước 4: Vá Lỗi và Xác Thực An Toàn (Phép thử 2)
-1. Bấm vào **Nút tròn nổi FAB**, nhấn nút **`Lệnh: Vá Lỗi (set BUG_IDOR=0)`**.
-2. Đang là **`Bệnh nhân An`**, tiếp tục gõ số `3` và bấm **`Tra Cứu Bệnh Án`** hoặc **`Chỉnh Sửa Bệnh Án`**.
-3. **Kết quả quan sát được:** Bệnh nhân An bị chặn hoàn toàn, hệ thống render ra **Trang Lỗi HTTP 403 Forbidden chuyên biệt**.
-4. Chạy lại công cụ kiểm thử tự động:
-   ```bash
-   php bin/run.php --project=1 --target=http://127.0.0.1:8205
-   ```
-   *Kết quả: 24 PASS / 0 FAIL (100% Đạt chuẩn an toàn).*
+### Bước 4: Kiểm tra Cảnh báo Vi phạm Dưới Góc Nhìn Tester (`tester_sec`)
+1. Bấm vào **Nút tròn chuyển tài khoản màu xanh**, chọn **`Trần Bảo Nam (tester_sec)`**.
+2. Trình duyệt tự động chuyển hướng đến **Trung Tâm Giám Sát An Ninh & Kiểm Thử** (`/?view=tester`).
+3. **Quan sát Tab 1 (Nhật Ký Cảnh Báo):** Sự cố vi phạm của `bn_an` đọc trộm và can thiệp bệnh án #03 hiển thị ngay lập tức ở dòng đầu tiên với mức độ **`CRITICAL`**, có đầy đủ thông tin thời gian, người thực hiện, mục tiêu và mã HTTP 200.
+4. **Quan sát Tab 2 (Ma Trận 24 Test Cases):** Ca kiểm thử `R02` báo màu đỏ rực **FAIL** (23 PASS / 1 FAIL).
 
 ---
 
-## 9. TẬP LỆNH CURL KIỂM TRA NHANH ĐỘC LẬP
+### Bước 5: Vá Lỗi và Xác Thực An Toàn (Phép thử 2)
+1. Trong màn hình Tester (hoặc mở Nút tròn Terminal), nhấn nút **`🛡️ Vá Lỗ Hổng Ngay`** (hoặc lệnh `set BUG_IDOR=0`).
+2. Chuyển lại tài khoản **`Bệnh nhân An`**, tiếp tục gõ số `3` và bấm **`Tra Cứu Bệnh Án`**.
+3. **Kết quả:** Bệnh nhân An bị chặn hoàn toàn, hệ thống render ra **Trang Lỗi HTTP 403 Forbidden chuyên biệt**.
+4. Chuyển lại sang **`tester_sec`**:
+   - Tab 1 ghi nhận thêm sự cố mức **`WARNING`**: An cố tình thăm dò bệnh án #03 nhưng đã bị chặn với HTTP 403.
+   - Tab 2 ma trận kiểm thử chuyển xanh toàn bộ: **24 PASS / 0 FAIL** (100% Đạt chuẩn an toàn).
+   - Tab 3: Bấm nút `[▶ Chạy Toàn Bộ Test Suite]` -> Màn hình hiển thị kết quả 88/88 bài test PASS.
+
+---
+
+## 12. TẬP LỆNH CURL KIỂM TRA NHANH ĐỘC LẬP
 
 ```bash
 # 1. Đọc dữ liệu thông báo chung (Bác sĩ hoặc Bệnh nhân)
@@ -292,11 +328,12 @@ curl.exe -s -w "\nHTTP_STATUS: %{http_code}\n" -X GET http://127.0.0.1:8205/api/
 
 ---
 
-## 10. XỬ LÝ SỰ CỐ THƯỜNG GẶP (TROUBLESHOOTING)
+## 13. XỬ LÝ SỰ CỐ THƯỜNG GẶP (TROUBLESHOOTING)
 
 | Hiện tượng | Nguyên nhân | Cách khắc phục |
 | :--- | :--- | :--- |
 | Báo lỗi `Failed to listen on 127.0.0.1:8205 (Address already in use)` | Cổng 8205 đã được tiến trình PHP khác chạy nền | Máy chủ đã chạy sẵn, bạn chỉ việc mở `http://localhost:8205` trên trình duyệt hoặc dùng `pkill -f 8205` nếu muốn khởi động lại. |
-| Truy cập cổng 8205 báo `ENDPOINT_NOT_FOUND` | Trước đây trang gốc `/` chưa có router | Hiện tại trang gốc `/` đã tích hợp đầy đủ giao diện web MediRecord, nhấn F5 để tải lại trang. |
+| Có cần chạy cổng 8105 nữa không? | Không cần | Cổng 8105 đã được loại bỏ hoàn toàn. Mọi tính năng kiểm thử, giám sát sự cố và ma trận test case đã được tích hợp tập trung vào cổng 8205 cho nhân viên kiểm thử `tester_sec`. |
 | Bấm mở bệnh án của Bình nhưng không thấy cảnh báo đỏ | Cờ `BUG_IDOR` đang ở mức `0` (Đã vá lỗi) | Mở tab Terminal và bấm nút `Lệnh: Tạo Lỗi (set BUG_IDOR=1)` hoặc chạy `./lab.sh target:vuln`. |
-| Không thấy nút "Bác Sĩ Gửi Bệnh Án" | Tài khoản hiện tại đang là Bệnh nhân hoặc Khách | Bấm vào nút `Bác sĩ Minh (Doctor)` trên thanh màu đen ở đầu trang để chuyển sang vai trò bác sĩ. |
+| Không thấy nút "Bác Sĩ Gửi Bệnh Án" | Tài khoản hiện tại đang là Bệnh nhân hoặc Khách | Bấm vào nút chuyển tài khoản nhanh (FAB màu xanh) và chọn `BS. CKI Lê Hoàng Minh`. |
+| Không thấy mục menu "Giám Sát An Ninh & Kiểm Thử" | Đang đăng nhập dưới quyền Bệnh nhân hoặc Bác sĩ | Chỉ tài khoản `tester_sec` (Kỹ sư Bảo mật) hoặc `admin_bv` mới có thẩm quyền truy cập trung tâm kiểm thử. Bấm nút FAB chuyển sang `tester_sec` để trải nghiệm. |
