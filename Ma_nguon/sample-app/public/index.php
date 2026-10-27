@@ -219,21 +219,26 @@ if ($currentUser === null && isset($_SESSION['auth_user'])) {
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
 
-// 8. Quản lý cờ lỗi IDOR: Header > ENV > File cờ .local/bug_idor.flag > Query Param > Session
+// 8. Quản lý cờ lỗi IDOR
 $flagFile = __DIR__ . '/../../.local/bug_idor.flag';
 $bugIdor = false;
-if (isset($_SERVER['HTTP_X_BUG_IDOR'])) {
+
+if (isset($_GET['bug'])) {
+    $bugIdor = ($_GET['bug'] === '1');
+    $_SESSION['bug_idor_flag'] = $bugIdor;
+    @mkdir(dirname($flagFile), 0777, true);
+    @file_put_contents($flagFile, $bugIdor ? '1' : '0');
+} elseif (isset($_SERVER['HTTP_X_BUG_IDOR'])) {
     $bugIdor = ($_SERVER['HTTP_X_BUG_IDOR'] === '1');
+} elseif (isset($_SESSION['bug_idor_flag'])) {
+    // Ưu tiên session người dùng khi tương tác trên trình duyệt Web
+    $bugIdor = ($_SESSION['bug_idor_flag'] === true);
 } elseif (getenv('BUG_IDOR') !== false && getenv('BUG_IDOR') !== '') {
+    // Dành cho kiểm thử tự động e2e runner
     $bugIdor = (getenv('BUG_IDOR') === '1');
 } elseif (file_exists($flagFile)) {
     $content = trim((string)@file_get_contents($flagFile));
     $bugIdor = ($content === '1');
-} elseif (isset($_SESSION['bug_idor_flag'])) {
-    $bugIdor = ($_SESSION['bug_idor_flag'] === true);
-}
-if (isset($_GET['bug'])) {
-    $bugIdor = ($_GET['bug'] === '1');
 }
 
 // =============================================================================
@@ -433,6 +438,36 @@ if ($action === 'run_full_test_suite') {
 if ($action === 'logout') {
     unset($_SESSION['auth_user']);
     header('Location: /?view=login');
+    exit;
+}
+
+// Bật / Tắt lỗi IDOR trực tiếp qua URL hoặc Nút bấm (Hỗ trợ 1-click tức thì)
+if ($action === 'toggle_bug_idor') {
+    $state = (isset($_GET['state']) && $_GET['state'] === '1') || (isset($_POST['state']) && $_POST['state'] === '1');
+    $_SESSION['bug_idor_flag'] = $state;
+    @mkdir(dirname($flagFile), 0777, true);
+    @file_put_contents($flagFile, $state ? '1' : '0');
+    if ($state) {
+        recordSecurityIncident(
+            'FLAG_ACTIVATED',
+            'HIGH',
+            $currentUser,
+            'Cờ bảo mật hệ thống (BUG_IDOR)',
+            'CẢNH BÁO: Lỗ hổng IDOR đã được kích hoạt (BUG_IDOR=1)! Hệ thống hiện đang trong trạng thái dễ bị tổn thương.',
+            ['status_code' => 200]
+        );
+    } else {
+        recordSecurityIncident(
+            'FLAG_DEACTIVATED',
+            'INFO',
+            $currentUser,
+            'Cờ bảo mật hệ thống (BUG_IDOR)',
+            'THÔNG BÁO: Lỗ hổng IDOR đã được khắc phục (BUG_IDOR=0). Cơ chế phân quyền ABAC đã khôi phục kiểm soát an toàn.',
+            ['status_code' => 200]
+        );
+    }
+    $targetV = $_GET['return_view'] ?? $_POST['return_view'] ?? ($view ?: 'records');
+    header('Location: /?view=' . urlencode($targetV) . ($state ? '&bug=1' : '&bug=0'));
     exit;
 }
 
@@ -1083,7 +1118,7 @@ if ($uri === '/api/admin/users' && $method === 'GET') {
 // =============================================================================
 // GIAO DIỆN WEB TRỰC QUAN (VISUAL WEB APPLICATION FOR MEDIRECORD)
 // =============================================================================
-$view = $_GET['view'] ?? 'records';
+$view = $_GET['view'] ?? 'landing';
 header('Content-Type: text/html; charset=utf-8');
 
 // Render Trang Lỗi HTTP Chuyên Biệt
@@ -1122,7 +1157,8 @@ if ($view === 'error') {
           <strong>Quy tắc bảo vệ phân quyền:</strong> Hệ thống thực thi cơ chế kiểm soát truy cập dựa trên thuộc tính sở hữu (ABAC - Attribute-Based Access Control). Bệnh nhân chỉ được xem và sửa hồ sơ do chính mình sở hữu. Thao tác tra cứu hoặc chỉnh sửa chéo bệnh án của người khác bị nghiêm cấm.
         </div>
         <div class="btn-row">
-          <a href="/?view=records" class="btn btn-pri">Quay lại Bệnh án của tôi</a>
+          <a href="/?view=landing" class="btn btn-pri">Về Trang Chủ Bệnh Viện</a>
+          <a href="/?view=records" class="btn btn-sec">Danh Sách Bệnh Án</a>
           <a href="/?action=switch_user&user=bs_minh" class="btn btn-sec">Đổi sang Bác sĩ Minh để thao tác hợp lệ</a>
           <button onclick="toggleTerminal();" class="btn btn-sec">Mở Terminal để bật lại lỗi IDOR</button>
         </div>
@@ -1256,34 +1292,1679 @@ if ($view === 'tester') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MediRecord - Hệ Thống Bệnh Án Điện Tử (Cổng 8205)</title>
+  <title><?= $view === 'landing' ? 'Cổng Thông Tin Điện Tử Bệnh Viện Bạch Mai - Bộ Y Tế' : 'MediRecord EMR - Hệ Thống Bệnh Án Điện Tử (Bộ Y Tế)' ?></title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- GSAP & ScrollTrigger Core for Parallax & Scrollytelling -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
   <style>
     :root {
       --bg: #f8fafc;
       --card: #ffffff;
+      --border: #e2e8f0;
       --text: #0f172a;
       --muted: #64748b;
-      --border: #e2e8f0;
-      --primary: #0284c7;
-      --primary-hover: #0369a1;
-      --safe: #16a34a;
+      --primary: #004b87;
+      --primary-hover: #003366;
+      --primary-light: #f0f7ff;
+      --primary-border: #bfdbfe;
+      --safe: #10b981;
+      --safe-bg: #ecfdf5;
+      --safe-border: #a7f3d0;
       --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
       --warn: #d97706;
+      --warn-bg: #fffbeb;
+      --warn-border: #fde68a;
+
+      /* Bach Mai Palette */
+      --bm-blue-dark: #003366;
+      --bm-blue-primary: #004b87;
+      --bm-blue-light: #0284c7;
+      --bm-red: #d32f2f;
+      --bm-red-dark: #b91c1c;
+      --bm-gold: #d97706;
+      --bm-gold-light: #fef3c7;
+      --bm-border: #e2e8f0;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; font-size: 14px; }
-    
-    /* Floating Action Buttons (FABs) at Bottom Right */
-    .account-fab {
-      position: fixed;
-      bottom: 86px;
-      right: 24px;
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ANIMATIONS */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUpDrawer { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); } 50% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); } }
+    @keyframes pulseGreen { 0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); } 50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); } }
+
+    /* =========================================================================
+       BỆNH VIỆN BẠCH MAI - OFFICIAL HEALTHCARE PORTAL STYLES (CLONE BACHMAI.GOV.VN)
+       ========================================================================= */
+
+    /* 1. TOPBAR TIỆN ÍCH */
+    .bm-topbar {
+      background: var(--bm-blue-dark);
+      color: #e2e8f0;
+      font-size: 13px;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .bm-topbar-inner {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .bm-topbar-left, .bm-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .bm-topbar-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .bm-topbar-item a {
+      color: #e2e8f0;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .bm-topbar-item a:hover {
+      color: #38bdf8;
+    }
+    .bm-topbar-badge {
+      background: var(--bm-red);
+      color: #fff;
+      font-weight: 700;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    /* 2. MAIN BRAND HEADER */
+    .bm-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--bm-border);
+      padding: 18px 0;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+    }
+    .bm-header-inner {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+    }
+    .bm-brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .bm-logo-emblem {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #004b87 0%, #0284c7 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 75, 135, 0.25);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .bm-logo-cross {
+      width: 30px;
+      height: 30px;
+      position: relative;
+    }
+    .bm-logo-cross::before, .bm-logo-cross::after {
+      content: '';
+      position: absolute;
+      background: #ffffff;
+      border-radius: 2px;
+    }
+    .bm-logo-cross::before {
+      top: 0;
+      left: 11px;
+      width: 8px;
+      height: 30px;
+    }
+    .bm-logo-cross::after {
+      top: 11px;
+      left: 0;
+      width: 30px;
+      height: 8px;
+    }
+    .bm-brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .bm-brand-sub {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .bm-brand-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--bm-blue-primary);
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+    }
+    .bm-brand-desc {
+      font-size: 12.5px;
+      color: #475569;
+      font-style: italic;
+      margin-top: 3px;
+    }
+    .bm-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .bm-header-hotline {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      padding-right: 18px;
+      border-right: 1px solid var(--bm-border);
+    }
+    .bm-hotline-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--bm-red);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bm-hotline-phone {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--bm-blue-dark);
+      text-decoration: none;
+      line-height: 1.2;
+    }
+    .bm-btn-booking {
+      background: linear-gradient(135deg, #e11d48 0%, #dc2626 100%);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+    .bm-btn-booking:hover {
+      background: linear-gradient(135deg, #be123c 0%, #b91c1c 100%);
+      transform: translateY(-1.5px);
+      box-shadow: 0 6px 16px rgba(225, 29, 72, 0.35);
+    }
+    .bm-btn-emr {
+      background: var(--bm-blue-primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0, 75, 135, 0.2);
+      transition: all 0.2s;
+    }
+    .bm-btn-emr:hover {
+      background: var(--bm-blue-dark);
+      transform: translateY(-1.5px);
+    }
+
+    /* 3. MAIN NAVIGATION MENU */
+    .bm-nav {
+      background: var(--bm-blue-primary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .bm-nav-inner {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .bm-nav-links {
+      display: flex;
+      align-items: center;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      gap: 4px;
+      flex-wrap: nowrap;
+    }
+    @media (max-width: 1280px) {
+      .bm-nav-links {
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .bm-nav-links::-webkit-scrollbar {
+        display: none;
+      }
+    }
+    .bm-nav-item {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .bm-nav-link {
+      display: inline-flex;
+      align-items: center;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 16px 14px;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s;
+      border-bottom: 3px solid transparent;
+      letter-spacing: 0.2px;
+    }
+    .bm-nav-link:hover, .bm-nav-link.active {
+      background: rgba(0, 0, 0, 0.18);
+      border-bottom-color: #facc15;
+      color: #ffffff;
+    }
+    .bm-nav-badge {
+      background: #ef4444;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 8px;
+      margin-left: 5px;
+      text-transform: uppercase;
+    }
+
+    /* 4. SCROLL-CRAFT & GSAP PARALLAX HERO SECTION */
+    .sc-hero-wrap {
+      position: relative;
+      min-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      background: #001f3f;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .sc-hero-bg {
+      position: absolute;
+      top: -15%;
+      left: -10%;
+      width: 120%;
+      height: 130%;
+      background-image: url('https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&w=2000&q=80');
+      background-size: cover;
+      background-position: center 35%;
+      filter: brightness(0.42) saturate(1.15);
+      will-change: transform;
+      z-index: 1;
+    }
+    .sc-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 75% 40%, rgba(2, 132, 199, 0.25) 0%, transparent 60%),
+                  linear-gradient(180deg, rgba(0, 34, 68, 0.85) 0%, rgba(0, 26, 51, 0.92) 65%, #061224 100%);
+      z-index: 2;
+    }
+    .sc-hero-particles {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(56, 189, 248, 0.15) 1px, transparent 1px);
+      background-size: 32px 32px;
+      z-index: 2;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .sc-hero-inner {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 64px 24px;
+      position: relative;
+      z-index: 3;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 52px;
+      align-items: center;
+    }
+    @media (max-width: 1024px) {
+      .sc-hero-inner {
+        grid-template-columns: 1fr;
+        gap: 40px;
+        padding: 48px 20px;
+      }
+    }
+    .sc-hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 18px;
+      background: rgba(14, 165, 233, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #7dd3fc;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.15);
+    }
+    .sc-hero-title {
+      font-size: 46px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #ffffff;
+      letter-spacing: -0.6px;
+      margin-bottom: 20px;
+      text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    }
+    .sc-hero-title span {
+      background: linear-gradient(135deg, #38bdf8 0%, #a7f3d0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .sc-hero-desc {
+      font-size: 16.5px;
+      color: #e2e8f0;
+      line-height: 1.7;
+      margin-bottom: 26px;
+      max-width: 640px;
+    }
+    .sc-hero-alert {
+      background: rgba(16, 185, 129, 0.12);
+      border-left: 4px solid #10b981;
+      border-radius: 12px;
+      padding: 16px 22px;
+      margin-bottom: 28px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-left-width: 4px;
+    }
+    .sc-hero-alert-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #6ee7b7;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .sc-hero-alert-desc {
+      font-size: 13.5px;
+      color: #d1fae5;
+      line-height: 1.6;
+    }
+    .sc-hero-actions {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .sc-btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #004b87 100%);
+      color: #ffffff;
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(2, 132, 199, 0.4);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .sc-btn-primary:hover {
+      background: linear-gradient(135deg, #0369a1 0%, #003366 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(2, 132, 199, 0.5);
+    }
+    .sc-btn-outline {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      padding: 14px 24px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      backdrop-filter: blur(8px);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sc-btn-outline:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: #38bdf8;
+      transform: translateY(-2px);
+      color: #38bdf8;
+    }
+    .sc-hero-tags {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .sc-hero-tag {
+      font-size: 12px;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      backdrop-filter: blur(6px);
+    }
+    .sc-hero-subject {
+      position: relative;
+      will-change: transform;
+    }
+    .sc-hero-card {
+      position: relative;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15);
+      background: #021a36;
+    }
+    .sc-hero-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: cover;
+      aspect-ratio: 16 / 10.5;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .sc-hero-card:hover .sc-hero-img {
+      transform: scale(1.03);
+    }
+    .sc-floating-badge {
+      position: absolute;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 12px 18px;
+      border-radius: 14px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 5;
+    }
+    .sc-badge-top {
+      top: 20px;
+      left: 20px;
+    }
+    .sc-badge-bottom {
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 51, 102, 0.92);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .sc-badge-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: #ffffff;
+    }
+    .sc-badge-sub {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+    .sc-scroll-indicator {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: #94a3b8;
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .sc-mouse-icon {
+      width: 22px;
+      height: 34px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 12px;
+      position: relative;
+    }
+    .sc-mouse-wheel {
+      width: 4px;
+      height: 7px;
+      background: #38bdf8;
+      border-radius: 2px;
+      position: absolute;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: scWheelMove 1.8s infinite ease-in-out;
+    }
+    @keyframes scWheelMove {
+      0% { transform: translate(-50%, 0); opacity: 1; }
+      80% { transform: translate(-50%, 14px); opacity: 0; }
+      100% { transform: translate(-50%, 0); opacity: 0; }
+    }
+
+    /* =========================================================================
+       5. PINNED HORIZONTAL SCROLLYTELLING TRACK (#milestonesPin)
+       ========================================================================= */
+    .sc-pin-section {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: #061224;
+      color: #ffffff;
+    }
+    .sc-pin-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 25;
+      padding: 24px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(6, 18, 36, 0.95) 0%, rgba(6, 18, 36, 0) 100%);
+      backdrop-filter: blur(6px);
+    }
+    .sc-pin-tag {
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sc-pin-progress {
+      flex: 1;
+      max-width: 400px;
+      margin: 0 40px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .sc-pin-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8 0%, #10b981 100%);
+      border-radius: 4px;
+      transition: width 0.1s linear;
+    }
+    .sc-pin-counter {
+      font-size: 12px;
+      font-weight: 800;
+      color: #cbd5e1;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .sc-horizontal-track {
+      display: flex;
+      height: 100vh;
+      width: 400vw;
+      will-change: transform;
+    }
+    .sc-slide {
+      width: 100vw;
+      height: 100vh;
+      flex-shrink: 0;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 100px 5vw 60px;
+      overflow: hidden;
+    }
+    .sc-slide-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: brightness(0.3) saturate(1.2);
+      transform: scale(1.05);
+      will-change: transform;
+    }
+    .sc-slide-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(6, 18, 36, 0.9) 0%, rgba(6, 18, 36, 0.6) 50%, rgba(6, 18, 36, 0.95) 100%);
+    }
+    .sc-slide-inner {
+      position: relative;
+      z-index: 10;
+      max-width: 1360px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 56px;
+      align-items: center;
+    }
+    @media (max-width: 1024px) {
+      .sc-slide-inner {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+      .sc-slide-media-wrap {
+        display: none;
+      }
+    }
+    .sc-slide-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(217, 119, 6, 0.2);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #fbbf24;
+      margin-bottom: 18px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .sc-slide-badge.cyan {
+      background: rgba(14, 165, 233, 0.2);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: #38bdf8;
+    }
+    .sc-slide-badge.green {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: rgba(52, 211, 153, 0.45);
+      color: #34d399;
+    }
+    .sc-slide-title {
+      font-size: 38px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: #ffffff;
+      margin-bottom: 20px;
+      letter-spacing: -0.5px;
+    }
+    .sc-slide-desc {
+      font-size: 16px;
+      line-height: 1.7;
+      color: #cbd5e1;
+      margin-bottom: 26px;
+    }
+    .sc-slide-highlight {
+      background: rgba(255, 255, 255, 0.06);
+      border-left: 3px solid #38bdf8;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+    .sc-slide-media-wrap {
+      position: relative;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.15);
+      background: #021a36;
+    }
+    .sc-slide-img {
+      width: 100%;
+      height: 380px;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.6s ease;
+    }
+    .sc-slide-media-wrap:hover .sc-slide-img {
+      transform: scale(1.04);
+    }
+
+    /* 6. QUICK SERVICE STRIP */
+    .bm-quick-strip {
+      max-width: 1560px;
+      width: 95%;
+      margin: -40px auto 64px;
+      padding: 0 24px;
+      position: relative;
+      z-index: 20;
+    }
+    .bm-quick-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 1100px) {
+      .bm-quick-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 600px) {
+      .bm-quick-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-quick-card {
+      background: #ffffff;
+      border: 1px solid var(--bm-border);
+      border-radius: 16px;
+      padding: 24px 20px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .bm-quick-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 16px 35px rgba(0, 75, 135, 0.14);
+      border-color: #38bdf8;
+    }
+    .bm-quick-icon {
       width: 52px;
       height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      flex-shrink: 0;
+    }
+    .bm-icon-phone { background: #fee2e2; color: #dc2626; }
+    .bm-icon-calendar { background: #e0f2fe; color: #0284c7; }
+    .bm-icon-emr { background: #dbeafe; color: #1d4ed8; }
+    .bm-icon-chat { background: #dcfce7; color: #16a34a; }
+    .bm-quick-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--bm-blue-dark);
+      margin-bottom: 6px;
+    }
+    .bm-quick-desc {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.55;
+    }
+
+    /* 7. SPECIALTIES SECTION (3D DEPTH CARDS) */
+    .bm-section {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto 72px;
+      padding: 0 24px;
+    }
+    .bm-section-header {
+      text-align: center;
+      margin-bottom: 44px;
+    }
+    .bm-section-tag {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--bm-blue-primary);
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .bm-section-title {
+      font-size: 34px;
+      font-weight: 800;
+      color: var(--bm-blue-dark);
+      letter-spacing: -0.5px;
+    }
+    .bm-section-desc {
+      font-size: 16px;
+      color: #64748b;
+      max-width: 820px;
+      margin: 12px auto 0;
+      line-height: 1.65;
+    }
+    .bm-spec-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+    @media (max-width: 1200px) {
+      .bm-spec-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .bm-spec-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-spec-card {
+      background: #ffffff;
+      border: 1px solid var(--bm-border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      position: relative;
+    }
+    .bm-spec-card:hover {
+      transform: translateY(-8px) scale(1.01);
+      box-shadow: 0 20px 40px rgba(0, 75, 135, 0.12);
+      border-color: #38bdf8;
+    }
+    .bm-spec-media {
+      height: 170px;
+      position: relative;
+      overflow: hidden;
+    }
+    .bm-spec-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+    .bm-spec-card:hover .bm-spec-media img {
+      transform: scale(1.08);
+    }
+    .bm-spec-badge-overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 2;
+    }
+    .bm-spec-body {
+      padding: 22px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .bm-spec-pill {
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(14, 165, 233, 0.15);
+      color: #0284c7;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      backdrop-filter: blur(4px);
+    }
+    .bm-spec-pill.a9 { background: #fee2e2; color: #dc2626; }
+    .bm-spec-pill.icu { background: #fef3c7; color: #b45309; }
+    .bm-spec-name {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--bm-blue-dark);
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    .bm-spec-text {
+      font-size: 13.5px;
+      color: #475569;
+      line-height: 1.65;
+      margin-bottom: 20px;
+      flex: 1;
+    }
+    .bm-spec-link {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--bm-blue-primary);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: gap 0.2s;
+    }
+    .bm-spec-link:hover {
+      color: #0284c7;
+      gap: 10px;
+    }
+
+    /* 8. DOCTORS / SPECIALISTS */
+    .bm-doctor-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 22px;
+    }
+    @media (max-width: 1300px) {
+      .bm-doctor-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      .bm-doctor-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 500px) {
+      .bm-doctor-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-doc-card {
+      background: #ffffff;
+      border: 1px solid var(--bm-border);
+      border-radius: 16px;
+      overflow: hidden;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+    }
+    .bm-doc-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 18px 36px rgba(0, 75, 135, 0.12);
+      border-color: #38bdf8;
+    }
+    .bm-doc-photo-wrap {
+      height: 220px;
+      position: relative;
+      overflow: hidden;
+      background: #0f172a;
+    }
+    .bm-doc-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      transition: transform 0.5s ease;
+    }
+    .bm-doc-card:hover .bm-doc-photo {
+      transform: scale(1.05);
+    }
+    .bm-doc-info {
+      padding: 20px 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .bm-doc-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--bm-blue-dark);
+      margin-bottom: 4px;
+    }
+    .bm-doc-role {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #0284c7;
+      margin-bottom: 10px;
+    }
+    .bm-doc-desc {
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+    .bm-doc-btn {
+      width: 100%;
+      padding: 8px 12px;
+      background: #f0f7ff;
+      border: 1px solid #bfdbfe;
+      color: var(--bm-blue-primary);
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .bm-doc-btn:hover {
+      background: var(--bm-blue-primary);
+      color: #ffffff;
+    }
+
+    /* 9. STATS STRIP */
+    .bm-stats-strip {
+      background: linear-gradient(135deg, #002b54 0%, #004b87 60%, #0369a1 100%);
+      color: #ffffff;
+      padding: 72px 0;
+      margin-bottom: 72px;
+      position: relative;
+      overflow: hidden;
+    }
+    .bm-stats-strip::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .bm-stats-inner {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 36px;
+      text-align: center;
+    }
+    @media (max-width: 960px) {
+      .bm-stats-inner {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 30px;
+      }
+    }
+    @media (max-width: 500px) {
+      .bm-stats-inner {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-stat-val {
+      font-size: 52px;
+      font-weight: 800;
+      color: #38bdf8;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .bm-stat-label {
+      font-size: 16.5px;
+      font-weight: 700;
+      margin-top: 8px;
+      color: #ffffff;
+    }
+    .bm-stat-sub {
+      font-size: 13.5px;
+      color: #bae6fd;
+      margin-top: 4px;
+    }
+
+    /* 10. NEWS */
+    .bm-news-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+    @media (max-width: 1200px) {
+      .bm-news-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .bm-news-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-news-card {
+      background: #ffffff;
+      border: 1px solid var(--bm-border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+    .bm-news-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 16px 35px rgba(0, 0, 0, 0.1);
+      border-color: #38bdf8;
+    }
+    .bm-news-thumb {
+      height: 190px;
+      position: relative;
+      overflow: hidden;
+      background: #0f172a;
+    }
+    .bm-news-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+    .bm-news-card:hover .bm-news-thumb img {
+      transform: scale(1.06);
+    }
+    .bm-news-thumb-tag {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bm-news-body {
+      padding: 22px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .bm-news-title {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .bm-news-meta {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    /* 11. PATIENT JOURNEY */
+    .bm-steps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 22px;
+    }
+    @media (max-width: 1100px) {
+      .bm-steps-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 600px) {
+      .bm-steps-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-step-card {
+      background: #ffffff;
+      border: 1px solid var(--bm-border);
+      border-radius: 16px;
+      padding: 30px 24px;
+      position: relative;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+    }
+    .bm-step-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 14px 30px rgba(0, 75, 135, 0.1);
+      border-color: #38bdf8;
+    }
+    .bm-step-num {
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
-      background: #0284c7;
+      background: linear-gradient(135deg, #0284c7 0%, #004b87 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 17px;
+      margin-bottom: 18px;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+    }
+    .bm-step-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--bm-blue-dark);
+      margin-bottom: 8px;
+    }
+    .bm-step-text {
+      font-size: 13.5px;
+      color: #475569;
+      line-height: 1.6;
+    }
+
+    /* 12. CAMPUSES */
+    .bm-campuses-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 28px;
+    }
+    @media (max-width: 860px) {
+      .bm-campuses-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bm-campus-card {
+      background: #ffffff;
+      border: 1px solid var(--bm-border);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+      transition: all 0.3s ease;
+    }
+    .bm-campus-card:hover {
+      box-shadow: 0 14px 35px rgba(0, 75, 135, 0.1);
+      border-color: #93c5fd;
+    }
+    .bm-campus-badge {
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 5px 12px;
+      border-radius: 6px;
+      background: #e0f2fe;
+      color: #0369a1;
+      width: fit-content;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+    }
+    .bm-campus-title {
+      font-size: 21px;
+      font-weight: 800;
+      color: var(--bm-blue-dark);
+      margin-bottom: 14px;
+    }
+    .bm-campus-info-row {
+      font-size: 14px;
+      color: #334155;
+      margin-bottom: 10px;
+      line-height: 1.55;
+      display: flex;
+      gap: 10px;
+    }
+
+    /* 13. FOOTER */
+    .bm-footer {
+      background: #001f3f;
+      color: #cbd5e1;
+      font-size: 13.5px;
+      padding: 60px 0 30px;
+      border-top: 4px solid var(--bm-blue-primary);
+    }
+    .bm-footer-inner {
+      max-width: 1560px;
+      width: 95%;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .bm-footer-grid {
+      display: grid;
+      grid-template-columns: 1.8fr 1fr 1fr 1.2fr;
+      gap: 44px;
+      margin-bottom: 44px;
+    }
+    @media (max-width: 1024px) { .bm-footer-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) { .bm-footer-grid { grid-template-columns: 1fr; } }
+    .bm-footer-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 18px;
+    }
+    .bm-footer-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .bm-footer-links li {
+      margin-bottom: 10px;
+    }
+    .bm-footer-links a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 13.5px;
+      transition: color 0.2s;
+    }
+    .bm-footer-links a:hover {
+      color: #38bdf8;
+    }
+    .bm-footer-bottom {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 24px;
+      font-size: 12.5px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    /* 14. MODAL ĐẶT LỊCH KHÁM */
+    .bm-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(6px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .bm-modal-card {
+      background: #ffffff;
+      border-radius: 18px;
+      max-width: 620px;
+      width: 100%;
+      padding: 32px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+      position: relative;
+    }
+    .bm-modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--bm-border);
+    }
+    .bm-modal-title {
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--bm-blue-dark);
+    }
+    .bm-close-btn {
+      background: transparent;
+      border: none;
+      font-size: 22px;
+      cursor: pointer;
+      color: #64748b;
+    }
+
+    /* =========================================================================
+       INTERNAL EMR INTERFACE STYLES (DÀNH CHO TRANG QUẢN TRỊ BỆNH ÁN & TESTER)
+       ========================================================================= */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 900;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+      transition: all 0.2s ease;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-title span { color: var(--primary); }
+    .badge-port {
+      font-size: 10px;
+      background: #eff6ff;
+      color: var(--primary);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      border: 1px solid #bfdbfe;
+      letter-spacing: 0.5px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .badge-danger {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid var(--danger-border);
+      animation: pulseGlow 2.5s infinite;
+    }
+    .badge-safe {
+      background: var(--safe-bg);
+      color: var(--safe);
+      border: 1px solid var(--safe-border);
+      animation: pulseGreen 2.5s infinite;
+    }
+    .dot-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-danger { background: var(--danger); }
+    .dot-safe { background: var(--safe); }
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 8px;
+      transition: all 0.18s ease;
+    }
+    .nav-links a:hover {
+      color: var(--text);
+      background: #f1f5f9;
+    }
+    .nav-links a.active {
+      color: var(--primary);
+      background: var(--primary-light);
+      font-weight: 700;
+    }
+    .nav-alert-badge {
+      background: #ef4444;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 12px;
+      margin-left: 6px;
+    }
+
+    .container {
+      max-width: 1560px;
+      width: 95%;
+      margin: 32px auto;
+      padding: 0 24px;
+      animation: fadeInUp 0.35s ease-out;
+    }
+
+    .idor-banner {
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08);
+    }
+    .idor-banner-safe {
+      background: var(--safe-bg);
+      border-color: var(--safe-border);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+    }
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.18s ease;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-safe { background: var(--safe); color: #fff; }
+    .btn-safe:hover { background: #059669; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      background: #f8fafc;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      color: var(--text);
+      vertical-align: middle;
+    }
+    tr:hover td { background: #f8fafc; }
+
+    .leak-box {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-left: 5px solid #e11d48;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+      animation: pulseGlow 2.5s infinite;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+    }
+
+    /* Floating Action Buttons (FABs) at Bottom Right (Nút tròn nổi) */
+    .account-fab {
+      position: fixed;
+      bottom: 88px;
+      right: 24px;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0284c7 0%, #004b87 100%);
       border: 2px solid #38bdf8;
-      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.35);
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -1294,151 +2975,26 @@ if ($view === 'tester') {
     }
     .account-fab:hover {
       transform: scale(1.08);
-      background: #0369a1;
-      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.45);
+      box-shadow: 0 8px 25px rgba(2, 132, 199, 0.55);
     }
     .account-fab-icon {
       display: flex;
       align-items: center;
       justify-content: center;
     }
-
-    /* Account Drawer Popup */
-    .account-drawer {
-      position: fixed;
-      bottom: 148px;
-      right: 24px;
-      width: 360px;
-      max-width: calc(100vw - 48px);
-      background: #ffffff;
-      border: 1px solid #cbd5e1;
-      border-radius: 12px;
-      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
-      z-index: 9998;
-      overflow: hidden;
-      animation: slideUp 0.18s ease-out;
-    }
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .acc-drawer-head {
-      background: #0f172a;
+    .account-fab-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      background: #ef4444;
       color: #fff;
-      padding: 12px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 10px;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     }
-    .acc-drawer-head h4 {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-      color: #f8fafc;
-    }
-    .acc-drawer-list {
-      padding: 8px;
-      max-height: 380px;
-      overflow-y: auto;
-    }
-    .acc-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 9px 12px;
-      border-radius: 8px;
-      text-decoration: none;
-      color: #0f172a;
-      transition: background 0.15s;
-      margin-bottom: 4px;
-      border: 1px solid transparent;
-    }
-    .acc-item:hover {
-      background: #f1f5f9;
-    }
-    .acc-item.active {
-      background: #e0f2fe;
-      border-color: #7dd3fc;
-    }
-    .acc-avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 12px;
-      margin-right: 10px;
-      flex-shrink: 0;
-    }
-    .acc-avatar-doc { background: #dbeafe; color: #1d4ed8; }
-    .acc-avatar-adm { background: #fee2e2; color: #b91c1c; }
-    .acc-avatar-pat { background: #dcfce7; color: #15803d; }
-    .acc-avatar-aud { background: #fef3c7; color: #b45309; }
-    .acc-avatar-anon { background: #f1f5f9; color: #64748b; }
-    .acc-info { flex: 1; min-width: 0; }
-    .acc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .acc-sub { font-size: 11px; color: #64748b; }
-    .acc-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-    .acc-footer {
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      padding: 10px 14px;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    /* Header Nav */
-    header { background: #fff; border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-title { font-size: 17px; font-weight: 800; color: #0369a1; letter-spacing: -0.3px; }
-    .nav-links { display: flex; gap: 16px; align-items: center; font-size: 13px; font-weight: 600; }
-    .nav-links a { color: #475569; text-decoration: none; padding: 6px 10px; border-radius: 6px; transition: background 0.1s; }
-    .nav-links a:hover, .nav-links a.active { color: var(--primary); background: #f0f9ff; }
-    
-    .status-badge { font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .badge-safe { background: #dcfce7; color: var(--safe); }
-    .badge-danger { background: #fee2e2; color: var(--danger); }
-    .badge-doctor { background: #e0f2fe; color: #0369a1; }
-    
-    /* Main Layout */
-    .container { max-width: 1040px; margin: 24px auto; padding: 0 16px; }
-
-    /* Banner */
-    .idor-banner { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-    .idor-banner-safe { background: #f0fdf4; border: 1px solid #bbf7d0; }
-    
-    /* Cards */
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
-    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-    .card-title { font-size: 16px; font-weight: 700; }
-
-    /* Tables */
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); }
-    th { background: #f8fafc; font-weight: 600; color: var(--muted); }
-    tr:hover { background: #f8fafc; }
-
-    /* Buttons */
-    .btn { display: inline-block; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; border: none; transition: all 0.15s ease; }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-safe { background: var(--safe); color: #fff; }
-    .btn-outline { background: #fff; border: 1px solid var(--border); color: #334155; }
-    .btn-outline:hover { background: #f1f5f9; }
-
-    /* Forms */
-    .form-group { margin-bottom: 16px; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px; }
-    input[type="text"], input[type="password"], textarea, select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
-    textarea { min-height: 90px; resize: vertical; }
-
-    /* Interactive Lookup Box */
-    .lookup-panel { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-    .lookup-form { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 
     /* Floating Action Button (FAB) for Terminal */
     .term-fab {
@@ -1450,7 +3006,7 @@ if ($view === 'tester') {
       border-radius: 50%;
       background: #090d16;
       border: 2px solid #334155;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -1459,13 +3015,13 @@ if ($view === 'tester') {
       transition: all 0.2s ease;
     }
     .term-fab:hover { transform: scale(1.08); border-color: #0284c7; }
-    .term-fab-icon { color: #22c55e; font-family: monospace; font-weight: 900; font-size: 18px; }
+    .term-fab-icon { color: #22c55e; font-family: 'JetBrains Mono', monospace; font-weight: 900; font-size: 19px; }
     .term-fab-dot {
       position: absolute;
-      top: 4px;
-      right: 4px;
-      width: 10px;
-      height: 10px;
+      top: 3px;
+      right: 3px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       border: 2px solid #090d16;
     }
@@ -1473,867 +3029,1815 @@ if ($view === 'tester') {
     .dot-safe { background: #22c55e; }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    /* Floating Terminal Popup Window */
-    .term-drawer {
+    /* ACCOUNT SWITCHER POPUP */
+    .account-drawer {
       position: fixed;
-      bottom: 148px;
+      bottom: 152px;
       right: 24px;
-      width: 480px;
-      max-width: calc(100vw - 48px);
-      background: #090d16;
-      border: 1px solid #1e293b;
-      border-radius: 10px;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
       z-index: 9998;
+      width: 360px;
+      background: #ffffff;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16);
       overflow: hidden;
-      font-family: "Courier New", Courier, monospace;
-      color: #10b981;
-      animation: slideUp 0.18s ease-out;
+      animation: slideUpDrawer 0.25s ease-out;
     }
-    .term-drawer-head {
-      background: #111827;
-      padding: 10px 14px;
-      font-size: 12px;
-      color: #94a3b8;
+    .acc-drawer-head {
+      background: var(--bm-blue-dark);
+      padding: 14px 18px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid #1f2937;
     }
-    .term-drawer-body {
-      padding: 14px;
-      height: 240px;
+    .acc-drawer-list {
+      padding: 8px;
+      max-height: 380px;
       overflow-y: auto;
+    }
+    .acc-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 10px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .acc-item:hover { background: #f8fafc; }
+    .acc-item.active { background: #eff6ff; border: 1px solid #bfdbfe; }
+    .acc-initial {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
       font-size: 12px;
-      line-height: 1.5;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+    .init-adm { background: #fee2e2; color: #b91c1c; }
+    .init-doc { background: #dbeafe; color: #1d4ed8; }
+    .init-pat { background: #dcfce7; color: #15803d; }
+    .init-aud { background: #e0f2fe; color: #0369a1; }
+    .init-anon { background: #f1f5f9; color: #64748b; }
+
+    /* TERMINAL DRAWER */
+    .term-drawer {
+      position: fixed;
+      bottom: 152px;
+      right: 24px;
+      z-index: 9998;
+      width: 540px;
+      max-width: calc(100vw - 44px);
+      background: #0f172a;
+      border-radius: 14px;
+      border: 1px solid #334155;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+      font-family: 'JetBrains Mono', monospace;
+      animation: slideUpDrawer 0.25s ease-out;
+    }
+    .term-drawer-head {
+      background: #1e293b;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 700;
+      border-bottom: 1px solid #334155;
     }
     .term-quick-btns {
+      padding: 8px 12px;
+      background: #162032;
+      border-bottom: 1px solid #1e293b;
       display: flex;
       gap: 6px;
-      padding: 8px 14px;
-      background: #0d131f;
-      border-top: 1px solid #1f2937;
       flex-wrap: wrap;
     }
     .term-qbtn {
-      background: #1e293b;
-      color: #94a3b8;
+      background: #0f172a;
       border: 1px solid #334155;
+      color: #cbd5e1;
       padding: 3px 8px;
+      font-size: 10px;
       border-radius: 4px;
-      font-size: 11px;
       cursor: pointer;
+      font-family: inherit;
     }
-    .term-qbtn:hover { background: #334155; color: #fff; }
+    .term-qbtn:hover { background: #1e293b; color: #fff; }
+    .term-drawer-body {
+      padding: 14px;
+      height: 220px;
+      overflow-y: auto;
+      font-size: 11.5px;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
     .term-input-row {
       display: flex;
       align-items: center;
-      background: #111827;
-      padding: 8px 14px;
-      border-top: 1px solid #1f2937;
+      background: #1e293b;
+      padding: 8px 12px;
+      border-top: 1px solid #334155;
     }
-    .term-prompt { color: #38bdf8; font-weight: 700; margin-right: 8px; font-size: 12px; }
-    .term-input { flex: 1; background: transparent; border: none; color: #f8fafc; font-family: monospace; font-size: 12px; outline: none; }
-
-    /* Leak Alert */
-    .leak-box { background: #fff1f2; border: 2px solid #f43f5e; border-radius: 8px; padding: 18px; margin-bottom: 20px; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { border-color: #f43f5e; } 50% { border-color: #be123c; } }
-
-    /* Modal Form for Add User */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center; }
-    .modal-box { background: #fff; width: 480px; max-width: 90%; border-radius: 10px; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
-
-    /* Tester Dashboard Styles */
-    .alert-badge { background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 9999px; margin-left: 6px; display: inline-block; }
-    .badge-crit { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .badge-high { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
-    .badge-warn { background: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
-    .badge-info { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
-    .badge-pass { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; font-weight: 700; }
-    .badge-fail { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; font-weight: 700; }
-    .live-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 6px; animation: blink 1s infinite; vertical-align: middle; }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .stat-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-    .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
-    .stat-val { font-size: 24px; font-weight: 800; color: #0f172a; margin-top: 6px; }
-    .tab-bar { display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px; }
-    .tab-item { padding: 10px 18px; text-decoration: none; font-size: 13px; font-weight: 700; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
-    .tab-item:hover { color: #0284c7; }
-    .tab-item.active { color: #0284c7; border-bottom-color: #0284c7; }
+    .term-prompt {
+      color: #38bdf8;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+    .term-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #f8fafc;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    /* 15. MODAL FORM OVERLAY FOR USERS MANAGEMENT */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: #ffffff;
+      width: 500px;
+      max-width: 95vw;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
 <body>
 
-  <!-- NAVBAR -->
-  <header>
-    <div class="brand">
-      <a href="/?view=records" style="text-decoration: none;">
-        <span class="brand-title">MEDIRECORD - BỆNH ÁN ĐIỆN TỬ</span>
-      </a>
-      <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 4px; font-weight: 600;">CỔNG 8205</span>
-      <?php if ($bugIdor): ?>
-        <span class="status-badge badge-danger">LỖI IDOR: ĐANG BẬT</span>
-      <?php else: ?>
-        <span class="status-badge badge-safe">BẢO MẬT: ĐÃ KHẮC PHỤC</span>
-      <?php endif; ?>
+  <!-- =======================================================================
+       BỘ HEADER VÀ NAVIGATION ĐIỀU KIỆN
+       ======================================================================= -->
+  <?php if ($view === 'landing'): ?>
+    <!-- 1. TOPBAR TIỆN ÍCH Y TẾ BỆNH VIỆN BẠCH MAI -->
+    <div class="bm-topbar">
+      <div class="bm-topbar-inner">
+        <div class="bm-topbar-left">
+          <div class="bm-topbar-item">
+            <span style="color: #38bdf8;">📞</span>
+            <span>Tổng đài đặt khám: <strong><a href="tel:1900888866">1900.888.866</a></strong></span>
+          </div>
+          <div class="bm-topbar-item">
+            <span class="bm-topbar-badge">CẤP CỨU 24/7</span>
+            <span>Trung tâm Cấp cứu A9: <strong><a href="tel:02438693731">024.3869.3731</a></strong></span>
+          </div>
+          <div class="bm-topbar-item">
+            <span style="color: #94a3b8;">📍</span>
+            <span>Số 78 Giải Phóng, P. Phương Mai, Q. Đống Đa, TP. Hà Nội</span>
+          </div>
+        </div>
+        <div class="bm-topbar-right">
+          <div class="bm-topbar-item">
+            <span>🕒 Tiếp đón: <strong>05:00 - 16:30 (Thứ 2 - CN)</strong></span>
+          </div>
+          <?php if ($currentUser): ?>
+            <div class="bm-topbar-item">
+              <span>Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong></span>
+              <a href="/?view=records" style="margin-left: 6px; color: #38bdf8; text-decoration: underline;">[Bệnh Án]</a>
+              <a href="/?action=logout" style="margin-left: 6px; color: #f87171;">[Đăng xuất]</a>
+            </div>
+          <?php else: ?>
+            <div class="bm-topbar-item">
+              <a href="/?view=login" style="color: #e2e8f0; font-weight: 600;">Cán Bộ Đăng Nhập</a>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
     </div>
 
-    <nav class="nav-links">
-      <a href="/?view=records" class="<?= $view === 'records' ? 'active' : '' ?>">Danh Sách Bệnh Án</a>
-      <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
-        <a href="/?view=create_record" class="<?= $view === 'create_record' ? 'active' : '' ?>">Bác Sĩ Gửi Bệnh Án</a>
-      <?php endif; ?>
-      <a href="/?view=announcements" class="<?= $view === 'announcements' ? 'active' : '' ?>">Thông Báo Chung</a>
-      <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
-        <a href="/?view=users" class="<?= $view === 'users' ? 'active' : '' ?>">Quản Trị Người Dùng</a>
-      <?php endif; ?>
-      <?php if ($currentUser && in_array($currentUser['role'], ['auditor', 'admin'], true)): ?>
-        <a href="/?view=tester" class="<?= $view === 'tester' ? 'active' : '' ?>" style="color: #0284c7; font-weight: 700; display: inline-flex; align-items: center;">
-          🛡️ Giám Sát An Ninh & Kiểm Thử
-          <?php if ($incidentCount > 0): ?>
-            <span class="alert-badge"><?= $incidentCount ?> vi phạm</span>
+    <!-- 2. MAIN HEADER THƯƠNG HIỆU BỆNH VIỆN BẠCH MAI -->
+    <div class="bm-header">
+      <div class="bm-header-inner">
+        <a href="/?view=landing" class="bm-brand">
+          <div class="bm-logo-emblem">
+            <div class="bm-logo-cross"></div>
+          </div>
+          <div class="bm-brand-text">
+            <span class="bm-brand-sub">BỘ Y TẾ</span>
+            <span class="bm-brand-title">BỆNH VIỆN BẠCH MAI</span>
+            <span class="bm-brand-desc">Bệnh viện Đa khoa hoàn chỉnh hạng Đặc biệt đầu tiên tại Việt Nam</span>
+          </div>
+        </a>
+        <div class="bm-header-actions">
+          <div class="bm-header-hotline">
+            <span class="bm-hotline-label">Cấp Cứu A9 Tuyến Cuối</span>
+            <a href="tel:02438693731" class="bm-hotline-phone">024.3869.3731</a>
+          </div>
+          <button onclick="openBookingModal()" class="bm-btn-booking">
+            <span>📅</span> ĐẶT LỊCH KHÁM
+          </button>
+          <a href="/?view=records" class="bm-btn-emr">
+            <span>📋</span> HỒ SƠ BỆNH ÁN EMR
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. MAIN NAVIGATION MENU (CHUẨN BACHMAI.GOV.VN) -->
+    <nav class="bm-nav">
+      <div class="bm-nav-inner">
+        <ul class="bm-nav-links">
+          <li class="bm-nav-item"><a href="/?view=landing" class="bm-nav-link active">TRANG CHỦ</a></li>
+          <li class="bm-nav-item"><a href="#gioi-thieu" class="bm-nav-link">GIỚI THIỆU</a></li>
+          <li class="bm-nav-item"><a href="#co-cau" class="bm-nav-link">CƠ CẤU TỔ CHỨC</a></li>
+          <li class="bm-nav-item"><a href="#chuyen-khoa" class="bm-nav-link">ĐƠN VỊ CHUYÊN KHOA</a></li>
+          <li class="bm-nav-item"><a href="#chuyen-gia" class="bm-nav-link">ĐỘI NGŨ BÁC SĨ</a></li>
+          <li class="bm-nav-item"><a href="#danh-cho-nguoi-benh" class="bm-nav-link">DÀNH CHO NGƯỜI BỆNH</a></li>
+          <li class="bm-nav-item">
+            <a href="/?view=records" class="bm-nav-link">
+              BỆNH ÁN ĐIỆN TỬ <span class="bm-nav-badge">EMR</span>
+            </a>
+          </li>
+          <li class="bm-nav-item"><a href="#tin-tuc" class="bm-nav-link">TIN TỨC & SỰ KIỆN</a></li>
+          <li class="bm-nav-item"><a href="#lien-he" class="bm-nav-link">LIÊN HỆ</a></li>
+        </ul>
+        <div style="flex-shrink: 0; margin-left: 14px;">
+          <?php if ($currentUser): ?>
+            <a href="/?view=records" style="color: #fff; font-size: 13px; text-decoration: none; font-weight: 700; background: rgba(255,255,255,0.18); padding: 8px 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+              <span>👤</span> <?= htmlspecialchars($currentUser['username']) ?> (<?= htmlspecialchars($currentUser['role']) ?>)
+            </a>
+          <?php else: ?>
+            <a href="/?view=login" style="color: #fff; font-size: 13px; text-decoration: none; font-weight: 700; background: rgba(255,255,255,0.18); padding: 8px 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+              <span>🔐</span> Đăng Nhập
+            </a>
           <?php endif; ?>
-        </a>
-      <?php endif; ?>
-
-      <?php if ($currentUser): ?>
-        <span style="color: var(--muted); font-size: 12px; margin-left: 8px;">
-          Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['role']) ?></code>)
-        </span>
-        <a href="/?action=logout" class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;">Đăng xuất</a>
-      <?php else: ?>
-        <a href="/?view=login" class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;">Đăng nhập</a>
-        <a href="/?view=register" class="btn btn-primary" style="padding: 4px 10px; font-size: 12px;">Đăng ký</a>
-      <?php endif; ?>
+        </div>
+      </div>
     </nav>
-  </header>
 
-  <div class="container">
-
-    <!-- BANNER TRẠNG THÁI BẢO MẬT -->
-    <?php if ($bugIdor): ?>
-      <div class="idor-banner">
-        <div>
-          <strong style="color: var(--danger); font-size: 14px;">LỖ HỔNG IDOR / BOLA ĐANG BẬT!</strong>
-          <p style="color: #7f1d1d; font-size: 12px; margin-top: 4px;">
-            Hệ thống bỏ qua kiểm tra quyền sở hữu đối tượng. Bệnh nhân An (<code>bn_an</code>) có thể tra cứu và chỉnh sửa trái phép Bệnh án số 03 của Bình (<code>bn_binh</code>).
-          </p>
-        </div>
-        <div>
-          <button onclick="execCmd('set BUG_IDOR=0')" class="btn btn-safe">Vá Lỗ Hổng (Tắt Lỗi)</button>
-        </div>
-      </div>
-    <?php else: ?>
-      <div class="idor-banner idor-banner-safe">
-        <div>
-          <strong style="color: var(--safe); font-size: 14px;">HỆ THỐNG AN TOÀN (ABAC ACTIVE)</strong>
-          <p style="color: #14532d; font-size: 12px; margin-top: 4px;">
-            Quy tắc kiểm tra sở hữu đang hoạt động: Bệnh nhân chỉ xem và sửa bệnh án của chính mình. Truy cập chéo bị chặn với HTTP 403 Forbidden.
-          </p>
-        </div>
-        <div>
-          <button onclick="execCmd('set BUG_IDOR=1')" class="btn btn-danger">Tạo Lỗi (Bật IDOR)</button>
-        </div>
-      </div>
-    <?php endif; ?>
-
-    <!-- VIEW 1: CHI TIẾT BỆNH ÁN -->
-    <?php if ($view === 'record' && $recordDetail): ?>
-      <?php if ($leakActive): ?>
-        <div class="leak-box">
-          <div style="font-weight: 800; color: #be123c; font-size: 15px; margin-bottom: 6px;">
-            [CẢNH BÁO VI PHẠM BẢO MẬT] PHÁT HIỆN LỖ HỔNG IDOR / BOLA (CWE-639) ĐANG BỊ KHAI THÁC!
-          </div>
-          <p style="color: #9f1239; font-size: 13px;">
-            Tài khoản hiện tại: <strong><?= htmlspecialchars($currentUser['username']) ?></strong> (<?= htmlspecialchars($currentUser['full_name']) ?>)<br>
-            Chủ sở hữu thực sự của bệnh án: <strong><?= htmlspecialchars($recordDetail['owner_username']) ?></strong> (Bệnh nhân Trần Thị Bình)<br>
-            <em>Máy chủ đã bỏ qua kiểm tra quan hệ sở hữu đối tượng và làm rò rỉ dữ liệu y tế nhạy cảm bên dưới!</em>
-          </p>
-        </div>
-      <?php endif; ?>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title"><?= htmlspecialchars($recordDetail['title']) ?></div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-              Mã hồ sơ: #<?= $recordDetail['id'] ?> | Khoa: <?= htmlspecialchars($recordDetail['department']) ?> | Ngày lập: <?= $recordDetail['created_at'] ?>
-            </div>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <a href="/?view=edit_record&id=<?= $recordDetail['id'] ?>" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7;">Chỉnh Sửa Bệnh Án Này</a>
-            <a href="/?view=records" class="btn btn-outline">Quay lại danh sách</a>
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; font-size: 13px;">
-          <div style="background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
-            <strong>Bệnh nhân sở hữu:</strong> <code><?= htmlspecialchars($recordDetail['owner_username']) ?></code><br>
-            <strong>Bác sĩ phụ trách:</strong> <?= htmlspecialchars($recordDetail['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?>
-          </div>
-          <div style="background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
-            <strong>Chẩn đoán lâm sàng:</strong><br>
-            <span style="color: #0369a1; font-weight: 600;"><?= htmlspecialchars($recordDetail['diagnosis'] ?? 'Đang cập nhật') ?></span>
-          </div>
-        </div>
-
-        <div style="background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-          <h3 style="font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 8px;">NỘI DUNG BỆNH ÁN & PHÁC ĐỒ ĐIỀU TRỊ:</h3>
-          <p style="font-size: 14px; color: #0f172a; white-space: pre-wrap;"><?= htmlspecialchars($recordDetail['content']) ?></p>
-        </div>
+  <?php else: ?>
+    <!-- NAVBAR NỘI BỘ CHO CÁC PHÂN HỆ EMR -->
+    <header>
+      <div class="brand">
+        <a href="/?view=landing" style="text-decoration: none;">
+          <span class="brand-title">MEDIRECORD <span>EMR</span></span>
+        </a>
+        <span class="badge-port">PORT 8205</span>
+        <?php if ($bugIdor): ?>
+          <span class="status-badge badge-danger">
+            <span class="dot-indicator dot-danger"></span>
+            LỖI IDOR: ĐANG BẬT
+          </span>
+        <?php else: ?>
+          <span class="status-badge badge-safe">
+            <span class="dot-indicator dot-safe"></span>
+            BẢO MẬT: ĐÃ KHẮC PHỤC
+          </span>
+        <?php endif; ?>
       </div>
 
-    <!-- VIEW 2: FORM CHỈNH SỬA BỆNH ÁN (TEST LỖI IDOR TRỰC TIẾP TRÊN UPDATE) -->
-    <?php elseif ($view === 'edit_record' && $editRecordDetail): ?>
-      <?php if ($leakActive): ?>
-        <div class="leak-box">
-          <div style="font-weight: 800; color: #be123c; font-size: 15px; margin-bottom: 6px;">
-            [CẢNH BÁO BẢO MẬT] BẠN ĐANG TRUY CẬP CHỈNH SỬA BỆNH ÁN CỦA NGƯỜI KHÁC QUA LỖ HỔNG IDOR!
-          </div>
-          <p style="color: #9f1239; font-size: 13px;">
-            Bệnh nhân An (<code>bn_an</code>) đang chỉnh sửa hồ sơ của Bệnh nhân Bình (<code>bn_binh</code>).
-            Khi nhấn "Lưu Thay Đổi Bệnh Án", máy chủ sẽ ghi đè dữ liệu bệnh án trái phép do thiếu kiểm tra quyền sở hữu!
-          </p>
-        </div>
-      <?php endif; ?>
-
-      <div class="card" style="max-width: 680px; margin: 0 auto;">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Chỉnh Sửa Hồ Sơ Bệnh Án #<?= $editRecordDetail['id'] ?></div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-              Bệnh nhân sở hữu: <code><?= htmlspecialchars($editRecordDetail['owner_username']) ?></code>
-            </div>
-          </div>
-          <a href="/?view=record&id=<?= $editRecordDetail['id'] ?>" class="btn btn-outline">Hủy bỏ</a>
-        </div>
-
-        <form action="/?action=edit_record_submit" method="POST">
-          <input type="hidden" name="id" value="<?= $editRecordDetail['id'] ?>">
-
-          <div class="form-group">
-            <label>Tiêu đề bệnh án:</label>
-            <input type="text" name="title" value="<?= htmlspecialchars($editRecordDetail['title']) ?>" required>
-          </div>
-
-          <div class="form-group">
-            <label>Chẩn đoán bệnh lý:</label>
-            <input type="text" name="diagnosis" value="<?= htmlspecialchars($editRecordDetail['diagnosis'] ?? '') ?>" required>
-          </div>
-
-          <div class="form-group">
-            <label>Nội dung phác đồ & Ghi chú y tế:</label>
-            <textarea name="content" required><?= htmlspecialchars($editRecordDetail['content']) ?></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px;">
-            Lưu Thay Đổi Bệnh Án
-          </button>
-        </form>
-      </div>
-
-    <!-- VIEW 3: DANH SÁCH BỆNH ÁN & HỘP TRA CỨU ID TỰ DO -->
-    <?php elseif ($view === 'records'): ?>
-      <?php if (isset($_GET['login_success'])): ?>
-        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
-          <div><strong>Đăng nhập thành công!</strong> Chào mừng <strong><?= htmlspecialchars($currentUser['full_name'] ?? '') ?></strong> (<code><?= htmlspecialchars($currentUser['username'] ?? '') ?></code>) quay trở lại hệ thống.</div>
-          <span class="status-badge badge-safe">Đã xác thực</span>
-        </div>
-      <?php endif; ?>
-      <?php if (isset($_GET['reg_success'])): ?>
-        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
-          <div><strong>Đăng ký thành công!</strong> Tài khoản <strong><?= htmlspecialchars($currentUser['username'] ?? '') ?></strong> đã được khởi tạo và tự động đăng nhập.</div>
-          <span class="status-badge badge-safe">Tài khoản mới</span>
-        </div>
-      <?php endif; ?>
-      
-      <!-- HỘP TRA CỨU BỆNH ÁN THEO MÃ ID TỰ DO (TEST TRỰC TIẾP IDOR TẠI ĐÂY) -->
-      <div class="lookup-panel">
-        <div>
-          <strong style="color: #1e40af; font-size: 14px;">TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ (ID LOOKUP & DIRECT TEST):</strong>
-          <div style="font-size: 12px; color: #1d4ed8; margin-top: 4px;">
-            Nhập trực tiếp mã bệnh án ID vào ô bên dưới để kiểm tra phân quyền:
-            (Bệnh án An sở hữu: ID <strong>1, 2</strong> | Bệnh án Bình sở hữu: ID <strong>3, 4</strong>).
-          </div>
-        </div>
-        <form action="/" method="GET" class="lookup-form">
-          <input type="hidden" name="view" value="record">
-          <input type="text" name="id" placeholder="Nhập mã bệnh án (VD: 3)..." value="3" style="max-width: 200px; background: #fff;" required>
-          <button type="submit" class="btn btn-primary">Tra Cứu / Xem Hồ Sơ</button>
-          <button type="submit" formaction="/" onclick="this.form.view.value='edit_record';" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7;">
-            Chỉnh Sửa Bệnh Án
-          </button>
-        </form>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Danh Sách Bệnh Án Điện Tử</div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-              <?php if ($currentUser && $currentUser['role'] === 'member'): ?>
-                Góc nhìn Bệnh nhân (<?= htmlspecialchars($currentUser['full_name']) ?>): Chỉ hiển thị bệnh án thuộc quyền sở hữu của bạn.
-              <?php elseif ($currentUser && in_array($currentUser['role'], ['doctor', 'admin', 'auditor'], true)): ?>
-                Góc nhìn Cán bộ Y tế / Kiểm toán: Bạn có thẩm quyền xem toàn bộ hồ sơ trong khoa.
-              <?php else: ?>
-                Khách vãng lai: Chưa đăng nhập. Vui lòng bấm vào nút tròn màu xanh ở góc dưới bên phải để chọn tài khoản hoặc Đăng nhập.
-              <?php endif; ?>
-            </div>
-          </div>
-          <div>
-            <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
-              <a href="/?view=create_record" class="btn btn-primary">+ Bác Sĩ Gửi Bệnh Án Mới</a>
+      <nav class="nav-links">
+        <a href="/?view=landing" class="<?= $view === 'landing' ? 'active' : '' ?>">Trang Chủ BV</a>
+        <a href="/?view=records" class="<?= $view === 'records' ? 'active' : '' ?>">Danh Sách Bệnh Án</a>
+        <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
+          <a href="/?view=create_record" class="<?= $view === 'create_record' ? 'active' : '' ?>">Lập Bệnh Án</a>
+        <?php endif; ?>
+        <a href="/?view=announcements" class="<?= $view === 'announcements' ? 'active' : '' ?>">Thông Báo Chung</a>
+        <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
+          <a href="/?view=users" class="<?= $view === 'users' ? 'active' : '' ?>">Quản Trị Người Dùng</a>
+        <?php endif; ?>
+        <?php if ($currentUser && in_array($currentUser['role'], ['auditor', 'admin'], true)): ?>
+          <a href="/?view=tester" class="<?= $view === 'tester' ? 'active' : '' ?>" style="color: var(--primary); font-weight: 700; display: inline-flex; align-items: center;">
+            Giám Sát An Ninh & Kiểm Thử
+            <?php if ($incidentCount > 0): ?>
+              <span class="nav-alert-badge"><?= $incidentCount ?> vi phạm</span>
             <?php endif; ?>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Tiêu Đề Bệnh Án</th>
-              <th>Bệnh Nhân Sở Hữu</th>
-              <th>Khoa Phòng</th>
-              <th>Bác Sĩ Khám</th>
-              <th>Ngày Lập</th>
-              <th>Thao Tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php
-            $displayRecords = [];
-            if ($currentUser) {
-                if ($currentUser['role'] === 'member') {
-                    $displayRecords = array_filter($mockRecords, fn($r) => $r['owner_username'] === $currentUser['username']);
-                } else {
-                    $displayRecords = $mockRecords;
-                }
-            }
-            ?>
-            <?php if (empty($displayRecords)): ?>
-              <tr>
-                <td colspan="7" style="text-align: center; color: var(--muted); padding: 32px;">
-                  Chưa có bệnh án nào hiển thị hoặc bạn chưa đăng nhập. Vui lòng bấm vào nút tròn chuyển tài khoản nhanh (biểu tượng người dùng) ở góc dưới bên phải hoặc <a href="/?view=login" style="color: #0284c7; font-weight: 600;">Đăng nhập</a>!
-                </td>
-              </tr>
-            <?php else: ?>
-              <?php foreach ($displayRecords as $rec): ?>
-                <tr>
-                  <td><strong>#<?= $rec['id'] ?></strong></td>
-                  <td>
-                    <a href="/?view=record&id=<?= $rec['id'] ?>" style="color: #0284c7; font-weight: 600; text-decoration: none;">
-                      <?= htmlspecialchars($rec['title']) ?>
-                    </a>
-                  </td>
-                  <td><code><?= htmlspecialchars($rec['owner_username']) ?></code></td>
-                  <td><?= htmlspecialchars($rec['department']) ?></td>
-                  <td><?= htmlspecialchars($rec['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?></td>
-                  <td style="color: var(--muted); font-size: 12px;"><?= $rec['created_at'] ?></td>
-                  <td style="display: flex; gap: 6px;">
-                    <a href="/?view=record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 4px 8px; font-size: 12px;">Xem</a>
-                    <a href="/?view=edit_record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 4px 8px; font-size: 12px;">Sửa</a>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            <?php endif; ?>
-          </tbody>
-        </table>
-      </div>
-
-    <!-- VIEW 4: BÁC SĨ GỬI BỆNH ÁN MỚI -->
-    <?php elseif ($view === 'create_record'): ?>
-      <div class="card" style="max-width: 680px; margin: 0 auto;">
-        <div class="card-head">
-          <div class="card-title">Bác Sĩ Lập & Gửi Bệnh Án Cho Bệnh Nhân</div>
-          <a href="/?view=records" class="btn btn-outline">Hủy bỏ</a>
-        </div>
-
-        <form action="/?action=create_record_submit" method="POST">
-          <div class="form-group">
-            <label>Bác sĩ phụ trách:</label>
-            <input type="text" value="<?= htmlspecialchars($currentUser['full_name'] ?? 'BS. CKI Lê Hoàng Minh') ?> (<?= htmlspecialchars($currentUser['username'] ?? 'bs_minh') ?>)" disabled style="background: #f1f5f9;">
-          </div>
-
-          <div class="form-group">
-            <label>Chọn Bệnh nhân nhận bệnh án:</label>
-            <select name="patient_username" required>
-              <option value="bn_an">Bệnh nhân Nguyễn Văn An (bn_an)</option>
-              <option value="bn_binh">Bệnh nhân Trần Thị Bình (bn_binh)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Khoa khám bệnh:</label>
-            <input type="text" name="department" value="Khoa Tim Mạch Can Thiệp" required>
-          </div>
-
-          <div class="form-group">
-            <label>Tiêu đề hồ sơ bệnh án:</label>
-            <input type="text" name="title" placeholder="VD: Bệnh án tái khám định kỳ..." required>
-          </div>
-
-          <div class="form-group">
-            <label>Chẩn đoán bệnh lý:</label>
-            <input type="text" name="diagnosis" placeholder="VD: Huyết áp kiểm soát ổn định, chỉ định duy trì đơn thuốc..." required>
-          </div>
-
-          <div class="form-group">
-            <label>Nội dung phác đồ điều trị và dặn dò bảo mật:</label>
-            <textarea name="content" placeholder="Nhập chi tiết phác đồ khám chữa bệnh..." required></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px; font-size: 14px;">
-            Lập & Gửi Bệnh Án Cho Bệnh Nhân
-          </button>
-        </form>
-      </div>
-
-    <!-- VIEW 5: QUẢN LÝ NGƯỜI DÙNG CHO QUẢN TRỊ VIÊN (THÊM, SỬA, XÓA, TÌM KIẾM) -->
-    <?php elseif ($view === 'users'): ?>
-      <?php if (!$currentUser || $currentUser['role'] !== 'admin'): ?>
-        <?php
-          recordSecurityIncident(
-              'PRIVILEGE_ESCALATION_ATTEMPT',
-              'HIGH',
-              $currentUser,
-              "Trang Quản trị người dùng (view=users)",
-              "Cố tình leo thang đặc quyền: Người dùng " . ($currentUser ? $currentUser['username'] . " (vai trò " . $currentUser['role'] . ")" : "Khách vãng lai") . " cố truy cập trang Quản lý Người dùng của Admin!",
-              ['status_code' => 403, 'cwe' => 'CWE-285 (Improper Authorization)']
-          );
-          header('Location: /?view=error&code=403&msg=' . urlencode('Chỉ Quản trị viên hệ thống (admin_bv) mới có quyền truy cập trang Quản lý Người dùng!'));
-          exit;
-        ?>
-      <?php endif; ?>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="card-title">Quản Trị Người Dùng Hệ Thống Y Tế (Admin Only)</div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-              Quản trị viên có toàn quyền thêm, sửa, xóa và tìm kiếm người dùng trong hệ thống.
-            </div>
-          </div>
-          <button onclick="openAddUserModal()" class="btn btn-primary">+ Thêm Người Dùng Mới</button>
-        </div>
-
-        <!-- THANH TÌM KIẾM NGƯỜI DÙNG TỨC THÌ -->
-        <div style="margin-bottom: 16px;">
-          <input type="text" id="userSearchInput" onkeyup="filterUsers()" placeholder="Tìm kiếm nhanh theo Tên đăng nhập, Họ tên, Vai trò, Khoa phòng..." style="background: #fff;">
-        </div>
-
-        <table id="userTable">
-          <thead>
-            <tr>
-              <th>Tên Đăng Nhập</th>
-              <th>Họ Và Tên</th>
-              <th>Vai Trò (Role)</th>
-              <th>Khoa Phòng / Đơn Vị</th>
-              <th>Thao Tác Quản Trị</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($mockUsers as $u): ?>
-              <tr>
-                <td><code><?= htmlspecialchars($u['username']) ?></code></td>
-                <td><strong><?= htmlspecialchars($u['full_name']) ?></strong></td>
-                <td>
-                  <span class="status-badge <?= $u['role'] === 'admin' ? 'badge-danger' : ($u['role'] === 'doctor' ? 'badge-doctor' : 'badge-safe') ?>">
-                    <?= htmlspecialchars($u['role']) ?>
-                  </span>
-                </td>
-                <td><?= htmlspecialchars($u['department'] ?? 'Khoa Khám Bệnh') ?></td>
-                <td>
-                  <button onclick="openEditUserModal('<?= htmlspecialchars($u['username']) ?>', '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars($u['role']) ?>', '<?= htmlspecialchars(addslashes($u['department'] ?? '')) ?>')" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;">Sửa</button>
-                  <?php if ($u['username'] !== $currentUser['username']): ?>
-                    <a href="/?action=delete_user&username=<?= urlencode($u['username']) ?>" onclick="return confirm('Bạn có chắc chắn muốn xóa người dùng <?= htmlspecialchars($u['username']) ?> không?');" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px; color: #dc2626; border-color: #fecaca;">Xóa</a>
-                  <?php endif; ?>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- MODAL THÊM NGƯỜI DÙNG -->
-      <div id="addUserModal" class="modal-overlay">
-        <div class="modal-box">
-          <div class="card-head">
-            <div class="card-title">Thêm Tài Khoản Người Dùng Mới</div>
-            <button onclick="closeAddUserModal()" class="btn btn-outline" style="padding: 2px 8px;">&times;</button>
-          </div>
-          <form action="/?action=add_user" method="POST">
-            <div class="form-group">
-              <label>Tên đăng nhập (username):</label>
-              <input type="text" name="username" placeholder="VD: bs_dung, bn_ha..." required>
-            </div>
-            <div class="form-group">
-              <label>Mật khẩu khởi tạo:</label>
-              <input type="password" name="password" value="TestPass@2026" required>
-            </div>
-            <div class="form-group">
-              <label>Họ và tên hiển thị:</label>
-              <input type="text" name="full_name" placeholder="VD: BS. Lê Tiến Dũng..." required>
-            </div>
-            <div class="form-group">
-              <label>Vai trò:</label>
-              <select name="role">
-                <option value="doctor">Bác sĩ khám bệnh (doctor)</option>
-                <option value="member">Bệnh nhân (member/patient)</option>
-                <option value="admin">Quản trị viên (admin)</option>
-                <option value="auditor">Kiểm toán an toàn (auditor)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Khoa phòng / Đơn vị:</label>
-              <input type="text" name="department" value="Khoa Khám Bệnh Chuyên Sâu" required>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px;">Tạo Người Dùng Mới</button>
-          </form>
-        </div>
-      </div>
-
-      <!-- MODAL SỬA NGƯỜI DÙNG -->
-      <div id="editUserModal" class="modal-overlay">
-        <div class="modal-box">
-          <div class="card-head">
-            <div class="card-title">Chỉnh Sửa Thông Tin Người Dùng</div>
-            <button onclick="closeEditUserModal()" class="btn btn-outline" style="padding: 2px 8px;">&times;</button>
-          </div>
-          <form action="/?action=edit_user" method="POST">
-            <input type="hidden" id="editUsername" name="username">
-            <div class="form-group">
-              <label>Tên đăng nhập:</label>
-              <input type="text" id="displayEditUsername" disabled style="background: #f1f5f9;">
-            </div>
-            <div class="form-group">
-              <label>Họ và tên hiển thị:</label>
-              <input type="text" id="editFullName" name="full_name" required>
-            </div>
-            <div class="form-group">
-              <label>Vai trò (Role):</label>
-              <select id="editRole" name="role">
-                <option value="doctor">Bác sĩ khám bệnh (doctor)</option>
-                <option value="member">Bệnh nhân (member/patient)</option>
-                <option value="admin">Quản trị viên (admin)</option>
-                <option value="auditor">Kiểm toán an toàn (auditor)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Khoa phòng / Đơn vị:</label>
-              <input type="text" id="editDept" name="department" required>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 10px;">Cập Nhật Người Dùng</button>
-          </form>
-        </div>
-      </div>
-
-    <!-- VIEW 6: THÔNG BÁO DÙNG CHUNG -->
-    <?php elseif ($view === 'announcements'): ?>
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">Thông Báo Bệnh Viện (Dữ Liệu Dùng Chung)</div>
-        </div>
-        <?php foreach ($mockAnnouncements as $ann): ?>
-          <div style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px;">
-            <h3 style="font-size: 15px; color: #0284c7; margin-bottom: 6px;"><?= htmlspecialchars($ann['title']) ?></h3>
-            <p style="font-size: 13px; color: #334155;"><?= htmlspecialchars($ann['body']) ?></p>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 8px;">Đăng lúc: <?= $ann['created_at'] ?> | Dữ liệu dùng chung cho mọi vai trò</div>
-          </div>
-        <?php endforeach; ?>
-      </div>
-
-    <!-- VIEW 7: ĐĂNG NHẬP -->
-    <?php elseif ($view === 'login'): ?>
-      <div class="card" style="max-width: 460px; margin: 40px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border-radius: 12px;">
-        <div class="card-head" style="border-bottom: 2px solid #e2e8f0; padding-bottom: 14px;">
-          <div>
-            <div class="card-title" style="font-size: 18px; color: #0f172a;">Đăng Nhập MediRecord</div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Hệ thống Quản lý Bệnh án Điện tử Y tế</div>
-          </div>
-          <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px; font-weight: 700;">CỔNG 8205</span>
-        </div>
-
-        <?php if (isset($_GET['err'])): ?>
-          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
-            <?php if ($_GET['err'] === 'invalid_credentials'): ?>
-              <strong>Đăng nhập thất bại:</strong> Tên đăng nhập hoặc mật khẩu không chính xác! Vui lòng thử lại.
-            <?php elseif ($_GET['err'] === 'missing_fields'): ?>
-              <strong>Lỗi:</strong> Vui lòng điền đầy đủ tên đăng nhập và mật khẩu!
-            <?php else: ?>
-              <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
-            <?php endif; ?>
-          </div>
-        <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'require_login'): ?>
-          <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
-            <strong>Yêu cầu đăng nhập:</strong> Vui lòng đăng nhập tài khoản để truy cập thông tin bệnh án y tế.
-          </div>
+          </a>
         <?php endif; ?>
 
-        <form action="/?action=login_submit" method="POST">
-          <div class="form-group">
-            <label for="loginUsername">Tên đăng nhập:</label>
-            <input type="text" id="loginUsername" name="username" value="<?= htmlspecialchars($_GET['u'] ?? '') ?>" placeholder="VD: bs_minh, bn_an, admin_bv" required autofocus>
-          </div>
-          <div class="form-group">
-            <label for="loginPassword">Mật khẩu:</label>
-            <input type="password" id="loginPassword" name="password" value="TestPass@2026" placeholder="Nhập mật khẩu..." required>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">(Mật khẩu mặc định của các tài khoản mẫu: <code>TestPass@2026</code>)</div>
-          </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px;">Đăng Nhập Ngay</button>
-        </form>
-
-        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
-          <div style="font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px;">Điền nhanh tài khoản kiểm thử:</div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <button type="button" onclick="fillLogin('admin_bv', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #fca5a5; color: #b91c1c;">Admin</button>
-            <button type="button" onclick="fillLogin('bs_minh', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #93c5fd; color: #1d4ed8;">Bác sĩ Minh</button>
-            <button type="button" onclick="fillLogin('bn_an', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #86efac; color: #15803d;">Bệnh nhân An</button>
-            <button type="button" onclick="fillLogin('bn_binh', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #86efac; color: #15803d;">Bệnh nhân Bình</button>
-            <button type="button" onclick="fillLogin('tester_sec', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #fde047; color: #b45309;">Tester Nam</button>
-          </div>
-        </div>
-
-        <div style="margin-top: 18px; text-align: center; font-size: 13px; color: #64748b;">
-          Chưa có tài khoản y tế? <a href="/?view=register" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng ký tài khoản mới</a>
-        </div>
-      </div>
-
-    <!-- VIEW 8: ĐĂNG KÝ -->
-    <?php elseif ($view === 'register'): ?>
-      <div class="card" style="max-width: 500px; margin: 40px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border-radius: 12px;">
-        <div class="card-head" style="border-bottom: 2px solid #e2e8f0; padding-bottom: 14px;">
-          <div>
-            <div class="card-title" style="font-size: 18px; color: #0f172a;">Đăng Ký Tài Khoản Y Tế Mới</div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Khởi tạo tài khoản Bệnh nhân hoặc Bác sĩ mới vào hệ thống</div>
-          </div>
-          <span style="font-size: 11px; background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 20px; font-weight: 700;">THÀNH VIÊN</span>
-        </div>
-
-        <?php if (isset($_GET['err'])): ?>
-          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
-            <?php if ($_GET['err'] === 'username_taken'): ?>
-              <strong>Đăng ký thất bại:</strong> Tên đăng nhập này đã được sử dụng! Vui lòng chọn tên đăng nhập khác.
-            <?php elseif ($_GET['err'] === 'password_mismatch'): ?>
-              <strong>Đăng ký thất bại:</strong> Mật khẩu xác nhận không khớp nhau! Vui lòng kiểm tra lại.
-            <?php elseif ($_GET['err'] === 'missing_fields'): ?>
-              <strong>Đăng ký thất bại:</strong> Vui lòng điền đầy đủ tất cả các trường thông tin bắt buộc!
-            <?php else: ?>
-              <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
-            <?php endif; ?>
-          </div>
+        <?php if ($currentUser): ?>
+          <span style="color: var(--muted); font-size: 12px; margin-left: 8px;">
+            Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['role']) ?></code>)
+          </span>
+          <a href="/?action=logout" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px;">Đăng xuất</a>
+        <?php else: ?>
+          <a href="/?view=login" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px;">Đăng nhập</a>
+          <a href="/?view=register" class="btn btn-primary" style="padding: 5px 12px; font-size: 12px;">Đăng ký</a>
         <?php endif; ?>
+      </nav>
+    </header>
+  <?php endif; ?>
 
-        <form action="/?action=register_submit" method="POST">
-          <div class="form-group">
-            <label for="regUsername">Tên đăng nhập (Username): <span style="color:#ef4444;">*</span></label>
-            <input type="text" id="regUsername" name="username" value="<?= htmlspecialchars($_GET['u'] ?? '') ?>" placeholder="VD: bn_tuan, bs_hoa..." required autofocus>
+  <!-- =======================================================================
+       NỘI DUNG CHÍNH (MAIN VIEWS)
+       ======================================================================= -->
+  <?php if ($view === 'landing'): ?>
+    <!-- =======================================================================
+         VIEW 0: TRANG CHỦ BỆNH VIỆN BẠCH MAI (CLONE BACHMAI.GOV.VN)
+         ======================================================================= -->
+    <!-- ACT I: DIMENSIONAL LAYERED HERO (SCRUBBED DEPTH) -->
+    <section class="sc-hero-wrap" id="gioi-thieu">
+      <div class="sc-hero-bg" id="scHeroBg"></div>
+      <div class="sc-hero-overlay"></div>
+      <div class="sc-hero-particles"></div>
+
+      <div class="sc-hero-inner">
+        <div class="sc-hero-content" id="scHeroContent">
+          <div class="sc-hero-badge">
+            <span class="bm-dot-green"></span>
+            <span>BỆNH VIỆN ĐA KHOA HOÀN CHỈNH HẠNG ĐẶC BIỆT ĐẦU TIÊN TẠI VIỆT NAM</span>
           </div>
-
-          <div class="form-group">
-            <label for="regFullName">Họ và tên đầy đủ: <span style="color:#ef4444;">*</span></label>
-            <input type="text" id="regFullName" name="full_name" value="<?= htmlspecialchars($_GET['fn'] ?? '') ?>" placeholder="VD: Nguyễn Tuấn Anh" required>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div class="form-group">
-              <label for="regRole">Vai trò tài khoản: <span style="color:#ef4444;">*</span></label>
-              <select id="regRole" name="role" required>
-                <option value="member">Bệnh nhân (Patient)</option>
-                <option value="doctor">Bác sĩ khám (Doctor)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="regDept">Khoa phòng / Đơn vị:</label>
-              <input type="text" id="regDept" name="department" value="Bệnh nhân ngoại trú" placeholder="VD: Khoa Khám Bệnh">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="regPassword">Mật khẩu: <span style="color:#ef4444;">*</span></label>
-            <input type="password" id="regPassword" name="password" placeholder="Tối thiểu 6 ký tự..." required>
-          </div>
-
-          <div class="form-group">
-            <label for="regConfirm">Xác nhận mật khẩu: <span style="color:#ef4444;">*</span></label>
-            <input type="password" id="regConfirm" name="confirm_password" placeholder="Nhập lại mật khẩu..." required>
-          </div>
-
-          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px;">Hoàn Tất Đăng Ký</button>
-        </form>
-
-        <div style="margin-top: 18px; text-align: center; font-size: 13px; color: #64748b;">
-          Đã có tài khoản? <a href="/?view=login" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng nhập ngay</a>
-        </div>
-      </div>
-
-    <!-- VIEW 9: TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ PHÂN QUYỀN (CHO TESTER_SEC & ADMIN) -->
-    <?php elseif ($view === 'tester'): ?>
-      <?php $testerTab = $_GET['tab'] ?? 'incidents'; ?>
-
-      <!-- HEADER BẢNG ĐIỀU KHIỂN KIỂM THỬ -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-            <span style="background: #0284c7; color: #fff; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px;">🛡️</span>
-            TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ PHÂN QUYỀN
+          <h1 class="sc-hero-title">
+            TRÍ - ĐỨC - CHUYÊN - TÂM<br>
+            <span>VƯƠN TẦM THẾ GIỚI</span>
           </h1>
-          <p style="color: var(--muted); font-size: 13px; margin-top: 4px;">
-            Giao diện kiểm thử và cảnh báo vi phạm dành cho <strong><?= htmlspecialchars($currentUser['full_name'] ?? 'Kỹ sư Bảo mật') ?></strong> (<code><?= htmlspecialchars($currentUser['username'] ?? 'tester_sec') ?></code> - Vai trò: <code><?= htmlspecialchars($currentUser['role'] ?? 'auditor') ?></code>).
+          <p class="sc-hero-desc">
+            Bệnh viện Bạch Mai là trung tâm y tế chuyên sâu tuyến cuối lớn nhất miền Bắc với hơn 114 năm lịch sử phụng sự sức khỏe nhân dân. Chúng tôi cam kết chăm sóc sức khỏe toàn diện bằng tài năng, y đức và sự tận tâm của đội ngũ thầy thuốc hàng đầu Việt Nam.
           </p>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <a href="/?action=simulate_security_alert" class="btn btn-outline" style="border-color: #fca5a5; color: #b91c1c; font-size: 12px;" title="Tạo sự cố tấn công mẫu để kiểm thử cơ chế phát hiện">
-            ⚡ Mô Phỏng Tấn Công IDOR
-          </a>
-          <a href="/?action=clear_security_alerts" onclick="return confirm('Bạn có chắc muốn xóa sạch toàn bộ nhật ký sự cố?');" class="btn btn-outline" style="font-size: 12px;">
-            🗑️ Xóa Nhật Ký
-          </a>
-        </div>
-      </div>
 
-      <!-- KPI METRIC CARDS -->
-      <div class="stats-grid">
-        <div class="stat-card" style="border-left: 4px solid #ef4444;">
-          <div class="stat-label">Cảnh Báo Sự Cố Xâm Phạm</div>
-          <div class="stat-val" style="color: #b91c1c;">
-            <?= $incidentCount ?>
-            <span style="font-size: 12px; font-weight: 600; color: #64748b;">(<?= $criticalCount ?> Nghiêm trọng)</span>
+          <div class="sc-hero-alert">
+            <div class="sc-hero-alert-title">TIÊN PHONG CHUYỂN ĐỔI SỐ Y TẾ TOÀN DIỆN</div>
+            <div class="sc-hero-alert-desc">
+              Bệnh viện Bạch Mai là bệnh viện đa khoa hạng đặc biệt đầu tiên chính thức áp dụng <strong>Hồ sơ Bệnh án Điện tử (EMR)</strong> từ ngày 01/11/2024, liên thông 100% dữ liệu chẩn đoán và điều trị trên toàn hệ thống.
+            </div>
           </div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Thời gian thực (Live Feeds)</div>
-        </div>
 
-        <div class="stat-card" style="border-left: 4px solid <?= $bugIdor ? '#ef4444' : '#16a34a' ?>;">
-          <div class="stat-label">Trạng Thái Lỗ Hổng IDOR (CWE-639)</div>
-          <div class="stat-val" style="color: <?= $bugIdor ? '#dc2626' : '#16a34a' ?>; font-size: 20px;">
-            <?= $bugIdor ? 'LỖ HỔNG ĐANG MỞ' : 'HỆ THỐNG AN TOÀN' ?>
+          <div class="sc-hero-actions">
+            <button onclick="openBookingModal()" class="sc-btn-primary">
+              <span>📅</span> Đặt Lịch Khám Trực Tuyến
+            </button>
+            <a href="/?view=records" class="sc-btn-outline">
+              <span>📋</span> Tra Cứu Bệnh Án EMR
+            </a>
+            <a href="tel:1900888866" class="sc-btn-outline" style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">
+              <span>📞</span> Tổng Đài: 1900.888.866
+            </a>
           </div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-            <?= $bugIdor ? 'Bệnh nhân An có thể đọc trộm bệnh án Bình' : 'Cơ chế ABAC đang bảo vệ 100%' ?>
+
+          <div class="sc-hero-tags">
+            <span class="sc-hero-tag"><span class="bm-dot-green"></span> Cấp Cứu A9 Trực 24/7</span>
+            <span class="sc-hero-tag">Bệnh Án Điện Tử EMR Quốc Gia</span>
+            <span class="sc-hero-tag">Tiếp Nhận Khám BHYT Toàn Quốc</span>
           </div>
         </div>
 
-        <div class="stat-card" style="border-left: 4px solid <?= $failedTestCount > 0 ? '#d97706' : '#16a34a' ?>;">
-          <div class="stat-label">Kết Quả Ma Trận 24 Test Cases</div>
-          <div class="stat-val" style="color: <?= $failedTestCount > 0 ? '#b45309' : '#15803d' ?>;">
-            <?= $passedTestCount ?> / 24 PASS
-          </div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-            <?= $failedTestCount > 0 ? "<span style='color:#dc2626;font-weight:700;'>$failedTestCount FAIL (Bẫy IDOR R02 kích hoạt)</span>" : "Tất cả test cases đều đạt chuẩn" ?>
-          </div>
-        </div>
-
-        <div class="stat-card" style="border-left: 4px solid #0284c7;">
-          <div class="stat-label">Bộ Test Suite Tích Hợp</div>
-          <div class="stat-val" style="color: #0369a1; font-size: 20px;">
-            88/88 TESTS
-          </div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-            Đã chuyển toàn bộ từ cổng 8105 sang 8205
+        <div class="sc-hero-subject" id="scHeroSubject">
+          <div class="sc-hero-card">
+            <img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=1200&q=80" alt="Đội ngũ Chuyên gia Bệnh viện Bạch Mai" class="sc-hero-img">
+            <div class="sc-floating-badge sc-badge-top">
+              <span class="bm-dot-green"></span>
+              <div>
+                <div class="sc-badge-title">Trung Tâm Cấp Cứu A9</div>
+                <div class="sc-badge-sub">Thường trực cấp cứu tuyến cuối 24/7</div>
+              </div>
+            </div>
+            <div class="sc-floating-badge sc-badge-bottom">
+              <div>
+                <div class="sc-badge-title" style="color: #38bdf8;">Hồ Sơ Bệnh Án EMR 100%</div>
+                <div class="sc-badge-sub" style="color: #e2e8f0;">Bảo mật & Liên thông chuẩn Bộ Y Tế</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- TABS CHỨC NĂNG KIỂM THỬ -->
-      <div class="tab-bar">
-        <a href="/?view=tester&tab=incidents" class="tab-item <?= $testerTab === 'incidents' ? 'active' : '' ?>">
-          🚨 Nhật Ký Cảnh Báo Xâm Phạm Thời Gian Thực (<?= $incidentCount ?>)
-        </a>
-        <a href="/?view=tester&tab=matrix" class="tab-item <?= $testerTab === 'matrix' ? 'active' : '' ?>">
-          📊 Ma Trận Kiểm Thử Phân Quyền Tự Động (24 Cases)
-        </a>
-        <a href="/?view=tester&tab=full_tests" class="tab-item <?= $testerTab === 'full_tests' ? 'active' : '' ?>">
-          ⚙️ Chạy Toàn Bộ Test Suite (88 Tests CLI)
-        </a>
+      <div class="sc-scroll-indicator">
+        <div class="sc-mouse-icon">
+          <div class="sc-mouse-wheel"></div>
+        </div>
+        <span>Cuộn để khám phá</span>
+      </div>
+    </section>
+
+    <!-- ACT II: PINNED HORIZONTAL SCROLLYTELLING SHOWCASE (114 NĂM & ĐỘT PHÁ SỐ) -->
+    <section class="sc-pin-section" id="milestonesPin">
+      <div class="sc-pin-header">
+        <div class="sc-pin-tag">
+          <span>🏛️</span>
+          <span>DẤU ẤN LỊCH SỬ & ĐỘT PHÁ SỐ Y TẾ</span>
+        </div>
+        <div class="sc-pin-progress">
+          <div class="sc-pin-progress-bar" id="pinProgressBar"></div>
+        </div>
+        <div class="sc-pin-counter" id="pinCounter">CHƯƠNG 01 / 04</div>
       </div>
 
-      <!-- TAB 1: NHẬT KÝ CẢNH BÁO SỰ CỐ XÂM PHẠM -->
-      <?php if ($testerTab === 'incidents'): ?>
+      <div class="sc-horizontal-track" id="horizontalTrack">
+        <!-- SLIDE 1: 1911 KHỞI NGUỒN -->
+        <div class="sc-slide">
+          <div class="sc-slide-bg" style="background-image: url('https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?auto=format&fit=crop&w=1600&q=80');"></div>
+          <div class="sc-slide-overlay"></div>
+          <div class="sc-slide-inner">
+            <div>
+              <span class="sc-slide-badge">1911 • 114 NĂM PHỤNG SỰ</span>
+              <h2 class="sc-slide-title">Khởi Thủy Từ Nhà Thương Lây Cống Vọng</h2>
+              <p class="sc-slide-desc">
+                Thành lập từ năm 1911, Bệnh viện Bạch Mai trải qua hơn một thế kỷ đồng hành cùng những thăng trầm lịch sử dân tộc. Từ một cơ sở điều trị truyền nhiễm đơn sơ, Bạch Mai đã vươn mình trở thành biểu tượng y đức và cái nôi đào tạo nhiều thế hệ thầy thuốc kiệt xuất của nền y học Việt Nam.
+              </p>
+              <div class="sc-slide-highlight">
+                <strong>Di sản Y đức:</strong> Nơi công tác của các bậc danh y lỗi lạc như GS. Đặng Văn Ngữ, GS. Tôn Thất Tùng, GS. Đỗ Xuân Hợp.
+              </div>
+              <a href="#chuyen-khoa" class="sc-btn-outline">Khám phá các Chuyên khoa →</a>
+            </div>
+            <div class="sc-slide-media-wrap">
+              <img src="https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80" alt="Di sản y học Bạch Mai" class="sc-slide-img">
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 2: TUYẾN CUỐI ĐA KHOA ĐẶC BIỆT & A9 -->
+        <div class="sc-slide">
+          <div class="sc-slide-bg" style="background-image: url('https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1600&q=80');"></div>
+          <div class="sc-slide-overlay"></div>
+          <div class="sc-slide-inner">
+            <div>
+              <span class="sc-slide-badge cyan">KỸ THUẬT CAO TUYẾN CUỐI</span>
+              <h2 class="sc-slide-title">Cấp Cứu A9 & Can Thiệp Chuyên Sâu Đỉnh Cao</h2>
+              <p class="sc-slide-desc">
+                Là Bệnh viện Đa khoa hoàn chỉnh hạng Đặc biệt đầu tiên của cả nước, Bạch Mai làm chủ những kỹ thuật y học phức tạp nhất: Hệ thống tim phổi nhân tạo ECMO, can thiệp thay van động mạch chủ qua da (TAVI), quy trình "Giờ Vàng" đột quỵ não và ghép tế bào gốc.
+              </p>
+              <div class="sc-slide-highlight">
+                <strong>Trung tâm Cấp cứu A9:</strong> Tiếp nhận hơn 350 ca cấp cứu nặng mỗi ngày từ khắp các tỉnh thành phía Bắc.
+              </div>
+              <a href="tel:02438693731" class="sc-btn-primary" style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);">Hotline A9: 024.3869.3731</a>
+            </div>
+            <div class="sc-slide-media-wrap">
+              <img src="https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=800&q=80" alt="Hồi sức cấp cứu kỹ thuật cao" class="sc-slide-img">
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 3: BỆNH ÁN ĐIỆN TỬ EMR 4.0 -->
+        <div class="sc-slide">
+          <div class="sc-slide-bg" style="background-image: url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80');"></div>
+          <div class="sc-slide-overlay"></div>
+          <div class="sc-slide-inner">
+            <div>
+              <span class="sc-slide-badge green">CHUYỂN ĐỔI SỐ QUỐC GIA</span>
+              <h2 class="sc-slide-title">Xóa Bỏ Bệnh Án Giấy — 100% EMR Điện Tử</h2>
+              <p class="sc-slide-desc">
+                Từ 01/11/2024, Bệnh viện Bạch Mai chính thức vận hành hệ thống Bệnh án Điện tử (EMR), trở thành lá cờ đầu trong chuyển đổi số y tế của Bộ Y Tế. Mọi chỉ định chẩn đoán hình ảnh, xét nghiệm và đơn thuốc được liên thông số tức thì với cơ chế bảo mật phân quyền ABAC nghiêm ngặt.
+              </p>
+              <div class="sc-slide-highlight">
+                <strong>An Toàn Dữ Liệu:</strong> Kiểm soát truy cập phân quyền thuộc tính (ABAC), ngăn chặn triệt để rò rỉ dữ liệu y tế người bệnh.
+              </div>
+              <a href="/?view=records" class="sc-btn-primary">Truy Cập Cổng Bệnh Án EMR →</a>
+            </div>
+            <div class="sc-slide-media-wrap">
+              <img src="https://images.unsplash.com/photo-1551076805-e1869033e561?auto=format&fit=crop&w=800&q=80" alt="Hệ thống bệnh án điện tử EMR" class="sc-slide-img">
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 4: MẠNG LƯỚI TOÀN QUỐC -->
+        <div class="sc-slide">
+          <div class="sc-slide-bg" style="background-image: url('https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&w=1600&q=80');"></div>
+          <div class="sc-slide-overlay"></div>
+          <div class="sc-slide-inner">
+            <div>
+              <span class="sc-slide-badge">2 CƠ SỞ TRỌNG ĐIỂM</span>
+              <h2 class="sc-slide-title">Hạ Tầng Hiện Đại Hà Nội & Ninh Bình</h2>
+              <p class="sc-slide-desc">
+                Với hơn 3.200 giường bệnh nội trú tại cơ sở Hà Nội và sự bổ sung 1.000 giường bệnh tại cơ sở Ninh Bình / Hà Nam, Bệnh viện Bạch Mai không ngừng mở rộng năng lực phục vụ, giảm tải tuyến trung ương và mang dịch vụ y tế chuẩn quốc tế đến gần hơn với nhân dân.
+              </p>
+              <div class="sc-slide-highlight">
+                <strong>Quy mô hàng năm:</strong> Phục vụ hơn 1,8 triệu lượt khám ngoại trú và 160.000 bệnh nhân điều trị nội trú.
+              </div>
+              <button onclick="openBookingModal()" class="sc-btn-primary">Đặt Lịch Khám Ngay</button>
+            </div>
+            <div class="sc-slide-media-wrap">
+              <img src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80" alt="Cơ sở Bệnh viện Bạch Mai" class="sc-slide-img">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 QUICK SERVICE CARDS (CHUẨN BACHMAI.GOV.VN) -->
+    <div class="bm-quick-strip" id="danh-cho-nguoi-benh">
+      <div class="bm-quick-grid">
+        <a href="tel:1900888866" class="bm-quick-card">
+          <div class="bm-quick-icon bm-icon-phone">📞</div>
+          <div>
+            <div class="bm-quick-title">Tổng Đài: 1900.888.866</div>
+            <div class="bm-quick-desc">Đặt lịch khám nhanh chóng qua tổng đài chăm sóc khách hàng 24/7, không lo chờ đợi.</div>
+          </div>
+        </a>
+
+        <div onclick="openBookingModal()" class="bm-quick-card" style="cursor: pointer;">
+          <div class="bm-quick-icon bm-icon-calendar">📅</div>
+          <div>
+            <div class="bm-quick-title">Đặt Lịch Khám Online</div>
+            <div class="bm-quick-desc">Chủ động lựa chọn ngày khám, khung giờ tiếp đón và bác sĩ chuyên khoa mong muốn.</div>
+          </div>
+        </div>
+
+        <a href="/?view=records" class="bm-quick-card">
+          <div class="bm-quick-icon bm-icon-emr">📋</div>
+          <div>
+            <div class="bm-quick-title">Tra Cứu Bệnh Án & Xét Nghiệm</div>
+            <div class="bm-quick-desc">Theo dõi hồ sơ bệnh án điện tử EMR, xem kết quả xét nghiệm và lịch sử điều trị trực tuyến.</div>
+          </div>
+        </a>
+
+        <a href="#chuyen-gia" class="bm-quick-card">
+          <div class="bm-quick-icon bm-icon-chat">💬</div>
+          <div>
+            <div class="bm-quick-title">Hỏi Đáp Cùng Chuyên Gia</div>
+            <div class="bm-quick-desc">Tư vấn trực tiếp phác đồ điều trị và giải đáp thắc mắc sức khỏe cùng bác sĩ Bạch Mai.</div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- ACT IV: 3D PARALLAX SPECIALTIES GRID (ĐƠN VỊ CHUYÊN KHOA ĐẦU NGÀNH) -->
+    <section class="bm-section" id="chuyen-khoa">
+      <div class="bm-section-header">
+        <div class="bm-section-tag">TRUNG TÂM Y HỌC CHUYÊN SÂU</div>
+        <h2 class="bm-section-title">Đơn Vị Chuyên Khoa Tuyến Cuối</h2>
+        <p class="bm-section-desc">Hệ thống các Viện, Trung tâm và Khoa lâm sàng kỹ thuật cao hàng đầu Việt Nam, thực hiện các can thiệp y tế phức tạp và điều trị ca bệnh hiểm nghèo.</p>
+      </div>
+
+      <div class="bm-spec-grid">
+        <!-- 1. A9 -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=800&q=80" alt="Trung Tâm Cấp Cứu A9">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill a9">CẤP CỨU ĐA KHOA 24/7</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Trung Tâm Cấp Cứu A9</h3>
+              <p class="bm-spec-text">Đơn vị cấp cứu đa khoa tuyến cuối tiếp nhận bệnh nhân nặng 24/7, trang bị hệ thống hồi sinh tim phổi và can thiệp mạch khẩn cấp hiện đại.</p>
+            </div>
+            <a href="tel:02438693731" class="bm-spec-link">Hotline A9: 024.3869.3731 →</a>
+          </div>
+        </div>
+
+        <!-- 2. Viện Tim Mạch -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&w=800&q=80" alt="Viện Tim Mạch Quốc Gia">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill">VIỆN ĐẦU NGÀNH</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Viện Tim Mạch Quốc Gia Việt Nam</h3>
+              <p class="bm-spec-text">Trung tâm tim mạch hàng đầu cả nước, dẫn đầu khu vực về can thiệp tim mạch phức tạp, thay van qua da (TAVI) và phẫu thuật tim hở chuyên sâu.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Hồ sơ bệnh án Tim mạch →</a>
+          </div>
+        </div>
+
+        <!-- 3. Hồi Sức Tích Cực -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80" alt="Trung Tâm Hồi Sức Tích Cực ICU">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill icu">HỒI SỨC ĐẶC BIỆT</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Trung Tâm Hồi Sức Tích Cực (ICU)</h3>
+              <p class="bm-spec-text">Đơn vị ICU kỹ thuật cao bậc nhất, ứng dụng kỹ thuật ECMO (tim phổi nhân tạo) và lọc máu liên tục cứu sống nhiều ca bệnh nguy kịch.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Theo dõi điều trị ICU →</a>
+          </div>
+        </div>
+
+        <!-- 4. Đột Quỵ -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1559757175-5700dde675bc?auto=format&fit=crop&w=800&q=80" alt="Trung Tâm Đột Quỵ Não">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill a9">CAN THIỆP MẠCH NÃO</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Trung Tâm Đột Quỵ & Can Thiệp Não</h3>
+              <p class="bm-spec-text">Quy trình cấp cứu đột quỵ "Giờ Vàng", can thiệp lấy huyết khối bằng dụng cụ cơ học và tiêu sợi huyết cứu sống mô não tổn thương.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Quy trình đột quỵ →</a>
+          </div>
+        </div>
+
+        <!-- 5. Viện Hô Hấp -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80" alt="Viện Hô Hấp">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill">CHUYÊN KHOA PHỔI</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Viện Hô Hấp Bạch Mai</h3>
+              <p class="bm-spec-text">Chẩn đoán và điều trị bệnh phổi phức tạp, COPD, nội soi phế quản can thiệp kỹ thuật số và hồi phục chức năng hô hấp chuyên biệt.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Bệnh án Hô hấp →</a>
+          </div>
+        </div>
+
+        <!-- 6. Viện Huyết Học -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1615461066841-6116e61058f4?auto=format&fit=crop&w=800&q=80" alt="Viện Huyết Học & Truyền Máu">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill">HUYẾT HỌC LÂM SÀNG</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Viện Huyết Học & Truyền Máu Bạch Mai</h3>
+              <p class="bm-spec-text">Chẩn đoán và điều trị các bệnh lý huyết học ác tính, cung ứng chế phẩm máu chuẩn quốc tế và chuyển giao kỹ thuật ghép tế bào gốc.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Hồ sơ Huyết học →</a>
+          </div>
+        </div>
+
+        <!-- 7. Phẫu Thuật Tiêu Hóa -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1551076805-e1869033e561?auto=format&fit=crop&w=800&q=80" alt="Trung Tâm Phẫu Thuật Tiêu Hóa">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill">NGOẠI TIÊU HÓA</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Trung Tâm Phẫu Thuật Tiêu Hóa - Gan Mật</h3>
+              <p class="bm-spec-text">Phẫu thuật nội soi 3D/4K tiên tiến, phẫu thuật ghép gan, can thiệp điều trị ung thư đường tiêu hóa và phẫu thuật xâm lấn tối thiểu.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Hồ sơ phẫu thuật →</a>
+          </div>
+        </div>
+
+        <!-- 8. Ung Bướu -->
+        <div class="bm-spec-card">
+          <div class="bm-spec-media">
+            <img src="https://images.unsplash.com/photo-1530497610245-94d3c16cda28?auto=format&fit=crop&w=800&q=80" alt="Trung Tâm Ung Bướu">
+            <div class="bm-spec-badge-overlay">
+              <span class="bm-spec-pill">XẠ TRỊ KỸ THUẬT CAO</span>
+            </div>
+          </div>
+          <div class="bm-spec-body">
+            <div>
+              <h3 class="bm-spec-name">Trung Tâm Y Học Hạt Nhân & Ung Bướu</h3>
+              <p class="bm-spec-text">Ứng dụng hệ thống xạ trị gia tốc tuyến tính thế hệ mới, PET/CT chẩn đoán sớm và phác đồ điều trị trúng đích cá thể hóa cho bệnh nhân ung thư.</p>
+            </div>
+            <a href="/?view=records" class="bm-spec-link">Hồ sơ điều trị ung bướu →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT V: ĐỘI NGŨ CHUYÊN GIA & BÁC SĨ ĐẦU NGÀNH -->
+    <section class="bm-section" id="chuyen-gia">
+      <div class="bm-section-header">
+        <div class="bm-section-tag">TÀI NĂNG & Y ĐỨC</div>
+        <h2 class="bm-section-title">Hội Đồng Chuyên Gia & Thầy Thuốc Nhân Dân</h2>
+        <p class="bm-section-desc">Bệnh viện Bạch Mai quy tụ đội ngũ Giáo sư, Phó Giáo sư, Tiến sĩ, Bác sĩ Chuyên khoa đầu ngành, giàu kinh nghiệm và tận tâm phụng sự sức khỏe người bệnh.</p>
+      </div>
+
+      <div class="bm-doctor-grid">
+        <div class="bm-doc-card">
+          <div class="bm-doc-photo-wrap">
+            <img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=600&q=80" alt="PGS.TS. Đào Xuân Cơ" class="bm-doc-photo">
+          </div>
+          <div class="bm-doc-info">
+            <div>
+              <h3 class="bm-doc-title">PGS.TS. Đào Xuân Cơ</h3>
+              <div class="bm-doc-role">Giám đốc Bệnh viện Bạch Mai</div>
+              <p class="bm-doc-desc">Chuyên gia Hồi sức Cấp cứu & Chống độc. Trưởng ban điều hành đề án Chuyển đổi số Y tế và Bệnh án Điện tử toàn diện.</p>
+            </div>
+            <button onclick="openBookingModal()" class="bm-doc-btn">Đặt lịch tư vấn</button>
+          </div>
+        </div>
+
+        <div class="bm-doc-card">
+          <div class="bm-doc-photo-wrap">
+            <img src="https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&w=600&q=80" alt="PGS.TS. Vũ Văn Giáp" class="bm-doc-photo">
+          </div>
+          <div class="bm-doc-info">
+            <div>
+              <h3 class="bm-doc-title">PGS.TS. Vũ Văn Giáp</h3>
+              <div class="bm-doc-role">Phó Giám đốc Bệnh viện Bạch Mai</div>
+              <p class="bm-doc-desc">Chuyên gia Viện Hô Hấp Bạch Mai, Tổng thư ký Hội Hô hấp Việt Nam. Tiên phong nội soi can thiệp phế quản kỹ thuật cao.</p>
+            </div>
+            <button onclick="openBookingModal()" class="bm-doc-btn">Đặt lịch tư vấn</button>
+          </div>
+        </div>
+
+        <div class="bm-doc-card">
+          <div class="bm-doc-photo-wrap">
+            <img src="https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=600&q=80" alt="GS.TS. Phạm Minh Thông" class="bm-doc-photo">
+          </div>
+          <div class="bm-doc-info">
+            <div>
+              <h3 class="bm-doc-title">GS.TS. Phạm Minh Thông</h3>
+              <div class="bm-doc-role">Chuyên Gia Cao Cấp</div>
+              <p class="bm-doc-desc">Chủ tịch Hội Điện quang & Y học Hạt nhân Việt Nam. Chuyên gia đầu ngành về chẩn đoán hình ảnh và can thiệp mạch não.</p>
+            </div>
+            <button onclick="openBookingModal()" class="bm-doc-btn">Đặt lịch tư vấn</button>
+          </div>
+        </div>
+
+        <div class="bm-doc-card">
+          <div class="bm-doc-photo-wrap">
+            <img src="https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=600&q=80" alt="PGS.TS. Phạm Mạnh Hùng" class="bm-doc-photo">
+          </div>
+          <div class="bm-doc-info">
+            <div>
+              <h3 class="bm-doc-title">PGS.TS. Phạm Mạnh Hùng</h3>
+              <div class="bm-doc-role">Viện Trưởng Viện Tim Mạch</div>
+              <p class="bm-doc-desc">Phó Chủ tịch Hội Tim Mạch Việt Nam. Chuyên gia can thiệp tim mạch phức tạp, thay van động mạch chủ qua da (TAVI).</p>
+            </div>
+            <button onclick="openBookingModal()" class="bm-doc-btn">Đặt lịch tư vấn</button>
+          </div>
+        </div>
+
+        <div class="bm-doc-card">
+          <div class="bm-doc-photo-wrap">
+            <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=600&q=80" alt="BS. CKI Lê Hoàng Minh" class="bm-doc-photo">
+          </div>
+          <div class="bm-doc-info">
+            <div>
+              <h3 class="bm-doc-title">BS. CKI Lê Hoàng Minh</h3>
+              <div class="bm-doc-role">Bác Sĩ Điều Trị Chuyên Khoa</div>
+              <p class="bm-doc-desc">Khoa Tim Mạch & Nội Tiết. Trực tiếp thăm khám, lập phác đồ điều trị và đồng hành cùng bệnh nhân trên hệ thống EMR.</p>
+            </div>
+            <button onclick="openBookingModal()" class="bm-doc-btn">Đặt lịch khám</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT VI: NĂNG LỰC BỆNH VIỆN BẠCH MAI (TELEMETRY STRIP COUNT-UP) -->
+    <div class="bm-stats-strip" id="statsStrip">
+      <div class="bm-stats-inner">
+        <div>
+          <div class="bm-stat-val" data-counter-target="3200" data-suffix="+">0</div>
+          <div class="bm-stat-label">Giường Bệnh Nội Trú</div>
+          <div class="bm-stat-sub">Trang thiết bị hiện đại chuẩn quốc tế</div>
+        </div>
+        <div>
+          <div class="bm-stat-val" data-counter-target="1800000" data-suffix="+">0</div>
+          <div class="bm-stat-label">Lượt Khám Mỗi Năm</div>
+          <div class="bm-stat-sub">Tiếp nhận và điều trị bệnh nhân toàn quốc</div>
+        </div>
+        <div>
+          <div class="bm-stat-val" data-counter-target="55" data-suffix="+">0</div>
+          <div class="bm-stat-label">Viện & Trung Tâm Chuyên Khoa</div>
+          <div class="bm-stat-sub">Hệ thống lâm sàng và cận lâm sàng chuyên sâu</div>
+        </div>
+        <div>
+          <div class="bm-stat-val" data-counter-target="114" data-suffix=" Năm">0</div>
+          <div class="bm-stat-label">Lịch Sử Hình Thành (1911 - 2025)</div>
+          <div class="bm-stat-sub">Bề dày truyền thống y đức và chuyên môn</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACT VII: TIN TỨC HOẠT ĐỘNG & Y HỌC THƯỜNG THỨC -->
+    <section class="bm-section" id="tin-tuc">
+      <div class="bm-section-header">
+        <div class="bm-section-tag">BẢN TIN BỆNH VIỆN</div>
+        <h2 class="bm-section-title">Tin Tức Hoạt Động & Y Học Thường Thức</h2>
+        <p class="bm-section-desc">Cập nhật những hoạt động y tế nổi bật, tiến bộ kỹ thuật mới và kiến thức chăm sóc sức khỏe chính thống từ Bệnh viện Bạch Mai.</p>
+      </div>
+
+      <div class="bm-news-grid">
+        <div class="bm-news-card">
+          <div class="bm-news-thumb">
+            <img src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80" alt="Bệnh án điện tử EMR">
+            <span class="bm-news-thumb-tag">CHUYỂN ĐỔI SỐ</span>
+          </div>
+          <div class="bm-news-body">
+            <div>
+              <h3 class="bm-news-title">Bệnh viện Bạch Mai là BV đa khoa hạng đặc biệt đầu tiên áp dụng hồ sơ bệnh án điện tử từ ngày 1/11/2024</h3>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.55;">Bước ngoặt lịch sử trong chuyển đổi số y tế, xóa bỏ hoàn toàn bệnh án giấy, tối ưu hóa quy trình khám và liên thông dữ liệu an toàn.</p>
+            </div>
+            <div class="bm-news-meta">
+              <span>📅 01/11/2024</span>
+              <span>👁️ 24.500 lượt xem</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bm-news-card">
+          <div class="bm-news-thumb">
+            <img src="https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&w=800&q=80" alt="Cơ sở 2 Ninh Bình">
+            <span class="bm-news-thumb-tag">CƠ SỞ 2</span>
+          </div>
+          <div class="bm-news-body">
+            <div>
+              <h3 class="bm-news-title">Khai trương tiếp nhận khám chữa bệnh Bệnh viện Bạch Mai cơ sở 2 tại Ninh Bình</h3>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.55;">Đưa vào vận hành cơ sở mới quy mô 1.000 giường bệnh, phục vụ người dân các tỉnh Nam Định, Ninh Bình, Hà Nam thuận tiện tiếp cận dịch vụ tuyến cuối.</p>
+            </div>
+            <div class="bm-news-meta">
+              <span>📅 15/03/2025</span>
+              <span>👁️ 18.200 lượt xem</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bm-news-card">
+          <div class="bm-news-thumb">
+            <img src="https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=800&q=80" alt="Kỳ tích y học">
+            <span class="bm-news-thumb-tag">KỲ TÍCH Y HỌC</span>
+          </div>
+          <div class="bm-news-body">
+            <div>
+              <h3 class="bm-news-title">Sự hồi sinh thần kỳ của cô bé làng Nủ sau 50 ngày điều trị tại Bệnh viện Bạch Mai</h3>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.55;">Huy động toàn bộ trang thiết bị hồi sức tích cực hiện đại nhất cùng sự tận tâm của tập thể y bác sĩ, đưa bệnh nhi thoát khỏi lưỡi hái tử thần.</p>
+            </div>
+            <div class="bm-news-meta">
+              <span>📅 28/10/2024</span>
+              <span>👁️ 36.800 lượt xem</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bm-news-card">
+          <div class="bm-news-thumb">
+            <img src="https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&w=800&q=80" alt="Can thiệp tim mạch TAVI">
+            <span class="bm-news-thumb-tag">CAN THIỆP TIM</span>
+          </div>
+          <div class="bm-news-body">
+            <div>
+              <h3 class="bm-news-title">Viện Tim Mạch thực hiện thành công ca thay van động mạch chủ qua da (TAVI) cho cụ bà 89 tuổi</h3>
+              <p style="font-size: 13px; color: #64748b; line-height: 1.55;">Kỹ thuật tim mạch can thiệp ít xâm lấn đỉnh cao giúp bệnh nhân cao tuổi hồi phục nhanh chóng chỉ sau 48 giờ phẫu thuật.</p>
+            </div>
+            <div class="bm-news-meta">
+              <span>📅 12/02/2025</span>
+              <span>👁️ 15.400 lượt xem</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT VIII: QUY TRÌNH KHÁM BỆNH 4 BƯỚC -->
+    <section class="bm-section" id="co-cau">
+      <div class="bm-section-header">
+        <div class="bm-section-tag">HƯỚNG DẪN BỆNH NHÂN</div>
+        <h2 class="bm-section-title">Quy Trình Khám Chữa Bệnh Chuẩn Mực</h2>
+        <p class="bm-section-desc">Các bước tiếp đón và thăm khám được số hóa toàn diện giúp người bệnh tiết kiệm thời gian và an tâm điều trị.</p>
+      </div>
+
+      <div class="bm-steps-grid">
+        <div class="bm-step-card">
+          <div class="bm-step-num">1</div>
+          <h3 class="bm-step-title">Tiếp Đón & Đăng Ký</h3>
+          <p class="bm-step-text">Đăng ký khám tại Kiosk tự động, quét thẻ Căn cước công dân gắn chip hoặc ứng dụng VNeID/VssID để nhận số thứ tự.</p>
+        </div>
+
+        <div class="bm-step-card">
+          <div class="bm-step-num">2</div>
+          <h3 class="bm-step-title">Khám Lâm Sàng</h3>
+          <p class="bm-step-text">Bác sĩ chuyên khoa thăm khám trực tiếp tại phòng khám chuyên khoa, khai thác tiền sử và chỉ định xét nghiệm cần thiết.</p>
+        </div>
+
+        <div class="bm-step-card">
+          <div class="bm-step-num">3</div>
+          <h3 class="bm-step-title">Cận Lâm Sàng & Xét Nghiệm</h3>
+          <p class="bm-step-text">Thực hiện chụp chiếu (X-quang, MRI, CT) và xét nghiệm. Kết quả được số hóa tự động đẩy thẳng lên hệ thống EMR.</p>
+        </div>
+
+        <div class="bm-step-card">
+          <div class="bm-step-num">4</div>
+          <h3 class="bm-step-title">Kết Luận & Nhận Thuốc</h3>
+          <p class="bm-step-text">Bác sĩ tư vấn phác đồ điều trị, kê đơn thuốc điện tử hoặc làm thủ tục nhập viện nội trú nhanh chóng, thuận tiện.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACT IX: THÔNG TIN 2 CƠ SỞ VÀ GIỜ LÀM VIỆC -->
+    <section class="bm-section" id="lien-he">
+      <div class="bm-section-header">
+        <div class="bm-section-tag">ĐỊA ĐIỂM & THỜI GIAN TIẾP ĐÓN</div>
+        <h2 class="bm-section-title">Cơ Sở Khám Chữa Bệnh Bệnh Viện Bạch Mai</h2>
+      </div>
+
+      <div class="bm-campuses-grid">
+        <div class="bm-campus-card">
+          <div class="bm-campus-badge">CƠ SỞ 1 - TP. HÀ NỘI</div>
+          <h3 class="bm-campus-title">Bệnh Viện Bạch Mai - Cơ Sở Hà Nội</h3>
+          <div class="bm-campus-info-row">
+            <span>📍</span>
+            <span><strong>Địa chỉ:</strong> Số 78 Đường Giải Phóng, P. Phương Mai, Q. Đống Đa, TP. Hà Nội</span>
+          </div>
+          <div class="bm-campus-info-row">
+            <span>📞</span>
+            <span><strong>Tổng đài tư vấn:</strong> 1900.888.866 | <strong>Hotline:</strong> 096.985.1616</span>
+          </div>
+          <div class="bm-campus-info-row">
+            <span>🚑</span>
+            <span><strong>Cấp cứu A9:</strong> Trực 24/24 tất cả các ngày trong năm (024.3869.3731)</span>
+          </div>
+          <hr style="border: none; border-top: 1px dashed var(--bm-border); margin: 14px 0;">
+          <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+            <strong>Lịch Khám Theo Yêu Cầu:</strong> Thứ 2 - Chủ Nhật (Tiếp đón từ 05:00; Khám: 06:00 - 16:30)<br>
+            <strong>Lịch Khám Thông Thường / BHYT:</strong> Thứ 2 - Thứ 6 (Tiếp đón từ 07:00; Khám: 07:30 - 16:30)
+          </div>
+        </div>
+
+        <div class="bm-campus-card">
+          <div class="bm-campus-badge">CƠ SỞ 2 - NINH BÌNH / HÀ NAM</div>
+          <h3 class="bm-campus-title">Bệnh Viện Bạch Mai - Cơ Sở 2</h3>
+          <div class="bm-campus-info-row">
+            <span>📍</span>
+            <span><strong>Địa chỉ:</strong> Tuyến đường Quốc lộ 21B, Xã Liêm Tuyền, TP. Phủ Lý, Tỉnh Hà Nam / Ninh Bình</span>
+          </div>
+          <div class="bm-campus-info-row">
+            <span>📞</span>
+            <span><strong>Tổng đài đặt lịch:</strong> 1900.888.866 | <strong>Hotline:</strong> 096.985.1616</span>
+          </div>
+          <div class="bm-campus-info-row">
+            <span>🚑</span>
+            <span><strong>Khoa Cấp cứu:</strong> Tiếp nhận bệnh nhân khẩn cấp 24/7</span>
+          </div>
+          <hr style="border: none; border-top: 1px dashed var(--bm-border); margin: 14px 0;">
+          <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+            <strong>Lịch Khám Theo Yêu Cầu:</strong> Thứ 2 - Chủ Nhật (06:30 - 16:30)<br>
+            <strong>Lịch Khám BHYT:</strong> Thứ 2 - Thứ 6 (07:30 - 16:30)
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER CHUẨN CỔNG THÔNG TIN ĐIỆN TỬ BỆNH VIỆN BẠCH MAI -->
+    <footer class="bm-footer">
+      <div class="bm-footer-inner">
+        <div class="bm-footer-grid">
+          <div>
+            <div style="font-weight: 800; font-size: 16px; color: #fff; margin-bottom: 4px;">CỔNG THÔNG TIN ĐIỆN TỬ BỆNH VIỆN BẠCH MAI</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 14px;">Bệnh viện Đa khoa hoàn chỉnh hạng Đặc biệt đầu tiên tại Việt Nam</div>
+            <p style="font-size: 12.5px; line-height: 1.6; color: #cbd5e1; margin-bottom: 12px;">
+              Cơ quan chủ quản: <strong>BỘ Y TẾ</strong><br>
+              Giấy phép số: 18/GP-TTĐT do Cục PTTH & TTĐT - Bộ Thông tin và Truyền thông cấp.<br>
+              Chịu trách nhiệm nội dung: <strong>PGS.TS. Đào Xuân Cơ</strong> - Giám đốc Bệnh viện Bạch Mai.
+            </p>
+          </div>
+
+          <div>
+            <div class="bm-footer-title">Về Bệnh Viện</div>
+            <ul class="bm-footer-links">
+              <li><a href="#gioi-thieu">Lịch sử phát triển</a></li>
+              <li><a href="#gioi-thieu">Sứ mệnh & Tầm nhìn</a></li>
+              <li><a href="#chuyen-gia">Ban Giám đốc Bệnh viện</a></li>
+              <li><a href="#co-cau">Cơ cấu tổ chức</a></li>
+              <li><a href="#chuyen-khoa">Hệ thống chuyên khoa</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="bm-footer-title">Dành Cho Người Bệnh</div>
+            <ul class="bm-footer-links">
+              <li><a href="javascript:void(0)" onclick="openBookingModal()">Đặt lịch khám trực tuyến</a></li>
+              <li><a href="/?view=records">Hồ sơ bệnh án điện tử (EMR)</a></li>
+              <li><a href="#danh-cho-nguoi-benh">Hướng dẫn khám BHYT</a></li>
+              <li><a href="#lien-he">Bảng giá dịch vụ viện phí</a></li>
+              <li><a href="#lien-he">Quy trình cấp cứu A9</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="bm-footer-title">Kết Nối Với Chúng Tôi</div>
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.6; margin-bottom: 12px;">
+              Tổng đài đặt khám: <strong style="color: #38bdf8;">1900.888.866</strong><br>
+              Cấp cứu A9: <strong style="color: #f87171;">024.3869.3731</strong><br>
+              Email: <strong>benhvienbachmai@bachmai.gov.vn</strong>
+            </p>
+            <div style="display: flex; gap: 10px; margin-top: 6px;">
+              <a href="/?view=records" style="font-size: 12px; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; background: rgba(255,255,255,0.08); color: #38bdf8; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><span>📋</span> Cổng EMR</a>
+              <a href="/?view=login" style="font-size: 12px; padding: 8px 14px; border-radius: 6px; background: var(--bm-blue-primary); color: #fff; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><span>🔐</span> Cán Bộ Đăng Nhập</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="bm-footer-bottom">
+          <div>© 2025 - 2026 Bản quyền thuộc về Bệnh viện Bạch Mai. Ghi rõ nguồn khi phát hành lại thông tin từ website này.</div>
+          <div>Hệ thống quản lý Hồ sơ Bệnh án Điện tử (EMR) chuẩn y tế quốc gia.</div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- MODAL ĐẶT LỊCH KHÁM ONLINE -->
+    <div id="bookingModal" class="bm-modal-overlay" style="display: none;">
+      <div class="bm-modal-card">
+        <div class="bm-modal-head">
+          <div class="bm-modal-title">Đặt Lịch Khám Trực Tuyến - Bệnh Viện Bạch Mai</div>
+          <button onclick="closeBookingModal()" class="bm-close-btn">✕</button>
+        </div>
+        <form onsubmit="handleBookingSubmit(event)">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 12px; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Họ và Tên Bệnh Nhân *</label>
+              <input type="text" id="bkName" required placeholder="Ví dụ: Nguyễn Văn An" style="width: 100%; padding: 8px 12px; border: 1px solid var(--bm-border); border-radius: 6px; font-size: 13px;">
+            </div>
+            <div>
+              <label style="font-size: 12px; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Số Điện Thoại Liên Hệ *</label>
+              <input type="tel" id="bkPhone" required placeholder="0987.xxx.xxx" style="width: 100%; padding: 8px 12px; border: 1px solid var(--bm-border); border-radius: 6px; font-size: 13px;">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+            <div>
+              <label style="font-size: 12px; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Chuyên Khoa Đăng Ký Khám *</label>
+              <select id="bkDept" required style="width: 100%; padding: 8px 12px; border: 1px solid var(--bm-border); border-radius: 6px; font-size: 13px; background: #fff;">
+                <option value="Khoa Tim Mạch & Nội Tiết">Khoa Tim Mạch & Nội Tiết</option>
+                <option value="Viện Tim Mạch Quốc Gia">Viện Tim Mạch Quốc Gia</option>
+                <option value="Trung Tâm Cấp Cứu A9">Trung Tâm Cấp Cứu A9</option>
+                <option value="Trung Tâm Hồi Sức Tích Cực">Trung Tâm Hồi Sức Tích Cực (ICU)</option>
+                <option value="Trung Tâm Đột Quỵ">Trung Tâm Đột Quỵ</option>
+                <option value="Viện Hô Hấp Bạch Mai">Viện Hô Hấp Bạch Mai</option>
+                <option value="Viện Huyết Học & Truyền Máu">Viện Huyết Học & Truyền Máu</option>
+                <option value="Phẫu Thuật Tiêu Hóa - Gan Mật">Phẫu Thuật Tiêu Hóa - Gan Mật</option>
+                <option value="Y Học Hạt Nhân & Ung Bướu">Y Học Hạt Nhân & Ung Bướu</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 12px; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Ngày Hẹn Khám Mong Muốn *</label>
+              <input type="date" id="bkDate" required style="width: 100%; padding: 8px 12px; border: 1px solid var(--bm-border); border-radius: 6px; font-size: 13px;">
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="font-size: 12px; font-weight: 700; color: #334155; display: block; margin-bottom: 4px;">Mô Tả Triệu Chứng / Ghi Chú Y Tế</label>
+            <textarea id="bkNote" rows="3" placeholder="Mô tả triệu chứng bệnh hoặc nhu cầu khám chuyên sâu..." style="width: 100%; padding: 8px 12px; border: 1px solid var(--bm-border); border-radius: 6px; font-size: 13px; font-family: inherit;"></textarea>
+          </div>
+
+          <div id="bookingSuccessMsg" style="display: none; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 14px;">
+            ✓ Tiếp nhận lịch hẹn khám thành công! Bộ phận tiếp đón của Bệnh viện Bạch Mai sẽ liên hệ với quý khách trong vòng 15 phút.
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="closeBookingModal()" class="btn btn-outline" style="padding: 9px 16px;">Đóng</button>
+            <button type="submit" class="btn btn-primary" style="padding: 9px 20px; background: var(--bm-blue-primary);">Xác Nhận Đặt Lịch</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- GSAP & SCROLL-CRAFT PARALLAX SCRIPTS -->
+    <script>
+      // 1. Booking Modal Control
+      function openBookingModal() {
+        document.getElementById('bookingModal').style.display = 'flex';
+        const dInput = document.getElementById('bkDate');
+        if (dInput && !dInput.value) {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          dInput.value = tomorrow.toISOString().split('T')[0];
+        }
+      }
+      function closeBookingModal() {
+        document.getElementById('bookingModal').style.display = 'none';
+        document.getElementById('bookingSuccessMsg').style.display = 'none';
+      }
+      function handleBookingSubmit(e) {
+        e.preventDefault();
+        document.getElementById('bookingSuccessMsg').style.display = 'block';
+        setTimeout(function() {
+          closeBookingModal();
+        }, 2200);
+      }
+
+      // 2. Initialize GSAP ScrollTrigger Animations
+      document.addEventListener('DOMContentLoaded', function() {
+        if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') {
+          console.warn('GSAP or ScrollTrigger not loaded');
+          return;
+        }
+
+        gsap.registerPlugin(ScrollTrigger);
+
+        // A. Parallax Multi-Plane Hero
+        const heroWrap = document.querySelector('.sc-hero-wrap');
+        const heroBg = document.getElementById('scHeroBg');
+        const heroContent = document.getElementById('scHeroContent');
+        const heroSubject = document.getElementById('scHeroSubject');
+
+        if (heroWrap && heroBg) {
+          // Hero Background moves down at gentle speed (scrub: 1)
+          gsap.to(heroBg, {
+            yPercent: 28,
+            scale: 1.08,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: heroWrap,
+              start: 'top top',
+              end: 'bottom top',
+              scrub: 1
+            }
+          });
+
+          // Hero Content recedes slightly upwards and fades
+          if (heroContent) {
+            gsap.to(heroContent, {
+              yPercent: -18,
+              opacity: 0.25,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: heroWrap,
+                start: 'top top',
+                end: '80% top',
+                scrub: 1
+              }
+            });
+          }
+
+          // Hero Subject plane moves independently to create visible occlusion
+          if (heroSubject) {
+            gsap.to(heroSubject, {
+              yPercent: -8,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: heroWrap,
+                start: 'top top',
+                end: 'bottom top',
+                scrub: 1
+              }
+            });
+          }
+        }
+
+        // B. Pinned Horizontal Scrollytelling Section
+        const pinSection = document.getElementById('milestonesPin');
+        const track = document.getElementById('horizontalTrack');
+        const progressBar = document.getElementById('pinProgressBar');
+        const counterEl = document.getElementById('pinCounter');
+
+        if (pinSection && track) {
+          const totalWidth = () => track.scrollWidth - window.innerWidth;
+
+          gsap.to(track, {
+            x: () => -totalWidth(),
+            ease: 'none',
+            scrollTrigger: {
+              trigger: pinSection,
+              start: 'top top',
+              end: () => '+=' + totalWidth(),
+              pin: true,
+              scrub: 1,
+              anticipatePin: 1,
+              invalidateOnRefresh: true,
+              onUpdate: function(self) {
+                if (progressBar) {
+                  progressBar.style.width = (self.progress * 100) + '%';
+                }
+                if (counterEl) {
+                  const slideIdx = Math.min(4, Math.floor(self.progress * 4) + 1);
+                  counterEl.innerText = 'CHƯƠNG 0' + slideIdx + ' / 04';
+                }
+              }
+            }
+          });
+        }
+
+        // C. Specialties Cards Batch Stagger Entrance
+        ScrollTrigger.batch('.bm-spec-card', {
+          start: 'top 85%',
+          onEnter: function(elements) {
+            gsap.fromTo(elements, 
+              { opacity: 0, y: 35, scale: 0.96 }, 
+              { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.7, ease: 'power2.out', overwrite: 'auto' }
+            );
+          },
+          once: true
+        });
+
+        // D. Doctor Cards Stagger Entrance
+        ScrollTrigger.batch('.bm-doc-card', {
+          start: 'top 85%',
+          onEnter: function(elements) {
+            gsap.fromTo(elements, 
+              { opacity: 0, y: 35 }, 
+              { opacity: 1, y: 0, stagger: 0.08, duration: 0.7, ease: 'power2.out', overwrite: 'auto' }
+            );
+          },
+          once: true
+        });
+
+        // E. News Cards Stagger Entrance
+        ScrollTrigger.batch('.bm-news-card', {
+          start: 'top 85%',
+          onEnter: function(elements) {
+            gsap.fromTo(elements, 
+              { opacity: 0, y: 30 }, 
+              { opacity: 1, y: 0, stagger: 0.1, duration: 0.6, ease: 'power2.out', overwrite: 'auto' }
+            );
+          },
+          once: true
+        });
+
+        // F. Stats Telemetry Animated Count-Up
+        const statsSection = document.getElementById('statsStrip');
+        if (statsSection) {
+          ScrollTrigger.create({
+            trigger: statsSection,
+            start: 'top 80%',
+            once: true,
+            onEnter: function() {
+              const counterEls = statsSection.querySelectorAll('[data-counter-target]');
+              counterEls.forEach(function(el) {
+                const target = parseInt(el.getAttribute('data-counter-target'), 10) || 0;
+                const suffix = el.getAttribute('data-suffix') || '';
+                const obj = { val: 0 };
+                gsap.to(obj, {
+                  val: target,
+                  duration: 2,
+                  ease: 'power2.out',
+                  onUpdate: function() {
+                    const current = Math.floor(obj.val);
+                    el.innerText = current.toLocaleString('vi-VN') + suffix;
+                  }
+                });
+              });
+            }
+          });
+        }
+      });
+    </script>
+
+  <?php else: ?>
+    <!-- =======================================================================
+         CÁC TRANG NGHIỆP VỤ NỘI BỘ (EMR SYSTEM)
+         ======================================================================= -->
+    <div class="container">
+
+      <!-- BANNER TRẠNG THÁI BẢO MẬT (Chỉ hiển thị trong nội bộ hệ thống) -->
+      <?php if ($bugIdor): ?>
+        <div class="idor-banner">
+          <div>
+            <strong style="color: var(--danger); font-size: 14px;">LỖ HỔNG IDOR / BOLA ĐANG BẬT!</strong>
+            <p style="color: #7f1d1d; font-size: 12px; margin-top: 4px;">
+              Hệ thống đang bỏ qua kiểm tra quan hệ sở hữu đối tượng. Bệnh nhân An (<code>bn_an</code>) có thể đọc trộm và chỉnh sửa trái phép Bệnh án số 03 của Bình (<code>bn_binh</code>).
+            </p>
+          </div>
+          <div>
+            <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" class="btn btn-safe" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">🛡️ Vá Lỗ Hổng (Tắt Lỗi)</a>
+          </div>
+        </div>
+      <?php else: ?>
+        <div class="idor-banner idor-banner-safe">
+          <div>
+            <strong style="color: var(--safe); font-size: 14px;">HỆ THỐNG AN TOÀN (ABAC ACTIVE)</strong>
+            <p style="color: #14532d; font-size: 12px; margin-top: 4px;">
+              Quy tắc kiểm soát thuộc tính sở hữu đang hoạt động: Bệnh nhân chỉ xem và sửa hồ sơ của chính mình. Thao tác truy cập chéo bị chặn với HTTP 403 Forbidden.
+            </p>
+          </div>
+          <div>
+            <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" class="btn btn-danger" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">⚠️ Tạo Lỗi (Bật IDOR)</a>
+          </div>
+        </div>
+      <?php endif; ?>
+
+      <!-- VIEW 1: CHI TIẾT BỆNH ÁN -->
+      <?php if ($view === 'record' && $recordDetail): ?>
+        <?php if ($leakActive): ?>
+          <div class="leak-box">
+            <div style="font-weight: 800; color: #be123c; font-size: 15px; margin-bottom: 6px;">
+              [CẢNH BÁO VI PHẠM BẢO MẬT] PHÁT HIỆN LỖ HỔNG IDOR / BOLA (CWE-639) ĐANG BỊ KHAI THÁC!
+            </div>
+            <p style="color: #9f1239; font-size: 13px;">
+              Tài khoản hiện tại: <strong><?= htmlspecialchars($currentUser['username']) ?></strong> (<?= htmlspecialchars($currentUser['full_name']) ?>)<br>
+              Chủ sở hữu thực sự của bệnh án: <strong><?= htmlspecialchars($recordDetail['owner_username']) ?></strong> (Bệnh nhân Trần Thị Bình)<br>
+              <em>Máy chủ đã bỏ qua kiểm tra quan hệ sở hữu đối tượng và làm rò rỉ dữ liệu y tế nhạy cảm bên dưới!</em>
+            </p>
+          </div>
+        <?php endif; ?>
+
         <div class="card">
           <div class="card-head">
             <div>
-              <div class="card-title">
-                <span class="live-pulse"></span>
-                Dòng Sự Kiện An Ninh & Cảnh Báo Xâm Phạm Thời Gian Thực
-              </div>
+              <div class="card-title"><?= htmlspecialchars($recordDetail['title']) ?></div>
               <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-                Tự động ghi nhận khi bất kỳ người dùng, bệnh nhân hoặc nhân viên nào có lỗi thao tác hoặc cố tình lợi dụng lỗ hổng phân quyền.
+                Mã hồ sơ: #<?= $recordDetail['id'] ?> | Khoa: <?= htmlspecialchars($recordDetail['department']) ?> | Ngày lập: <?= $recordDetail['created_at'] ?>
               </div>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <a href="/?action=switch_user&user=bn_an" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-size: 12px;">
-                👤 Chuyển sang BN An để thử tấn công
-              </a>
-              <?php if ($bugIdor): ?>
-                <button onclick="execCmd('set BUG_IDOR=0')" class="btn btn-safe" style="font-size: 12px;">🛡️ Vá Lỗ Hổng Ngay</button>
-              <?php else: ?>
-                <button onclick="execCmd('set BUG_IDOR=1')" class="btn btn-danger" style="font-size: 12px;">⚠️ Kích Hoạt Lỗi IDOR</button>
-              <?php endif; ?>
+            <div style="display: flex; gap: 8px;">
+              <a href="/?view=edit_record&id=<?= $recordDetail['id'] ?>" class="btn btn-outline" style="border-color: var(--primary); color: var(--primary);">Chỉnh Sửa Bệnh Án Này</a>
+              <a href="/?view=records" class="btn btn-outline">Quay lại danh sách</a>
             </div>
           </div>
 
-          <?php if (empty($allIncidents)): ?>
-            <div style="text-align: center; padding: 40px; color: var(--muted);">
-              Chưa có sự cố an ninh nào được ghi nhận. Hệ thống đang an toàn tuyệt đối.
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; font-size: 13px;">
+            <div style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <strong>Bệnh nhân sở hữu:</strong> <code><?= htmlspecialchars($recordDetail['owner_username']) ?></code><br>
+              <strong>Bác sĩ phụ trách:</strong> <?= htmlspecialchars($recordDetail['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?>
             </div>
-          <?php else: ?>
+            <div style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <strong>Chẩn đoán lâm sàng:</strong><br>
+              <span style="color: #0369a1; font-weight: 600;"><?= htmlspecialchars($recordDetail['diagnosis'] ?? 'Đang cập nhật') ?></span>
+            </div>
+          </div>
+
+          <div style="background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 8px;">NỘI DUNG BỆNH ÁN & PHÁC ĐỒ ĐIỀU TRỊ:</h3>
+            <p style="font-size: 14px; color: #0f172a; white-space: pre-wrap;"><?= htmlspecialchars($recordDetail['content']) ?></p>
+          </div>
+        </div>
+
+      <!-- VIEW 2: FORM CHỈNH SỬA BỆNH ÁN -->
+      <?php elseif ($view === 'edit_record' && $editRecordDetail): ?>
+        <?php if ($leakActive): ?>
+          <div class="leak-box">
+            <div style="font-weight: 800; color: #be123c; font-size: 15px; margin-bottom: 6px;">
+              [CẢNH BÁO BẢO MẬT] BẠN ĐANG TRUY CẬP CHỈNH SỬA BỆNH ÁN CỦA NGƯỜI KHÁC QUA LỖ HỔNG IDOR!
+            </div>
+            <p style="color: #9f1239; font-size: 13px;">
+              Bệnh nhân An (<code>bn_an</code>) đang chỉnh sửa hồ sơ của Bệnh nhân Bình (<code>bn_binh</code>).
+              Khi nhấn "Lưu Thay Đổi Bệnh Án", máy chủ sẽ ghi đè dữ liệu bệnh án trái phép do thiếu kiểm tra quyền sở hữu!
+            </p>
+          </div>
+        <?php endif; ?>
+
+        <div class="card" style="max-width: 680px; margin: 0 auto;">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Chỉnh Sửa Hồ Sơ Bệnh Án #<?= $editRecordDetail['id'] ?></div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Bệnh nhân sở hữu: <code><?= htmlspecialchars($editRecordDetail['owner_username']) ?></code>
+              </div>
+            </div>
+            <a href="/?view=record&id=<?= $editRecordDetail['id'] ?>" class="btn btn-outline">Hủy bỏ</a>
+          </div>
+
+          <form action="/?action=edit_record_submit" method="POST">
+            <input type="hidden" name="id" value="<?= $editRecordDetail['id'] ?>">
+
+            <div class="form-group">
+              <label>Tiêu đề bệnh án:</label>
+              <input type="text" name="title" value="<?= htmlspecialchars($editRecordDetail['title']) ?>" required>
+            </div>
+
+            <div class="form-group">
+              <label>Chẩn đoán bệnh lý:</label>
+              <input type="text" name="diagnosis" value="<?= htmlspecialchars($editRecordDetail['diagnosis'] ?? '') ?>" required>
+            </div>
+
+            <div class="form-group">
+              <label>Nội dung bệnh án & phác đồ:</label>
+              <textarea name="content" rows="6" required><?= htmlspecialchars($editRecordDetail['content']) ?></textarea>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+              <a href="/?view=record&id=<?= $editRecordDetail['id'] ?>" class="btn btn-outline">Hủy Bỏ</a>
+              <button type="submit" class="btn btn-primary">Lưu Thay Đổi Bệnh Án</button>
+            </div>
+          </form>
+        </div>
+
+      <!-- VIEW 3: TẠO BỆNH ÁN MỚI (DÀNH CHO BÁC SĨ) -->
+      <?php elseif ($view === 'create_record'): ?>
+        <div class="card" style="max-width: 720px; margin: 0 auto;">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Lập Hồ Sơ Bệnh Án Mới Cho Bệnh Nhân</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Bác sĩ phụ trách: <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['department'] ?? 'Khoa Khám Bệnh') ?></code>)
+              </div>
+            </div>
+            <a href="/?view=records" class="btn btn-outline">Quay lại danh sách</a>
+          </div>
+
+          <form action="/?action=create_record_submit" method="POST">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div class="form-group">
+                <label>Bệnh nhân thụ hưởng (Chọn tài khoản):</label>
+                <select name="owner_username" required>
+                  <option value="bn_an">Nguyễn Văn An (bn_an - Điều trị ngoại trú)</option>
+                  <option value="bn_binh">Trần Thị Bình (bn_binh - Khoa Ung Bướu)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Khoa / Phòng điều trị:</label>
+                <input type="text" name="department" value="<?= htmlspecialchars($currentUser['department'] ?? 'Khoa Tim Mạch') ?>" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Tiêu đề hồ sơ bệnh án:</label>
+              <input type="text" name="title" placeholder="Ví dụ: Bệnh án khám định kỳ chuyên khoa Tim Mạch..." required>
+            </div>
+
+            <div class="form-group">
+              <label>Chẩn đoán sơ bộ ban đầu:</label>
+              <input type="text" name="diagnosis" placeholder="Ví dụ: Rối loạn nhịp xoang, tăng huyết áp độ 1..." required>
+            </div>
+
+            <div class="form-group">
+              <label>Nội dung phác đồ điều trị, kết quả lâm sàng & đơn thuốc:</label>
+              <textarea name="content" rows="6" placeholder="Chi tiết khám lâm sàng, sinh hiệu, chỉ định dùng thuốc..." required></textarea>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+              <a href="/?view=records" class="btn btn-outline">Hủy Bỏ</a>
+              <button type="submit" class="btn btn-primary">Lưu & Phát Hành Bệnh Án</button>
+            </div>
+          </form>
+        </div>
+
+      <!-- VIEW 4: THÔNG BÁO BỆNH VIỆN -->
+      <?php elseif ($view === 'announcements'): ?>
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Bản Tin & Thông Báo Nội Bộ Bệnh Viện</div>
+            <span style="font-size: 12px; color: var(--muted);"><?= count($mockAnnouncements) ?> thông báo</span>
+          </div>
+
+          <?php foreach ($mockAnnouncements as $ann): ?>
+            <div style="padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px; background: #fff;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <h4 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0;"><?= htmlspecialchars($ann['title']) ?></h4>
+                <span style="font-size: 11px; color: #64748b;"><?= $ann['created_at'] ?></span>
+              </div>
+              <div style="font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 8px;">
+                <?= htmlspecialchars($ann['content']) ?>
+              </div>
+              <div style="font-size: 11px; color: #94a3b8;">
+                Người đăng: <strong><?= htmlspecialchars($ann['author']) ?></strong> | Phạm vi: <code>Công cộng (Dùng chung)</code>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+
+      <!-- VIEW 5: QUẢN TRỊ NGƯỜI DÙNG (ADMIN) -->
+      <?php elseif ($view === 'users' && $currentUser && $currentUser['role'] === 'admin'): ?>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Quản Trị Người Dùng & Nhân Sự Y Tế (Admin CRUD)</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Tổng số tài khoản: <strong id="totalUserCount"><?= count($mockUsers) ?></strong> người dùng
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <input type="text" id="userSearchInput" onkeyup="filterUsers()" placeholder="Tìm kiếm nhanh họ tên, username..." style="padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; width: 240px;">
+              <button onclick="openAddUserModal()" class="btn btn-primary" style="font-size: 12px;">+ Thêm Người Dùng</button>
+            </div>
+          </div>
+
+          <table id="userTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Họ và Tên</th>
+                <th>Vai trò</th>
+                <th>Khoa / Phòng</th>
+                <th style="text-align: right;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($mockUsers as $u): ?>
+                <tr>
+                  <td><code><?= htmlspecialchars($u['username']) ?></code></td>
+                  <td><strong><?= htmlspecialchars($u['full_name']) ?></strong></td>
+                  <td>
+                    <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: #e0f2fe; color: #0369a1;">
+                      <?= htmlspecialchars($u['role']) ?>
+                    </span>
+                  </td>
+                  <td><?= htmlspecialchars($u['department'] ?? 'Chưa cập nhật') ?></td>
+                  <td style="text-align: right;">
+                    <button onclick="openEditUserModal('<?= htmlspecialchars($u['username']) ?>', '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars($u['role']) ?>', '<?= htmlspecialchars(addslashes($u['department'] ?? '')) ?>')" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
+                    <?php if ($u['username'] !== 'admin_bv'): ?>
+                      <a href="/?action=delete_user&username=<?= urlencode($u['username']) ?>" onclick="return confirm('Bạn có chắc muốn xóa tài khoản này?')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px;">Xóa</a>
+                    <?php endif; ?>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- MODAL THÊM NGƯỜI DÙNG -->
+        <div id="addUserModal" class="modal-overlay" style="display: none;">
+          <div class="modal-box">
+            <div class="card-head" style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px;">
+              <div class="card-title">Thêm Tài Khoản Người Dùng Mới</div>
+              <button type="button" onclick="closeAddUserModal()" class="btn btn-outline" style="padding: 2px 8px;">&times;</button>
+            </div>
+            <form action="/?action=add_user" method="POST">
+              <div class="form-group">
+                <label>Tên đăng nhập (username): <span style="color:#ef4444;">*</span></label>
+                <input type="text" name="username" placeholder="VD: bs_dung, bn_ha..." required>
+              </div>
+              <div class="form-group">
+                <label>Mật khẩu khởi tạo: <span style="color:#ef4444;">*</span></label>
+                <input type="password" name="password" value="TestPass@2026" required>
+              </div>
+              <div class="form-group">
+                <label>Họ và tên hiển thị: <span style="color:#ef4444;">*</span></label>
+                <input type="text" name="full_name" placeholder="VD: BS. Lê Tiến Dũng..." required>
+              </div>
+              <div class="form-group">
+                <label>Vai trò hệ thống: <span style="color:#ef4444;">*</span></label>
+                <select name="role" required>
+                  <option value="doctor">Bác sĩ khám bệnh (doctor)</option>
+                  <option value="member">Bệnh nhân (member/patient)</option>
+                  <option value="admin">Quản trị viên (admin)</option>
+                  <option value="auditor">Kiểm toán an toàn (auditor)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Khoa phòng / Đơn vị:</label>
+                <input type="text" name="department" value="Khoa Khám Bệnh Chuyên Sâu" required>
+              </div>
+              <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" onclick="closeAddUserModal()" class="btn btn-outline">Hủy Bỏ</button>
+                <button type="submit" class="btn btn-primary">Tạo Người Dùng Mới</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- MODAL SỬA NGƯỜI DÙNG -->
+        <div id="editUserModal" class="modal-overlay" style="display: none;">
+          <div class="modal-box">
+            <div class="card-head" style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px;">
+              <div class="card-title">Chỉnh Sửa Thông Tin Người Dùng</div>
+              <button type="button" onclick="closeEditUserModal()" class="btn btn-outline" style="padding: 2px 8px;">&times;</button>
+            </div>
+            <form action="/?action=edit_user" method="POST">
+              <input type="hidden" id="editUsername" name="username">
+              <div class="form-group">
+                <label>Tên đăng nhập:</label>
+                <input type="text" id="displayEditUsername" disabled style="background: #f1f5f9; cursor: not-allowed;">
+              </div>
+              <div class="form-group">
+                <label>Họ và tên hiển thị: <span style="color:#ef4444;">*</span></label>
+                <input type="text" id="editFullName" name="full_name" required>
+              </div>
+              <div class="form-group">
+                <label>Vai trò (Role): <span style="color:#ef4444;">*</span></label>
+                <select id="editRole" name="role" required>
+                  <option value="doctor">Bác sĩ khám bệnh (doctor)</option>
+                  <option value="member">Bệnh nhân (member/patient)</option>
+                  <option value="admin">Quản trị viên (admin)</option>
+                  <option value="auditor">Kiểm toán an toàn (auditor)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Khoa phòng / Đơn vị:</label>
+                <input type="text" id="editDept" name="department" required>
+              </div>
+              <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" onclick="closeEditUserModal()" class="btn btn-outline">Hủy Bỏ</button>
+                <button type="submit" class="btn btn-primary">Cập Nhật Người Dùng</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      <!-- VIEW 6: TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ (TESTER / AUDITOR) -->
+      <?php elseif ($view === 'tester' && $currentUser && in_array($currentUser['role'], ['auditor', 'admin'], true)): ?>
+        <?php $testerTab = $_GET['tab'] ?? 'incidents'; ?>
+
+        <!-- HEADER BẢNG ĐIỀU KHIỂN KIỂM THỬ -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px; margin: 0;">
+              <span style="background: #0284c7; color: #fff; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px;">🛡️</span>
+              TRUNG TÂM GIÁM SÁT AN NINH & KIỂM THỬ PHÂN QUYỀN
+            </h1>
+            <p style="color: var(--muted); font-size: 13px; margin-top: 4px;">
+              Giao diện kiểm thử và cảnh báo vi phạm dành cho <strong><?= htmlspecialchars($currentUser['full_name'] ?? 'Kỹ sư Bảo mật') ?></strong> (<code><?= htmlspecialchars($currentUser['username'] ?? 'tester_sec') ?></code> - Vai trò: <code><?= htmlspecialchars($currentUser['role'] ?? 'auditor') ?></code>).
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <a href="/?action=simulate_security_alert" class="btn btn-outline" style="border-color: #fca5a5; color: #b91c1c; font-size: 12px;" title="Tạo sự cố tấn công mẫu để kiểm thử cơ chế phát hiện">
+              ⚡ Mô Phỏng Tấn Công IDOR
+            </a>
+            <a href="/?action=clear_security_alerts" onclick="return confirm('Bạn có chắc muốn xóa sạch toàn bộ nhật ký sự cố?');" class="btn btn-outline" style="font-size: 12px;">
+              🗑️ Xóa Nhật Ký
+            </a>
+          </div>
+        </div>
+
+        <!-- KPI METRIC CARDS -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+          <div class="card" style="border-left: 4px solid #ef4444; margin: 0; padding: 16px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: 600;">Cảnh Báo Sự Cố Xâm Phạm</div>
+            <div style="font-size: 24px; font-weight: 800; color: #b91c1c; margin: 6px 0 2px;">
+              <?= $incidentCount ?>
+              <span style="font-size: 12px; font-weight: 600; color: #64748b;">(<?= $criticalCount ?> Nghiêm trọng)</span>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8;">Thời gian thực (Live Feeds)</div>
+          </div>
+
+          <div class="card" style="border-left: 4px solid <?= $bugIdor ? '#ef4444' : '#16a34a' ?>; margin: 0; padding: 16px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: 600;">Trạng Thái Lỗ Hổng IDOR (CWE-639)</div>
+            <div style="font-size: 20px; font-weight: 800; color: <?= $bugIdor ? '#dc2626' : '#16a34a' ?>; margin: 6px 0 2px;">
+              <?= $bugIdor ? 'LỖ HỔNG ĐANG MỞ' : 'HỆ THỐNG AN TOÀN' ?>
+            </div>
+            <div style="font-size: 11px; color: #64748b;">
+              <?= $bugIdor ? 'Bệnh nhân An có thể đọc trộm bệnh án Bình' : 'Cơ chế ABAC đang bảo vệ 100%' ?>
+            </div>
+          </div>
+
+          <div class="card" style="border-left: 4px solid <?= $failedTestCount > 0 ? '#d97706' : '#16a34a' ?>; margin: 0; padding: 16px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: 600;">Kết Quả Ma Trận 24 Test Cases</div>
+            <div style="font-size: 24px; font-weight: 800; color: <?= $failedTestCount > 0 ? '#b45309' : '#15803d' ?>; margin: 6px 0 2px;">
+              <?= $passedTestCount ?> / 24 PASS
+            </div>
+            <div style="font-size: 11px; color: #64748b;">
+              <?= $failedTestCount > 0 ? "<span style='color:#dc2626;font-weight:700;'>$failedTestCount FAIL (Bẫy IDOR R02 kích hoạt)</span>" : "Tất cả test cases đều đạt chuẩn" ?>
+            </div>
+          </div>
+
+          <div class="card" style="border-left: 4px solid #0284c7; margin: 0; padding: 16px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: 600;">Bộ Test Suite Tích Hợp</div>
+            <div style="font-size: 20px; font-weight: 800; color: #0369a1; margin: 6px 0 2px;">
+              88/88 TESTS
+            </div>
+            <div style="font-size: 11px; color: #64748b;">
+              Đã chuyển toàn bộ từ cổng 8105 sang 8205
+            </div>
+          </div>
+        </div>
+
+        <!-- TABS CHỨC NĂNG KIỂM THỬ -->
+        <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px;">
+          <a href="/?view=tester&tab=incidents" class="btn <?= $testerTab === 'incidents' ? 'btn-primary' : 'btn-outline' ?>" style="font-size: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
+            🚨 Nhật Ký Cảnh Báo Xâm Phạm Thời Gian Thực (<?= $incidentCount ?>)
+          </a>
+          <a href="/?view=tester&tab=matrix" class="btn <?= $testerTab === 'matrix' ? 'btn-primary' : 'btn-outline' ?>" style="font-size: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
+            📊 Ma Trận Kiểm Thử Phân Quyền Tự Động (24 Cases)
+          </a>
+          <a href="/?view=tester&tab=full_tests" class="btn <?= $testerTab === 'full_tests' ? 'btn-primary' : 'btn-outline' ?>" style="font-size: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
+            ⚙️ Chạy Toàn Bộ Test Suite (88 Tests CLI)
+          </a>
+        </div>
+
+        <!-- TAB 1: NHẬT KÝ CẢNH BÁO SỰ CỐ XÂM PHẠM -->
+        <?php if ($testerTab === 'incidents'): ?>
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">Dòng Sự Kiện An Ninh & Cảnh Báo Xâm Phạm Thời Gian Thực</div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                  Tự động ghi nhận khi bất kỳ người dùng, bệnh nhân hoặc nhân viên nào có thao tác vi phạm hoặc cố tình lợi dụng lỗ hổng phân quyền.
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <a href="/?action=switch_user&user=bn_an" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-size: 12px;">
+                  👤 Chuyển sang BN An để thử tấn công
+                </a>
+                <?php if ($bugIdor): ?>
+                  <a href="/?action=toggle_bug_idor&state=0&return_view=tester&tab=incidents" class="btn btn-safe" style="font-size: 12px; text-decoration: none;">🛡️ Vá Lỗ Hổng Ngay</a>
+                <?php else: ?>
+                  <a href="/?action=toggle_bug_idor&state=1&return_view=tester&tab=incidents" class="btn btn-danger" style="font-size: 12px; text-decoration: none;">⚠️ Kích Hoạt Lỗi IDOR</a>
+                <?php endif; ?>
+              </div>
+            </div>
+
+            <?php if (empty($allIncidents)): ?>
+              <div style="text-align: center; padding: 40px; color: var(--muted); background: #f8fafc; border-radius: 8px;">
+                Chưa có sự cố an ninh nào được ghi nhận. Hệ thống đang an toàn tuyệt đối.
+              </div>
+            <?php else: ?>
+              <div style="overflow-x: auto;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Mã Sự Cố & Thời Gian</th>
+                      <th>Mức Độ</th>
+                      <th>Đối Tượng Vi Phạm (Actor)</th>
+                      <th>Mục Tiêu (Target)</th>
+                      <th>Chi Tiết Hành Vi Vi Phạm & Phân Loại</th>
+                      <th>Mã Phản Hồi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($allIncidents as $inc): ?>
+                      <tr>
+                        <td style="white-space: nowrap;">
+                          <code style="font-weight: 700; color: #0f172a;"><?= htmlspecialchars($inc['id'] ?? '') ?></code><br>
+                          <span style="font-size: 11px; color: var(--muted);"><?= htmlspecialchars($inc['time'] ?? '') ?></span>
+                        </td>
+                        <td>
+                          <span style="font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; background: <?= ($inc['severity'] ?? '') === 'CRITICAL' ? '#fee2e2' : '#fef3c7' ?>; color: <?= ($inc['severity'] ?? '') === 'CRITICAL' ? '#b91c1c' : '#b45309' ?>;">
+                            <?= htmlspecialchars($inc['severity'] ?? 'INFO') ?>
+                          </span>
+                        </td>
+                        <td>
+                          <strong><?= htmlspecialchars($inc['actor_name'] ?? 'Khách vãng lai') ?></strong><br>
+                          <span style="font-size: 11px; color: #64748b;">
+                            <code><?= htmlspecialchars($inc['actor_username'] ?? 'anon') ?></code> (<?= htmlspecialchars($inc['actor_role'] ?? 'anon') ?>)
+                          </span>
+                        </td>
+                        <td>
+                          <span style="font-size: 12px; font-weight: 600; color: #0284c7;">
+                            <?= htmlspecialchars($inc['target'] ?? '-') ?>
+                          </span>
+                        </td>
+                        <td>
+                          <div style="font-size: 13px; color: #0f172a;">
+                            <?= htmlspecialchars($inc['description'] ?? '') ?>
+                          </div>
+                          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                            Phân loại: <strong><?= htmlspecialchars($inc['cwe'] ?? 'CWE-639') ?></strong>
+                            <?php if (!empty($inc['uri'])): ?>
+                              | URI: <code><?= htmlspecialchars($inc['uri']) ?></code>
+                            <?php endif; ?>
+                          </div>
+                        </td>
+                        <td>
+                          <?php $sc = $inc['status_code'] ?? 200; ?>
+                          <span style="font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 6px; background: <?= $sc === 200 ? ($inc['severity'] === 'CRITICAL' ? '#fee2e2' : '#dcfce7') : '#fee2e2' ?>; color: <?= $sc === 200 ? ($inc['severity'] === 'CRITICAL' ? '#b91c1c' : '#15803d') : '#b91c1c' ?>;">
+                            HTTP <?= $sc ?>
+                          </span>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            <?php endif; ?>
+          </div>
+
+        <!-- TAB 2: MA TRẬN KIỂM THỬ PHÂN QUYỀN TỰ ĐỘNG (24 TEST CASES) -->
+        <?php elseif ($testerTab === 'matrix'): ?>
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">Ma Trận 24 Ca Kiểm Thử Phân Quyền Tự Động (Access Matrix)</div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                  Kiểm tra kiểm soát truy cập (ABAC/RBAC) trên 5 phân hệ API (Profile, Danh sách bệnh án, Bệnh án cá nhân, Thông báo, Quản trị).
+                </div>
+              </div>
+              <div>
+                <?php if ($bugIdor): ?>
+                  <span style="background: #fee2e2; color: #b91c1c; font-weight: 800; font-size: 12px; padding: 6px 12px; border-radius: 8px;">23 PASS / 1 FAIL (R02 Thất Bại do IDOR)</span>
+                <?php else: ?>
+                  <span style="background: #dcfce7; color: #15803d; font-weight: 800; font-size: 12px; padding: 6px 12px; border-radius: 8px;">24 PASS / 0 FAIL (Tất cả Đạt Chuẩn An Toàn)</span>
+                <?php endif; ?>
+              </div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; font-size: 13px;">
+              <strong>Giải thích ca kiểm thử đặc biệt R02 (Bẫy IDOR):</strong><br>
+              • Khi <code>BUG_IDOR=1</code> (Có lỗ hổng): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#dc2626;font-weight:700;">FAIL</span> do máy chủ trả về HTTP 200 OK và làm rò rỉ bệnh án Bình cho An.<br>
+              • Khi <code>BUG_IDOR=0</code> (Đã vá): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#16a34a;font-weight:700;">PASS</span> do máy chủ chặn lại với HTTP 403 Forbidden!
+            </div>
+
             <div style="overflow-x: auto;">
               <table>
                 <thead>
                   <tr>
-                    <th>Mã Sự Cố & Thời Gian</th>
-                    <th>Mức Độ</th>
-                    <th>Đối Tượng Vi Phạm (Actor)</th>
-                    <th>Mục Tiêu (Target)</th>
-                    <th>Chi Tiết Hành Vi Vi Phạm & Mã Lỗi</th>
-                    <th>HTTP Code</th>
+                    <th>Mã Test</th>
+                    <th>Phương Thức & API</th>
+                    <th>Tài Khoản Thử Nghiệm</th>
+                    <th>Vai Trò</th>
+                    <th>Mô Tả Mục Tiêu Kiểm Thử</th>
+                    <th>Kỳ Vọng</th>
+                    <th>Kết Quả Thực Tế</th>
+                    <th>Trạng Thái</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <?php foreach ($allIncidents as $inc): ?>
-                    <?php
-                      $sevClass = match($inc['severity'] ?? 'INFO') {
-                        'CRITICAL' => 'badge-crit',
-                        'HIGH'     => 'badge-high',
-                        'WARNING'  => 'badge-warn',
-                        default    => 'badge-info'
-                      };
-                    ?>
-                    <tr>
-                      <td style="white-space: nowrap;">
-                        <code style="font-weight: 700; color: #0f172a;"><?= htmlspecialchars($inc['id'] ?? '') ?></code><br>
-                        <span style="font-size: 11px; color: var(--muted);"><?= htmlspecialchars($inc['time'] ?? '') ?></span>
-                      </td>
+                  <?php foreach ($testCases as $tc): ?>
+                    <tr style="<?= $tc['code'] === 'R02' ? ($tc['status'] === 'FAIL' ? 'background: #fff1f2;' : 'background: #f0fdf4;') : '' ?>">
+                      <td><strong style="color: #0369a1;"><?= $tc['code'] ?></strong></td>
+                      <td><code><?= $tc['method'] ?> <?= $tc['api'] ?></code></td>
+                      <td><?= htmlspecialchars($tc['user']) ?></td>
+                      <td><span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 700;"><?= $tc['role'] ?></span></td>
+                      <td><?= htmlspecialchars($tc['desc']) ?></td>
+                      <td><code style="color: #334155;"><?= $tc['expect'] ?></code></td>
+                      <td style="font-size: 12px;"><?= htmlspecialchars($tc['actual']) ?></td>
                       <td>
-                        <span class="status-badge <?= $sevClass ?>">
-                          <?= htmlspecialchars($inc['severity'] ?? 'INFO') ?>
-                        </span>
-                      </td>
-                      <td>
-                        <strong><?= htmlspecialchars($inc['actor_name'] ?? 'Khách vãng lai') ?></strong><br>
-                        <span style="font-size: 11px; color: #64748b;">
-                          <code><?= htmlspecialchars($inc['actor_username'] ?? 'anon') ?></code> (<?= htmlspecialchars($inc['actor_role'] ?? 'anon') ?>)
-                        </span>
-                      </td>
-                      <td>
-                        <span style="font-size: 12px; font-weight: 600; color: #0284c7;">
-                          <?= htmlspecialchars($inc['target'] ?? '-') ?>
-                        </span>
-                      </td>
-                      <td>
-                        <div style="font-size: 13px; color: #0f172a;">
-                          <?= htmlspecialchars($inc['description'] ?? '') ?>
-                        </div>
-                        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-                          Phân loại: <strong><?= htmlspecialchars($inc['cwe'] ?? 'CWE-639') ?></strong>
-                          <?php if (!empty($inc['uri'])): ?>
-                            | URI: <code><?= htmlspecialchars($inc['uri']) ?></code>
-                          <?php endif; ?>
-                        </div>
-                      </td>
-                      <td>
-                        <?php $sc = $inc['status_code'] ?? 200; ?>
-                        <span class="status-badge <?= $sc === 200 ? ($inc['severity'] === 'CRITICAL' ? 'badge-danger' : 'badge-safe') : ($sc === 403 ? 'badge-danger' : 'badge-warn') ?>">
-                          HTTP <?= $sc ?>
+                        <span style="font-weight: 800; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: <?= $tc['status'] === 'PASS' ? '#dcfce7' : '#fee2e2' ?>; color: <?= $tc['status'] === 'PASS' ? '#15803d' : '#b91c1c' ?>;">
+                          <?= $tc['status'] ?>
                         </span>
                       </td>
                     </tr>
@@ -2341,191 +4845,356 @@ if ($view === 'tester') {
                 </tbody>
               </table>
             </div>
+          </div>
+
+        <!-- TAB 3: CHẠY BỘ TEST SUITE 88 TESTS CLI -->
+        <?php elseif ($testerTab === 'full_tests'): ?>
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">Bộ Kiểm Thử Tự Động Toàn Diện Hệ Thống (88 Test Cases)</div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                  Thực thi lệnh kiểm thử <code>bash lab.sh test</code> trực tiếp trên môi trường máy chủ để xác nhận tính toàn vẹn 100% của hệ thống.
+                </div>
+              </div>
+              <div>
+                <a href="/?action=run_full_test_suite" class="btn btn-primary">
+                  ▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)
+                </a>
+              </div>
+            </div>
+
+            <div style="background: #090d16; border-radius: 8px; padding: 16px; font-family: monospace; color: #22c55e; font-size: 12px; line-height: 1.6; max-height: 480px; overflow-y: auto;">
+              <?php if (isset($_SESSION['last_full_test_output'])): ?>
+                <pre style="white-space: pre-wrap; margin: 0; color: #38bdf8;"><?= htmlspecialchars($_SESSION['last_full_test_output']) ?></pre>
+              <?php else: ?>
+                <div style="color: #94a3b8;">
+                  # Nhấn vào nút "Chạy Toàn Bộ Test Suite" phía trên để thực thi kiểm thử toàn bộ 88 ca kiểm tra.<br>
+                  # Bao gồm: Unit test CSDL PostgreSQL, Kiểm tra chính sách ABAC/RBAC, E2E HTTP Test và Ma trận bảo mật.
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+        <?php endif; ?>
+
+      <!-- VIEW 7: ĐĂNG NHẬP -->
+      <?php elseif ($view === 'login'): ?>
+        <div class="card" style="max-width: 480px; margin: 30px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border-radius: 12px;">
+          <div class="card-head" style="border-bottom: 2px solid #e2e8f0; padding-bottom: 14px;">
+            <div>
+              <div class="card-title" style="font-size: 18px; color: #0f172a;">Đăng Nhập MediRecord EMR</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Hệ thống Quản lý Bệnh án Điện tử - Bệnh viện Bạch Mai</div>
+            </div>
+            <span style="font-size: 11px; background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px; font-weight: 700;">CỔNG 8205</span>
+          </div>
+
+          <?php if ($currentUser): ?>
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div>
+                Đang đăng nhập: <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['username']) ?></code>)
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <a href="/?view=records" class="btn btn-primary" style="font-size: 11px; padding: 4px 8px;">Hồ Sơ</a>
+                <a href="/?action=logout" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; color: #b91c1c; border-color: #fca5a5;">Đăng Xuất</a>
+              </div>
+            </div>
           <?php endif; ?>
+
+          <?php if (isset($_GET['err'])): ?>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+              <?php if ($_GET['err'] === 'invalid_credentials'): ?>
+                <strong>Đăng nhập thất bại:</strong> Tên đăng nhập hoặc mật khẩu không chính xác! Vui lòng thử lại.
+              <?php elseif ($_GET['err'] === 'missing_fields'): ?>
+                <strong>Lỗi:</strong> Vui lòng điền đầy đủ tên đăng nhập và mật khẩu!
+              <?php else: ?>
+                <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
+              <?php endif; ?>
+            </div>
+          <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'require_login'): ?>
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+              <strong>Yêu cầu đăng nhập:</strong> Vui lòng đăng nhập tài khoản để truy cập thông tin bệnh án y tế.
+            </div>
+          <?php endif; ?>
+
+          <form action="/?action=login_submit" method="POST">
+            <div class="form-group">
+              <label for="loginUsername">Tên đăng nhập (Username):</label>
+              <input type="text" id="loginUsername" name="username" value="<?= htmlspecialchars($_GET['u'] ?? '') ?>" placeholder="VD: bs_minh, bn_an, admin_bv" required autofocus>
+            </div>
+            <div class="form-group">
+              <label for="loginPassword">Mật khẩu truy cập:</label>
+              <input type="password" id="loginPassword" name="password" value="TestPass@2026" placeholder="Nhập mật khẩu..." required>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">(Mật khẩu mặc định của các tài khoản mẫu: <code>TestPass@2026</code>)</div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px;">Đăng Nhập Ngay</button>
+          </form>
+
+          <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <div style="font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px;">Điền nhanh tài khoản kiểm thử:</div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" onclick="fillLogin('admin_bv', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #fca5a5; color: #b91c1c;">Admin</button>
+              <button type="button" onclick="fillLogin('bs_minh', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #93c5fd; color: #1d4ed8;">Bác sĩ Minh</button>
+              <button type="button" onclick="fillLogin('bn_an', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #86efac; color: #15803d;">Bệnh nhân An</button>
+              <button type="button" onclick="fillLogin('bn_binh', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #86efac; color: #15803d;">Bệnh nhân Bình</button>
+              <button type="button" onclick="fillLogin('tester_sec', 'TestPass@2026')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; border-color: #fde047; color: #b45309;">Tester Nam</button>
+            </div>
+          </div>
+
+          <div style="margin-top: 18px; text-align: center; font-size: 13px; color: #64748b;">
+            Chưa có tài khoản y tế? <a href="/?view=register" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng ký tài khoản mới</a>
+          </div>
         </div>
 
-      <!-- TAB 2: MA TRẬN KIỂM THỬ PHÂN QUYỀN TỰ ĐỘNG (24 TEST CASES) -->
-      <?php elseif ($testerTab === 'matrix'): ?>
+      <!-- VIEW 8: ĐĂNG KÝ -->
+      <?php elseif ($view === 'register'): ?>
+        <div class="card" style="max-width: 500px; margin: 30px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border-radius: 12px;">
+          <div class="card-head" style="border-bottom: 2px solid #e2e8f0; padding-bottom: 14px;">
+            <div>
+              <div class="card-title" style="font-size: 18px; color: #0f172a;">Đăng Ký Tài Khoản Y Tế Mới</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Khởi tạo tài khoản Bệnh nhân hoặc Bác sĩ mới vào hệ thống</div>
+            </div>
+            <span style="font-size: 11px; background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 20px; font-weight: 700;">THÀNH VIÊN</span>
+          </div>
+
+          <?php if (isset($_GET['err'])): ?>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+              <?php if ($_GET['err'] === 'username_taken'): ?>
+                <strong>Đăng ký thất bại:</strong> Tên đăng nhập này đã được sử dụng! Vui lòng chọn tên đăng nhập khác.
+              <?php elseif ($_GET['err'] === 'password_mismatch'): ?>
+                <strong>Đăng ký thất bại:</strong> Mật khẩu xác nhận không khớp nhau! Vui lòng kiểm tra lại.
+              <?php elseif ($_GET['err'] === 'missing_fields'): ?>
+                <strong>Đăng ký thất bại:</strong> Vui lòng điền đầy đủ tất cả các trường thông tin bắt buộc!
+              <?php else: ?>
+                <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+
+          <form action="/?action=register_submit" method="POST">
+            <div class="form-group">
+              <label for="regUsername">Tên đăng nhập (Username): <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="regUsername" name="username" value="<?= htmlspecialchars($_GET['u'] ?? '') ?>" placeholder="VD: bn_tuan, bs_hoa..." required autofocus>
+            </div>
+
+            <div class="form-group">
+              <label for="regFullName">Họ và tên đầy đủ: <span style="color:#ef4444;">*</span></label>
+              <input type="text" id="regFullName" name="full_name" value="<?= htmlspecialchars($_GET['fn'] ?? '') ?>" placeholder="VD: Nguyễn Tuấn Anh" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label for="regRole">Vai trò tài khoản: <span style="color:#ef4444;">*</span></label>
+                <select id="regRole" name="role" required>
+                  <option value="member">Bệnh nhân (Patient)</option>
+                  <option value="doctor">Bác sĩ khám (Doctor)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="regDept">Khoa phòng / Đơn vị:</label>
+                <input type="text" id="regDept" name="department" value="Bệnh nhân ngoại trú" placeholder="VD: Khoa Khám Bệnh">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="regPassword">Mật khẩu: <span style="color:#ef4444;">*</span></label>
+              <input type="password" id="regPassword" name="password" placeholder="Tối thiểu 6 ký tự..." required>
+            </div>
+
+            <div class="form-group">
+              <label for="regConfirm">Xác nhận mật khẩu: <span style="color:#ef4444;">*</span></label>
+              <input type="password" id="regConfirm" name="confirm_password" placeholder="Nhập lại mật khẩu..." required>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px;">Hoàn Tất Đăng Ký</button>
+          </form>
+
+          <div style="margin-top: 18px; text-align: center; font-size: 13px; color: #64748b;">
+            Đã có tài khoản? <a href="/?view=login" style="color: #0284c7; font-weight: 700; text-decoration: none;">Đăng nhập ngay</a>
+          </div>
+        </div>
+
+      <!-- VIEW 9: DANH SÁCH BỆNH ÁN (MẶC ĐỊNH CHO TẤT CẢ VAI TRÒ) -->
+      <?php else: ?>
         <div class="card">
           <div class="card-head">
             <div>
-              <div class="card-title">Ma Trận 24 Ca Kiểm Thử Phân Quyền Tự Động (Access Matrix)</div>
+              <div class="card-title">Hồ Sơ Bệnh Án Điện Tử (Danh Sách Khám Bệnh)</div>
               <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-                Tích hợp toàn diện từ công cụ kiểm thử: Kiểm tra kiểm soát truy cập (ABAC/RBAC) trên 5 phân hệ API (Profile, Danh sách bệnh án, Bệnh án cá nhân, Thông báo, Quản trị).
+                Đang hiển thị danh sách hồ sơ thuộc thẩm quyền tiếp cận của tài khoản hiện tại.
               </div>
             </div>
-            <div>
-              <?php if ($bugIdor): ?>
-                <span class="status-badge badge-danger" style="font-size: 12px; padding: 6px 12px;">23 PASS / 1 FAIL (R02 Thất Bại do IDOR)</span>
-              <?php else: ?>
-                <span class="status-badge badge-safe" style="font-size: 12px; padding: 6px 12px;">24 PASS / 0 FAIL (Tất cả Đạt Chuẩn An Toàn)</span>
+            <div style="display: flex; gap: 8px;">
+              <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
+                <a href="/?view=create_record" class="btn btn-primary">+ Lập Bệnh Án Mới</a>
               <?php endif; ?>
             </div>
           </div>
 
-          <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; font-size: 13px;">
-            <strong>Giải thích ca kiểm thử đặc biệt R02 (Bẫy IDOR):</strong><br>
-            • Khi <code>BUG_IDOR=1</code> (Có lỗ hổng): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#dc2626;font-weight:700;">FAIL</span> do máy chủ trả về HTTP 200 OK và làm rò rỉ bệnh án Bình cho An.<br>
-            • Khi <code>BUG_IDOR=0</code> (Đã vá): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#16a34a;font-weight:700;">PASS</span> do máy chủ chặn lại với HTTP 403 Forbidden!
+          <!-- Hộp tra cứu nhanh theo ID (Điểm kiểm thử IDOR trực tiếp) -->
+          <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+            <div>
+              <div style="font-weight: 700; font-size: 13px; color: #0f172a;">TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID:</div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                Nhập mã bệnh án (Ví dụ: ID <code>1</code>, <code>2</code> của An, hoặc ID <code>3</code> của Bình) để kiểm tra phản hồi phân quyền.
+              </div>
+            </div>
+            <form action="/" method="GET" style="display: flex; gap: 8px; align-items: center;">
+              <input type="hidden" name="view" value="record">
+              <input type="number" name="id" min="1" max="10" value="3" style="width: 80px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: 700; text-align: center;">
+              <button type="submit" class="btn btn-primary" style="font-size: 12px;">Tra Cứu Bệnh Án</button>
+            </form>
           </div>
 
-          <div style="overflow-x: auto;">
-            <table>
-              <thead>
+          <table>
+            <thead>
+              <tr>
+                <th>Mã HS</th>
+                <th>Tiêu Đề Bệnh Án</th>
+                <th>Khoa Khám</th>
+                <th>Bệnh Nhân Sở Hữu</th>
+                <th>Bác Sĩ Phụ Trách</th>
+                <th>Chẩn Đoán Sơ Bộ</th>
+                <th>Ngày Lập</th>
+                <th style="text-align: right;">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($mockRecords as $rec): ?>
+                <?php
+                  $isOwn = ($currentUser && $rec['owner_username'] === $currentUser['username']);
+                  $isStaff = ($currentUser && in_array($currentUser['role'], ['doctor', 'admin', 'auditor'], true));
+                ?>
                 <tr>
-                  <th>Mã Test</th>
-                  <th>Phương Thức & API</th>
-                  <th>Tài Khoản Thử Nghiệm</th>
-                  <th>Vai Trò</th>
-                  <th>Mô Tả Mục Tiêu Kiểm Thử</th>
-                  <th>Kỳ Vọng</th>
-                  <th>Kết QuẢ Thực Tế</th>
-                  <th>Trạng Thái</th>
+                  <td><code>#<?= $rec['id'] ?></code></td>
+                  <td>
+                    <strong><?= htmlspecialchars($rec['title']) ?></strong>
+                    <?php if ($rec['id'] === 3): ?>
+                      <span style="font-size: 10px; background: #fee2e2; color: #b91c1c; padding: 1px 6px; border-radius: 8px; font-weight: 800; margin-left: 4px;">BẢO MẬT</span>
+                    <?php endif; ?>
+                  </td>
+                  <td><?= htmlspecialchars($rec['department']) ?></td>
+                  <td>
+                    <code><?= htmlspecialchars($rec['owner_username']) ?></code>
+                    <?php if ($isOwn): ?>
+                      <span style="font-size: 10px; background: #dcfce7; color: #15803d; padding: 1px 5px; border-radius: 6px; font-weight: 700; margin-left: 2px;">Của bạn</span>
+                    <?php endif; ?>
+                  </td>
+                  <td><?= htmlspecialchars($rec['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?></td>
+                  <td><span style="color: #0369a1;"><?= htmlspecialchars($rec['diagnosis'] ?? 'Đang cập nhật') ?></span></td>
+                  <td><?= $rec['created_at'] ?></td>
+                  <td style="text-align: right;">
+                    <a href="/?view=record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;">Xem Chi Tiết</a>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($testCases as $tc): ?>
-                  <tr style="<?= $tc['code'] === 'R02' ? ($tc['status'] === 'FAIL' ? 'background: #fff1f2;' : 'background: #f0fdf4;') : '' ?>">
-                    <td><strong style="color: #0369a1;"><?= $tc['code'] ?></strong></td>
-                    <td><code><?= $tc['method'] ?> <?= $tc['api'] ?></code></td>
-                    <td><?= htmlspecialchars($tc['user']) ?></td>
-                    <td><span class="status-badge badge-doctor" style="font-size: 10px;"><?= $tc['role'] ?></span></td>
-                    <td><?= htmlspecialchars($tc['desc']) ?></td>
-                    <td><code style="color: #334155;"><?= $tc['expect'] ?></code></td>
-                    <td style="font-size: 12px;"><?= htmlspecialchars($tc['actual']) ?></td>
-                    <td>
-                      <span class="status-badge <?= $tc['status'] === 'PASS' ? 'badge-pass' : 'badge-fail' ?>">
-                        <?= $tc['status'] ?>
-                      </span>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      <!-- TAB 3: CHẠY BỘ TEST SUITE 88 TESTS CLI -->
-      <?php elseif ($testerTab === 'full_tests'): ?>
-        <div class="card">
-          <div class="card-head">
-            <div>
-              <div class="card-title">Bộ Kiểm Thử Tự Động Toàn Diện Hệ Thống (88 Test Cases)</div>
-              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-                Thực thi lệnh kiểm thử <code>bash lab.sh test</code> trực tiếp trên môi trường máy chủ để xác nhận tính toàn vẹn 100% của hệ thống.
-              </div>
-            </div>
-            <div>
-              <a href="/?action=run_full_test_suite" class="btn btn-primary">
-                ▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)
-              </a>
-            </div>
-          </div>
-
-          <div style="background: #090d16; border-radius: 8px; padding: 16px; font-family: monospace; color: #22c55e; font-size: 12px; line-height: 1.6; max-height: 480px; overflow-y: auto;">
-            <?php if (isset($_SESSION['last_full_test_output'])): ?>
-              <pre style="white-space: pre-wrap; margin: 0; color: #38bdf8;"><?= htmlspecialchars($_SESSION['last_full_test_output']) ?></pre>
-            <?php else: ?>
-              <div style="color: #94a3b8;">
-                # Nhấn vào nút "Chạy Toàn Bộ Test Suite" phía trên để thực thi kiểm thử toàn bộ 88 ca kiểm tra.<br>
-                # Bao gồm: Unit test CSDL PostgreSQL, Kiểm tra chính sách ABAC/RBAC, E2E HTTP Test và Ma trận bảo mật.
-              </div>
-            <?php endif; ?>
-          </div>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
         </div>
       <?php endif; ?>
-    <?php endif; ?>
 
-  </div>
+    </div> <!-- /container -->
+  <?php endif; ?>
 
-  <!-- NÚT TRÒN NỔI (FAB) CHUYỂN TÀI KHOẢN NHANH - NẰM NGAY TRÊN NÚT TERMINAL -->
+  <!-- =======================================================================
+       CÁC NÚT TRÒN NỔI (FAB) & CỬA SỔ ĐIỀU KHIỂN (HIỂN THỊ TOÀN HỆ THỐNG)
+       ======================================================================= -->
+  <!-- NÚT TRÒN NỔI (FAB) CHUYỂN TÀI KHOẢN NHANH (NẰM TRÊN NÚT TERMINAL) -->
   <button id="accountFab" onclick="toggleAccountDrawer()" class="account-fab" title="Chuyển Nhanh Tài Khoản (1-Click Switch)">
     <span class="account-fab-icon">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
         <circle cx="9" cy="7" r="4"></circle>
         <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
       </svg>
     </span>
+    <?php if ($incidentCount > 0): ?>
+      <span class="account-fab-badge"><?= $incidentCount ?></span>
+    <?php endif; ?>
   </button>
 
-  <!-- CỬA SỔ POPUP CHUYỂN TÀI KHOẢN NHANH -->
+  <!-- NÚT TRÒN NỔI (FAB) TERMINAL GÓC DƯỚI BÊN PHẢI -->
+  <button id="termFab" onclick="toggleTerminal()" class="term-fab" title="Mở Terminal Điều Khiển Lỗi Bảo Mật">
+    <span class="term-fab-icon">&gt;_</span>
+    <span class="term-fab-dot <?= $bugIdor ? 'dot-danger' : 'dot-safe' ?>"></span>
+  </button>
+
+  <!-- POPUP CHUYỂN TÀI KHOẢN NHANH -->
   <div id="accountDrawer" class="account-drawer" style="display: none;">
     <div class="acc-drawer-head">
       <div>
-        <h4 style="margin: 0; font-size: 13px; font-weight: 700; color: #fff;">CHUYỂN NHANH TÀI KHOẢN (1-CLICK)</h4>
+        <h4 style="margin: 0; font-size: 13px; font-weight: 700; color: #fff;">CHUYỂN NHANH VAI TRÒ (1-CLICK)</h4>
         <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
           <?= $currentUser ? 'Đang dùng: <strong>' . htmlspecialchars($currentUser['username']) . '</strong>' : 'Khách vãng lai' ?>
         </div>
       </div>
-      <button onclick="toggleAccountDrawer()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; line-height: 1;">&times;</button>
+      <button onclick="toggleAccountDrawer()" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px; color: #cbd5e1; border-color: #475569; background: transparent;">Đóng</button>
     </div>
 
     <div class="acc-drawer-list">
       <!-- Admin -->
       <a href="/?action=switch_user&user=admin_bv" class="acc-item <?= ($currentUser && $currentUser['username'] === 'admin_bv') ? 'active' : '' ?>">
         <div style="display: flex; align-items: center;">
-          <div class="acc-avatar acc-avatar-adm">AD</div>
+          <div class="acc-initial init-adm">AD</div>
           <div>
-            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">BS. CKII Vũ Quốc Bảo</div>
-            <div style="font-size: 11px; color: #64748b;">admin_bv • Quản trị viên Bệnh viện</div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Quản trị viên Bệnh viện Bạch Mai</div>
+            <div style="font-size: 11px; color: #64748b;">admin_bv - Phòng CNTT & An Ninh Mạng</div>
           </div>
         </div>
         <?php if ($currentUser && $currentUser['username'] === 'admin_bv'): ?>
-          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+          <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
         <?php endif; ?>
       </a>
 
       <!-- Doctor -->
       <a href="/?action=switch_user&user=bs_minh" class="acc-item <?= ($currentUser && $currentUser['username'] === 'bs_minh') ? 'active' : '' ?>">
         <div style="display: flex; align-items: center;">
-          <div class="acc-avatar acc-avatar-doc">BS</div>
+          <div class="acc-initial init-doc">BS</div>
           <div>
             <div style="font-weight: 700; font-size: 13px; color: #0f172a;">BS. CKI Lê Hoàng Minh</div>
-            <div style="font-size: 11px; color: #64748b;">bs_minh • Bác sĩ điều trị</div>
+            <div style="font-size: 11px; color: #64748b;">bs_minh - Khoa Tim Mạch & Nội Tiết</div>
           </div>
         </div>
         <?php if ($currentUser && $currentUser['username'] === 'bs_minh'): ?>
-          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+          <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
         <?php endif; ?>
       </a>
 
       <!-- Patient An -->
       <a href="/?action=switch_user&user=bn_an" class="acc-item <?= ($currentUser && $currentUser['username'] === 'bn_an') ? 'active' : '' ?>">
         <div style="display: flex; align-items: center;">
-          <div class="acc-avatar acc-avatar-pat">AN</div>
+          <div class="acc-initial init-pat">AN</div>
           <div>
-            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Nguyễn Văn An</div>
-            <div style="font-size: 11px; color: #64748b;">bn_an • Bệnh nhân (Mục tiêu IDOR)</div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Bệnh nhân Nguyễn Văn An</div>
+            <div style="font-size: 11px; color: #64748b;">bn_an - Điều trị Ngoại trú (Tim Mạch)</div>
           </div>
         </div>
         <?php if ($currentUser && $currentUser['username'] === 'bn_an'): ?>
-          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+          <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
         <?php endif; ?>
       </a>
 
       <!-- Patient Binh -->
       <a href="/?action=switch_user&user=bn_binh" class="acc-item <?= ($currentUser && $currentUser['username'] === 'bn_binh') ? 'active' : '' ?>">
         <div style="display: flex; align-items: center;">
-          <div class="acc-avatar acc-avatar-pat">BI</div>
+          <div class="acc-initial init-pat">BI</div>
           <div>
-            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Trần Thị Bình</div>
-            <div style="font-size: 11px; color: #64748b;">bn_binh • Bệnh nhân (Nạn nhân IDOR)</div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Bệnh nhân Trần Thị Bình</div>
+            <div style="font-size: 11px; color: #64748b;">bn_binh - Điều trị Nội trú (Khoa Ung Bướu)</div>
           </div>
         </div>
         <?php if ($currentUser && $currentUser['username'] === 'bn_binh'): ?>
-          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+          <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
         <?php endif; ?>
       </a>
 
       <!-- Tester -->
       <a href="/?action=switch_user&user=tester_sec" class="acc-item <?= ($currentUser && $currentUser['username'] === 'tester_sec') ? 'active' : '' ?>">
         <div style="display: flex; align-items: center;">
-          <div class="acc-avatar acc-avatar-aud">KT</div>
+          <div class="acc-initial init-aud">KT</div>
           <div>
-            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Trần Bảo Nam</div>
-            <div style="font-size: 11px; color: #64748b;">tester_sec • Kiểm thử An toàn thông tin</div>
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Kỹ sư Nguyễn Kiểm Thử</div>
+            <div style="font-size: 11px; color: #64748b;">tester_sec - Ban An Toàn Thông Tin & Kiểm Toán Y Tế</div>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 6px;">
@@ -2533,7 +5202,7 @@ if ($view === 'tester') {
             <span style="font-size: 10px; background: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 10px; font-weight: 700;"><?= $incidentCount ?> sự cố</span>
           <?php endif; ?>
           <?php if ($currentUser && $currentUser['username'] === 'tester_sec'): ?>
-            <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+            <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
           <?php endif; ?>
         </div>
       </a>
@@ -2541,44 +5210,37 @@ if ($view === 'tester') {
       <!-- Anonymous / Guest -->
       <a href="/?action=switch_user&user=anon" class="acc-item <?= ($currentUser === null) ? 'active' : '' ?>">
         <div style="display: flex; align-items: center;">
-          <div class="acc-avatar" style="background: #f1f5f9; color: #64748b;">--</div>
+          <div class="acc-initial init-anon">--</div>
           <div>
             <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Khách Vãng Lai</div>
             <div style="font-size: 11px; color: #64748b;">Chưa đăng nhập (Anonymous)</div>
           </div>
         </div>
         <?php if ($currentUser === null): ?>
-          <span style="font-size: 11px; color: #0284c7; font-weight: 700;">Đang chọn</span>
+          <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
         <?php endif; ?>
       </a>
     </div>
 
-    <!-- Drawer Footer với liên kết Đăng nhập / Đăng ký -->
-    <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
-      <a href="/?view=login" style="color: #0284c7; text-decoration: none; font-weight: 600;">Đăng Nhập</a>
+    <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+      <a href="/?view=login" style="color: var(--primary); text-decoration: none; font-weight: 700;">Đăng Nhập</a>
       <span style="color: #cbd5e1;">|</span>
-      <a href="/?view=register" style="color: #0284c7; text-decoration: none; font-weight: 600;">Đăng Ký</a>
+      <a href="/?view=register" style="color: var(--primary); text-decoration: none; font-weight: 700;">Đăng Ký</a>
       <span style="color: #cbd5e1;">|</span>
-      <a href="/?action=logout" style="color: #ef4444; text-decoration: none; font-weight: 600;">Đăng Xuất</a>
+      <a href="/?action=logout" style="color: #ef4444; text-decoration: none; font-weight: 700;">Đăng Xuất</a>
     </div>
   </div>
 
-  <!-- NÚT TRÒN NỔI FLOATING ACTION BUTTON (FAB) TERMINAL GÓC DƯỚI BÊN PHẢI -->
-  <button id="termFab" onclick="toggleTerminal()" class="term-fab" title="Mở Terminal Điều Khiển Lỗi Bảo Mật">
-    <span class="term-fab-icon">&gt;_</span>
-    <span class="term-fab-dot <?= $bugIdor ? 'dot-danger' : 'dot-safe' ?>"></span>
-  </button>
-
-  <!-- CỬA SỔ TERMINAL NỔI TRƯỢT LÊN TỪ GÓC DƯỚI BÊN PHẢI -->
+  <!-- TERMINAL DRAWER -->
   <div id="termDrawer" class="term-drawer" style="display: none;">
     <div class="term-drawer-head">
-      <span>MEDIRECORD CONSOLE [<?= $bugIdor ? 'IDOR: ON' : 'SECURE' ?>]</span>
-      <button onclick="toggleTerminal()" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-size:16px;">&times;</button>
+      <span>MEDIRECORD TERMINAL [<?= $bugIdor ? 'IDOR: ON' : 'SECURE' ?>]</span>
+      <button onclick="toggleTerminal()" class="btn btn-outline" style="padding: 2px 6px; font-size: 10px; color: #cbd5e1; border-color: #334155; background: transparent;">Đóng</button>
     </div>
     
     <div class="term-quick-btns">
-      <button onclick="execCmd('set BUG_IDOR=1')" class="term-qbtn" style="color: #f87171;">Tạo Lỗi (set BUG_IDOR=1)</button>
-      <button onclick="execCmd('set BUG_IDOR=0')" class="term-qbtn" style="color: #4ade80;">Vá Lỗi (set BUG_IDOR=0)</button>
+      <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" class="term-qbtn" style="color: #f87171; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Tạo Lỗi (set BUG_IDOR=1)</a>
+      <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" class="term-qbtn" style="color: #4ade80; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Vá Lỗi (set BUG_IDOR=0)</a>
       <button onclick="execCmd('status')" class="term-qbtn">status</button>
       <button onclick="execCmd('curl /api/notes/3')" class="term-qbtn">curl /api/notes/3</button>
       <button onclick="execCmd('clear')" class="term-qbtn">clear</button>
@@ -2587,7 +5249,7 @@ if ($view === 'tester') {
     <div class="term-drawer-body" id="termLogs">
       <div>MEDIRECORD MEDICAL SECURITY CONSOLE [v2.0]</div>
       <div>Trạng thái: BUG_IDOR = <?= $bugIdor ? '<span style="color:#ef4444;font-weight:700;">1 (LỖ HỔNG ĐANG BẬT)</span>' : '<span style="color:#22c55e;font-weight:700;">0 (AN TOÀN - ĐÃ VÁ)</span>' ?></div>
-      <div>Gõ 'help' hoặc bấm nút phía trên để điều khiển.</div>
+      <div>Gõ 'help' hoặc bấm các nút phía trên để điều khiển.</div>
       <br>
     </div>
 
@@ -2602,6 +5264,7 @@ if ($view === 'tester') {
     function toggleAccountDrawer() {
       const accDrawer = document.getElementById('accountDrawer');
       const termDrawer = document.getElementById('termDrawer');
+      if (!accDrawer) return;
       if (accDrawer.style.display === 'none' || accDrawer.style.display === '') {
         accDrawer.style.display = 'block';
         if (termDrawer) termDrawer.style.display = 'none';
@@ -2610,10 +5273,11 @@ if ($view === 'tester') {
       }
     }
 
-    // Bật/tắt Cửa sổ Terminal nổi từ nút tròn
+    // Bật/tắt Cửa sổ Terminal
     function toggleTerminal() {
       const termDrawer = document.getElementById('termDrawer');
       const accDrawer = document.getElementById('accountDrawer');
+      if (!termDrawer) return;
       if (termDrawer.style.display === 'none' || termDrawer.style.display === '') {
         termDrawer.style.display = 'block';
         if (accDrawer) accDrawer.style.display = 'none';
@@ -2671,7 +5335,10 @@ if ($view === 'tester') {
           }
         }
         if (cmd.startsWith('set BUG_IDOR')) {
-          setTimeout(() => { location.reload(); }, 600);
+          const isBug = cmd.includes('1') ? '1' : '0';
+          const url = new URL(window.location.href);
+          url.searchParams.set('bug', isBug);
+          setTimeout(() => { window.location.href = url.toString(); }, 400);
         }
       })
       .catch(err => {
@@ -2691,29 +5358,37 @@ if ($view === 'tester') {
 
     // Modal quản lý người dùng
     function openAddUserModal() {
-      document.getElementById('addUserModal').style.display = 'flex';
+      const m = document.getElementById('addUserModal');
+      if (m) m.style.display = 'flex';
     }
     function closeAddUserModal() {
-      document.getElementById('addUserModal').style.display = 'none';
+      const m = document.getElementById('addUserModal');
+      if (m) m.style.display = 'none';
     }
 
     function openEditUserModal(username, fullName, role, dept) {
-      document.getElementById('editUsername').value = username;
-      document.getElementById('displayEditUsername').value = username;
-      document.getElementById('editFullName').value = fullName;
-      document.getElementById('editRole').value = role;
-      document.getElementById('editDept').value = dept;
-      document.getElementById('editUserModal').style.display = 'flex';
+      const u = document.getElementById('editUsername');
+      if (u) {
+        u.value = username;
+        document.getElementById('displayEditUsername').value = username;
+        document.getElementById('editFullName').value = fullName;
+        document.getElementById('editRole').value = role;
+        document.getElementById('editDept').value = dept;
+        document.getElementById('editUserModal').style.display = 'flex';
+      }
     }
     function closeEditUserModal() {
-      document.getElementById('editUserModal').style.display = 'none';
+      const m = document.getElementById('editUserModal');
+      if (m) m.style.display = 'none';
     }
 
     // Tìm kiếm người dùng tức thì (Live search filter)
     function filterUsers() {
       const input = document.getElementById('userSearchInput');
+      if (!input) return;
       const filter = input.value.toLowerCase();
       const table = document.getElementById('userTable');
+      if (!table) return;
       const trs = table.getElementsByTagName('tr');
 
       for (let i = 1; i < trs.length; i++) {

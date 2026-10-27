@@ -169,25 +169,25 @@ Khi vi phạm phân quyền, hệ thống trả về mã trạng thái **HTTP 40
 
 ---
 
-## 7. BỘ ĐÔI NÚT TRÒN NỔI (FABs) & TERMINAL ĐIỀU KHIỂN
+## 7. BỘ ĐÔI NÚT DOCK NỔI ĐIỀU KHIỂN & TERMINAL BẢO MẬT (THIẾT KẾ HIỆN ĐẠI KHÔNG ICON)
 
-Giao diện tích hợp **2 Nút Tròn Nổi FAB (Floating Action Buttons)** cố định ở góc dưới bên phải màn hình:
-1. **Nút Tròn Chuyển Tài Khoản Nhanh (Account FAB - Nút màu xanh ở trên):**
-   - Vị trí: Đặt ngay phía trên nút Terminal (`bottom: 86px; right: 24px;`).
-   - Biểu tượng: Người dùng (Users).
-   - Khi bấm: Mở cửa sổ popup `CHUYỂN NHANH TÀI KHOẢN (1-CLICK)` hiển thị danh sách đầy đủ các tài khoản thật:
-     - `admin_bv` (BS. CKII Vũ Quốc Bảo - Quản trị viên Bệnh viện)
-     - `bs_minh` (BS. CKI Lê Hoàng Minh - Bác sĩ điều trị)
-     - `bn_an` (Nguyễn Văn An - Bệnh nhân mục tiêu IDOR)
-     - `bn_binh` (Trần Thị Bình - Bệnh nhân nạn nhân IDOR)
-     - `tester_sec` (Trần Bảo Nam - Kỹ sư kiểm thử an toàn)
-     - `anon` (Khách vãng lai - Chưa đăng nhập)
-     - Footer điều hướng nhanh đến: **Đăng Nhập**, **Đăng Ký**, **Đăng Xuất**.
-2. **Nút Tròn Terminal Bảo Mật (Terminal FAB - Nút màu đen ở dưới):**
-   - Vị trí: Đặt ở góc dưới cùng (`bottom: 24px; right: 24px;`).
-   - Biểu tượng: `>_` kèm chấm đèn trạng thái (Đỏ khi lỗi IDOR đang bật, Xanh khi an toàn).
-   - Khi bấm: Cửa sổ terminal trượt lên mượt mà ngay tại chỗ, tự động đóng cửa sổ chuyển tài khoản.
-   - Thao tác 1-click: `set BUG_IDOR=1` (Tạo lỗi), `set BUG_IDOR=0` (Vá lỗi), `status`, `curl /api/notes/3`, `clear`.
+Giao diện tích hợp **Bộ đôi Nút Dock Nổi** dạng viên nang (Pill Dock) cố định ở góc dưới bên phải màn hình, thiết kế tối giản, loại bỏ icon thừa, chú trọng trải nghiệm:
+1. **Nút VAI TRÒ (Chuyển nhanh tài khoản 1-Click - Nút màu xanh ở trên):**
+   - Vị trí: Đặt ở góc dưới bên phải màn hình.
+   - Hiển thị: Nhãn `VAI TRÒ`, tên tài khoản đang hoạt động (ví dụ: `bn_an` hoặc `Khách Vãng Lai`) và huy hiệu số lượng sự cố an ninh vi phạm chưa đọc màu đỏ nhấp nháy.
+   - Khi bấm: Mở cửa sổ popup `CHUYỂN NHANH VAI TRÒ (1-CLICK)` hiển thị danh sách đầy đủ 5 tài khoản thật với ký hiệu viết tắt chuyên nghiệp (`AD`, `BS`, `AN`, `BI`, `KT`, `--`):
+     - `AD`: `admin_bv` (BS. CKII Vũ Quốc Bảo - Quản trị viên Bệnh viện)
+     - `BS`: `bs_minh` (BS. CKI Lê Hoàng Minh - Bác sĩ điều trị)
+     - `AN`: `bn_an` (Nguyễn Văn An - Bệnh nhân mục tiêu IDOR)
+     - `BI`: `bn_binh` (Trần Thị Bình - Bệnh nhân nạn nhân IDOR)
+     - `KT`: `tester_sec` (Trần Bảo Nam - Kiểm thử An toàn thông tin)
+     - `--`: `anon` (Khách vãng lai - Chưa đăng nhập)
+     - Footer điều hướng nhanh: **Đăng Nhập**, **Đăng Ký**, **Đăng Xuất**.
+2. **Nút CONSOLE (Terminal Điều khiển An ninh - Nút màu đen ở dưới):**
+   - Vị trí: Đặt ở góc dưới cùng bên phải.
+   - Hiển thị: Chấm đèn trạng thái (Xanh lá cây: An toàn / Đỏ nhấp nháy: Đang bật lỗi IDOR), nhãn `CONSOLE`, trạng thái `IDOR ON` hoặc `SECURE`.
+   - Khi bấm: Cửa sổ terminal trượt lên mượt mà ngay tại chỗ, tự động đóng cửa sổ vai trò.
+   - Thao tác 1-click: `Tạo Lỗi (set BUG_IDOR=1)`, `Vá Lỗi (set BUG_IDOR=0)`, `status`, `curl /api/notes/3`, `clear`.
    - Cho phép gõ lệnh tùy ý bằng phím Enter.
 
 ---
