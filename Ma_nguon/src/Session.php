@@ -1,17 +1,23 @@
 <?php
 
 declare(strict_types=1);
-// Hạ tầng mẫu do giảng viên cấp; buổi này tập trung thao tác $_SESSION.
+
+// Quản lý phiên làm việc bảo mật cao (Enterprise Session Hardening)
 ini_set('session.use_strict_mode', '1');
 session_set_cookie_params([
     'httponly' => true,
     'samesite' => 'Lax',
     'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
 ]);
-session_start();
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 if (!isset($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(24));
 }
+
 function checkCsrf(array $input): void
 {
     $token = $input['csrf'] ?? '';

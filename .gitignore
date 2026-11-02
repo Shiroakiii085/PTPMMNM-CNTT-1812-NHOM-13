@@ -9,3 +9,5 @@ evidence/private/
 *.docx
 Huong_Dan_Demo_Bao_Cao.md
 graphify-out/
+
+.unity/

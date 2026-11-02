@@ -73,7 +73,7 @@ require_once __DIR__ . '/../templates/header.php';
 </div>
 
 <!-- Bộ chọn 2 lần chạy để đối chiếu -->
-<div class="card mb-6" style="border-top: 3px solid var(--color-brand-accent);">
+<div class="card mb-6">
     <form method="GET" action="/compare.php" style="display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap;">
         <input type="hidden" name="project_id" value="<?= $selectedProjectId ?>">
 

@@ -130,7 +130,7 @@ require_once __DIR__ . '/../templates/header.php';
 <?php endif; ?>
 
 <!-- Khung điều khiển thực thi kiểm thử mới -->
-<div class="card mb-6" style="border-top: 3px solid var(--color-brand-accent);">
+<div class="card mb-6">
     <div class="card-header">
         <div>
             <h2 class="card-title">Khởi chạy đợt kiểm thử HTTP thực tế</h2>

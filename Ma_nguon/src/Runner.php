@@ -143,6 +143,7 @@ final class Runner
         $configHash = self::computeConfigHash($cases);
         $baseUrl = rtrim($project['base_url'], '/');
 
+        Policy::clearCache();
         $runId = $this->runRepo->createRun(
             $projectId,
             $label,

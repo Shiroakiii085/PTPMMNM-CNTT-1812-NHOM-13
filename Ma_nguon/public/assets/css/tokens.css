@@ -1,74 +1,79 @@
-/* AccessTester Light Security Design Tokens - Clean, High Contrast, No Icon */
+/* ==========================================================================
+   AccessTester Design Tokens (Taste-Skill v2 Compliant)
+   Anti-slop house style: Restrained chrome, 3% color budget focused on data,
+   flat surfaces (1px borders, zero blurry drop shadows), tabular figures.
+   ========================================================================== */
 :root {
-  /* Color Palette - Authority, Trust & Security */
-  --color-brand-primary: #1e3a8a;       /* Deep Navy */
-  --color-brand-accent: #2563eb;        /* Security Blue */
-  --color-brand-light: #eff6ff;         /* Light Blue Tint */
-  --color-brand-border: #bfdbfe;
+  /* Surface Grounds (Flat, crisp, zero blurred glow) */
+  --color-bg-app: #f8fafc;              /* Slate-50 Crisp neutral ground */
+  --color-bg-card: #ffffff;             /* Pure White flat surface */
+  --color-bg-subtle: #f1f5f9;           /* Slate-100 Recessed surface */
+  --color-bg-muted: #e2e8f0;            /* Slate-200 Hover & divider */
+  --color-bg-inset: #0f172a;            /* Slate-900 High-contrast inset */
 
-  /* Surfaces & Backgrounds */
-  --color-bg-app: #f8fafc;              /* Slate-50 Crisp Canvas */
-  --color-bg-card: #ffffff;             /* Pure White */
-  --color-bg-subtle: #f1f5f9;           /* Slate-100 */
-  --color-bg-muted: #e2e8f0;            /* Slate-200 */
+  /* Neutral Typography (Slate scale) */
+  --color-text-main: #0f172a;           /* Slate-900 High Contrast Text */
+  --color-text-body: #334155;           /* Slate-700 High Readability Body */
+  --color-text-muted: #64748b;          /* Slate-500 Meta/captions */
+  --color-text-subtle: #94a3b8;         /* Slate-400 Secondary hints */
+  --color-text-inverse: #ffffff;        /* Pure white for dark badges */
 
-  /* Text & Typography */
-  --color-text-main: #0f172a;           /* Slate-900 High Contrast */
-  --color-text-body: #334155;           /* Slate-700 */
-  --color-text-muted: #64748b;          /* Slate-500 */
-  --color-text-inverse: #ffffff;
+  /* Hairline Borders (Crisp 1px separation instead of blurry shadows) */
+  --color-border-light: #e2e8f0;        /* Slate-200 Hairline divider */
+  --color-border-strong: #cbd5e1;       /* Slate-300 Card and form outline */
+  --color-border-focus: #0f172a;        /* Slate-900 High-intent focus */
 
-  /* Borders & Dividers */
-  --color-border-light: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-border-focus: #3b82f6;
+  /* Data-Only Semantic Accents (Color reserved strictly for state) */
+  --color-pass-bg: #ecfdf5;             /* Emerald-50 */
+  --color-pass-text: #065f46;           /* Emerald-800 */
+  --color-pass-border: #a7f3d0;         /* Emerald-200 */
+  --color-pass-accent: #059669;         /* Emerald-600 */
 
-  /* Security Status Tokens */
-  --color-pass-bg: #ecfdf5;
-  --color-pass-text: #065f46;
-  --color-pass-border: #a7f3d0;
-  --color-pass-accent: #10b981;
+  --color-fail-bg: #fef2f2;             /* Red-50 */
+  --color-fail-text: #991b1b;           /* Red-800 */
+  --color-fail-border: #fecaca;         /* Red-200 */
+  --color-fail-accent: #dc2626;         /* Red-600 */
 
-  --color-fail-bg: #fef2f2;
-  --color-fail-text: #991b1b;
-  --color-fail-border: #fecaca;
-  --color-fail-accent: #ef4444;
+  --color-warn-bg: #fffbeb;             /* Amber-50 */
+  --color-warn-text: #92400e;           /* Amber-800 */
+  --color-warn-border: #fde68a;         /* Amber-200 */
+  --color-warn-accent: #d97706;         /* Amber-600 */
 
-  --color-warn-bg: #fffbeb;
-  --color-warn-text: #92400e;
-  --color-warn-border: #fde68a;
-  --color-warn-accent: #f59e0b;
+  --color-info-bg: #f0f9ff;             /* Sky-50 */
+  --color-info-text: #075985;           /* Sky-800 */
+  --color-info-border: #bae6fd;         /* Sky-200 */
+  --color-info-accent: #0284c7;         /* Sky-600 */
 
-  --color-info-bg: #f0f9ff;
-  --color-info-text: #075985;
-  --color-info-border: #bae6fd;
-  --color-info-accent: #0284c7;
+  /* HTTP Method Specific Color Tags (Concise, high-legibility) */
+  --color-method-get: #0284c7;          /* Sky-600 */
+  --color-method-get-bg: #f0f9ff;
+  --color-method-get-border: #bae6fd;
 
-  /* HTTP Method Specific Colors */
-  --color-method-get: #0284c7;
-  --color-method-get-bg: #e0f2fe;
-  --color-method-post: #059669;
-  --color-method-post-bg: #dcfce7;
-  --color-method-put: #d97706;
-  --color-method-put-bg: #fef3c7;
-  --color-method-delete: #dc2626;
-  --color-method-delete-bg: #fee2e2;
+  --color-method-post: #059669;         /* Emerald-600 */
+  --color-method-post-bg: #ecfdf5;
+  --color-method-post-border: #a7f3d0;
 
-  /* Elevation Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
-  --shadow-highlight: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  --color-method-put: #d97706;          /* Amber-600 */
+  --color-method-put-bg: #fffbeb;
+  --color-method-put-border: #fde68a;
 
-  /* Animation Timings */
-  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --color-method-delete: #dc2626;       /* Red-600 */
+  --color-method-delete-bg: #fef2f2;
+  --color-method-delete-border: #fecaca;
 
-  /* Radii */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Taste-Skill Flat Elevation (17 of 23 real product screens have no card shadow) */
+  --shadow-flat: none;
+  --shadow-hairline: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-overlay: 0 4px 12px 0 rgba(15, 23, 42, 0.08);
+
+  /* Precise Radii Scale */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
   --radius-pill: 9999px;
+
+  /* Snappy Transitions */
+  --transition-fast: 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }

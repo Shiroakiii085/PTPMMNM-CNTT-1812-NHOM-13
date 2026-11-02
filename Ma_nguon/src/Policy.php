@@ -7,6 +7,18 @@ require_once __DIR__ . '/Database.php';
 final class Policy
 {
     /**
+     * In-memory cache cho các truy vấn quyền của CSDL khi kiểm thử hàng ngàn ca.
+     */
+    private static array $permCache = [];
+    private static array $recordCache = [];
+
+    public static function clearCache(): void
+    {
+        self::$permCache = [];
+        self::$recordCache = [];
+    }
+
+    /**
      * Quy tắc phân quyền cốt lõi (Yêu cầu kỹ thuật 1).
      * Mặc định là DENY nếu không có quyền khai báo hoặc tài khoản ẩn danh.
      *
@@ -84,6 +96,7 @@ final class Policy
 
     /**
      * Tính toán quyền kỳ vọng tự động từ CSDL cho một ca kiểm thử.
+     * Tích hợp bộ nhớ đệm (memoization) tối ưu hóa truy vấn cho hàng triệu lượt kiểm thử.
      */
     public static function computeExpectedForCase(PgSql\Connection $db, array $case): array
     {
@@ -96,10 +109,16 @@ final class Policy
 
         // Lấy chủ sở hữu từ bảng records nếu chưa có target_owner trực tiếp
         if (empty($targetOwner) && !empty($case['record_id'])) {
-            $r = queryParams($db, 'SELECT owner_key FROM records WHERE id = $1', [(int)$case['record_id']]);
-            $row = pg_fetch_assoc($r);
-            if ($row) {
-                $targetOwner = $row['owner_key'];
+            $recId = (int)$case['record_id'];
+            if (isset(self::$recordCache[$recId])) {
+                $targetOwner = self::$recordCache[$recId];
+            } else {
+                $r = queryParams($db, 'SELECT owner_key FROM records WHERE id = $1', [$recId]);
+                $row = pg_fetch_assoc($r);
+                if ($row) {
+                    $targetOwner = $row['owner_key'];
+                    self::$recordCache[$recId] = $targetOwner;
+                }
             }
         }
 
@@ -108,22 +127,28 @@ final class Policy
             $ownerMatch = (strcasecmp((string)$accountOwner, (string)$targetOwner) === 0);
         }
 
-        // Truy vấn permission trực tiếp từ CSDL
+        // Truy vấn permission có cache in-memory
         $scope = null;
         if (!empty($roleName)) {
-            $permRes = queryParams(
-                $db,
-                'SELECT p.scope
-                 FROM permissions p
-                 JOIN roles ro ON ro.id = p.role_id
-                 JOIN resources res ON res.id = p.resource_id
-                 JOIN actions act ON act.id = p.action_id
-                 WHERE ro.project_id = $1 AND ro.name = $2 AND res.name = $3 AND act.name = $4',
-                [$projectId, $roleName, $resourceName, $actionName]
-            );
-            $pRow = pg_fetch_assoc($permRes);
-            if ($pRow) {
-                $scope = (string)$pRow['scope'];
+            $cacheKey = "{$projectId}:{$roleName}:{$resourceName}:{$actionName}";
+            if (array_key_exists($cacheKey, self::$permCache)) {
+                $scope = self::$permCache[$cacheKey];
+            } else {
+                $permRes = queryParams(
+                    $db,
+                    'SELECT p.scope
+                     FROM permissions p
+                     JOIN roles ro ON ro.id = p.role_id
+                     JOIN resources res ON res.id = p.resource_id
+                     JOIN actions act ON act.id = p.action_id
+                     WHERE ro.project_id = $1 AND ro.name = $2 AND res.name = $3 AND act.name = $4',
+                    [$projectId, $roleName, $resourceName, $actionName]
+                );
+                $pRow = pg_fetch_assoc($permRes);
+                if ($pRow) {
+                    $scope = (string)$pRow['scope'];
+                }
+                self::$permCache[$cacheKey] = $scope;
             }
         }
 

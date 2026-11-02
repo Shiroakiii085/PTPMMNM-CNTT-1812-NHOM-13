@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/Auth.php';
 
+// Thiết lập Security Headers tiêu chuẩn Enterprise cho Production
+if (!headers_sent()) {
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
+    header("Content-Security-Policy: default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:;");
+}
+
 // Xử lý chuyển đổi tài khoản người dùng trực tiếp trên header nếu có POST/GET
 if (isset($_GET['switch_user'])) {
     Auth::switchUser((string)$_GET['switch_user']);
@@ -27,6 +36,8 @@ foreach ($usersList as $u) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) . ' • ' : '' ?>AccessTester - Nền tảng kiểm thử tự động quyền truy cập Web</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/assets/css/tokens.css">
     <link rel="stylesheet" href="/assets/css/app.css">
     <!-- Chart.js Thư viện đồ họa phân tích bảo mật tiêu chuẩn quốc tế -->
@@ -37,7 +48,7 @@ foreach ($usersList as $u) {
     <header class="site-header">
         <div class="header-inner container">
             <div class="brand-group">
-                <a href="/" class="brand-link">
+                <a href="/" class="brand-link" aria-label="AccessTester Trang chủ">
                     <span class="brand-mark">AT</span>
                     <span class="brand-title">AccessTester</span>
                 </a>

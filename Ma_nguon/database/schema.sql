@@ -210,6 +210,9 @@ UPDATE run_results rr
 CREATE UNIQUE INDEX IF NOT EXISTS run_results_run_code_uq ON run_results (run_id, case_code);
 CREATE INDEX IF NOT EXISTS runs_project_idx ON runs (project_id, id DESC);
 CREATE INDEX IF NOT EXISTS project_members_user_idx ON project_members (username);
+CREATE INDEX IF NOT EXISTS run_results_outcome_idx ON run_results (run_id, outcome);
+CREATE INDEX IF NOT EXISTS test_cases_project_code_idx ON test_cases (project_id, code);
+CREATE INDEX IF NOT EXISTS roles_project_name_idx ON roles (project_id, name);
 
 -- ==========================================================
 -- 6. Schema của Ứng dụng mẫu (sample_app) trong cùng CSDL
@@ -244,3 +247,7 @@ CREATE TABLE IF NOT EXISTS sample_app.announcements (
   body text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Chỉ mục tối ưu hóa hiệu năng truy vấn lớn (Scale-out indexing)
+CREATE INDEX IF NOT EXISTS sample_notes_owner_idx ON sample_app.notes (owner_username);
+CREATE INDEX IF NOT EXISTS sample_tokens_user_idx ON sample_app.tokens (username);
