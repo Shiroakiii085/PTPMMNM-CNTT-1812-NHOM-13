@@ -52,12 +52,12 @@ require_once __DIR__ . '/../templates/header.php';
 
 <div class="page-header">
     <div class="page-header-info">
-        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;">
-            <span class="badge badge-brand">PHÉP THỬ 2</span>
-            <span class="badge badge-subtle">TÌNH HUỐNG 2: SỬA LỖI IDOR</span>
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+            <span class="badge badge-subtle">Bệnh Viện Bạch Mai</span>
+            <span class="badge badge-subtle">Xác minh vá lỗi IDOR</span>
         </div>
-        <h1 class="page-title">Đối chiếu trước & sau khi sửa lỗi</h1>
-        <p class="page-desc">Tự động so sánh hai lần chạy độc lập. Làm nổi bật các ca kiểm thử chuyển biến từ <strong>FAIL sang PASS</strong> mà không phát sinh lỗi mới.</p>
+        <h1 class="page-title">Đối Chiếu Trước & Sau Khi Sửa Lỗi IDOR</h1>
+        <p class="page-desc">Tự động so sánh hai đợt kiểm thử độc lập. Làm nổi bật ca trọng yếu <strong>R02 (Bệnh án của BN. Bình)</strong> chuyển biến từ <strong>FAIL sang PASS</strong> mà không phát sinh lỗi hồi quy.</p>
     </div>
     <div class="page-header-actions">
         <form method="GET" action="/compare.php" style="margin: 0;">
@@ -78,7 +78,7 @@ require_once __DIR__ . '/../templates/header.php';
         <input type="hidden" name="project_id" value="<?= $selectedProjectId ?>">
 
         <div class="form-group" style="flex: 1; min-width: 250px; margin-bottom: 0;">
-            <label class="form-label">Lần chạy trước (Before - Ví dụ: Trước khi sửa IDOR)</label>
+            <label class="form-label">Lần chạy trước (Before - Trước khi sửa IDOR)</label>
             <select name="before" class="form-control font-mono" onchange="this.form.submit()">
                 <?php foreach ($runs as $r): ?>
                     <option value="<?= (int)$r['id'] ?>" <?= $runBeforeId === (int)$r['id'] ? 'selected' : '' ?>>
@@ -89,7 +89,7 @@ require_once __DIR__ . '/../templates/header.php';
         </div>
 
         <div class="form-group" style="flex: 1; min-width: 250px; margin-bottom: 0;">
-            <label class="form-label">Lần chạy sau (After - Ví dụ: Sau khi sửa IDOR)</label>
+            <label class="form-label">Lần chạy sau (After - Sau khi sửa IDOR)</label>
             <select name="after" class="form-control font-mono" onchange="this.form.submit()">
                 <?php foreach ($runs as $r): ?>
                     <option value="<?= (int)$r['id'] ?>" <?= $runAfterId === (int)$r['id'] ? 'selected' : '' ?>>
@@ -109,7 +109,7 @@ require_once __DIR__ . '/../templates/header.php';
     <div class="banner-body">
         Các ca thử nghiệm chuyển biến tích cực từ <strong>FAIL sang PASS</strong>: 
         <?php foreach ($fixedCases as $fc): ?>
-            <code style="background: var(--color-pass-border); color: var(--color-pass-text); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: bold;"><?= e($fc) ?></code>
+            <code style="background: #bbf7d0; color: #166534; padding: 2px 6px; border-radius: 4px; font-weight: bold;"><?= e($fc) ?></code>
         <?php endforeach; ?>
         <br>Lỗ hổng đọc chéo dữ liệu của người dùng khác đã bị chặn đứng hoàn toàn theo chuẩn Phép thử 2.
     </div>
@@ -131,36 +131,36 @@ require_once __DIR__ . '/../templates/header.php';
     <div class="banner-body">
         Các ca thử nghiệm bị thụt lùi từ <strong>PASS sang FAIL</strong>: 
         <?php foreach ($regressionCases as $rc): ?>
-            <code style="background: var(--color-fail-border); color: var(--color-fail-text); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: bold;"><?= e($rc) ?></code>
+            <code style="background: #fecaca; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-weight: bold;"><?= e($rc) ?></code>
         <?php endforeach; ?>
     </div>
 </div>
 <?php endif; ?>
 
 <?php if ($runBefore && $runAfter): ?>
-<!-- Thẻ so sánh chỉ số và biểu đồ -->
+<!-- Thẻ so sánh chỉ số và biểu đồ chuẩn nghiên cứu -->
 <div class="grid grid-cols-3 gap-6 mb-6">
     <div class="card" style="grid-column: span 1;">
         <div class="card-header">
             <h2 class="card-title">Trước sửa (#<?= (int)$runBefore['id'] ?>)</h2>
             <span class="badge badge-subtle"><?= e($runBefore['label']) ?></span>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <div style="display: flex; justify-content: space-between;">
-                <span class="text-muted">PASS:</span>
-                <strong class="text-success"><?= (int)$runBefore['pass_count'] ?> / <?= (int)($runBefore['total'] ?: 24) ?> ca</strong>
+        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-muted">Đạt chuẩn (PASS):</span>
+                <strong class="text-success font-mono"><?= (int)$runBefore['pass_count'] ?> / <?= (int)($runBefore['total'] ?: 24) ?> ca</strong>
             </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span class="text-muted">FAIL (Lỗ hổng):</span>
-                <strong class="text-danger"><?= (int)$runBefore['fail_count'] ?> ca</strong>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-muted">Lỗ hổng (FAIL):</span>
+                <strong class="text-danger font-mono"><?= (int)$runBefore['fail_count'] ?> ca</strong>
             </div>
             <?php if ((int)($runBefore['error_count'] ?? 0) > 0): ?>
-            <div style="display: flex; justify-content: space-between;">
-                <span class="text-muted">ERROR (Lỗi kết nối):</span>
-                <strong class="text-warning"><?= (int)$runBefore['error_count'] ?> ca</strong>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-muted">Lỗi kết nối (ERROR):</span>
+                <strong class="text-warning font-mono"><?= (int)$runBefore['error_count'] ?> ca</strong>
             </div>
             <?php endif; ?>
-            <div style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-border-light); padding-top: 0.5rem;">
                 <span class="text-muted">Mã băm SHA-256:</span>
                 <code class="font-mono text-muted" style="font-size: 0.72rem;"><?= substr((string)$runBefore['config_hash'], 0, 16) ?>...</code>
             </div>
@@ -172,22 +172,22 @@ require_once __DIR__ . '/../templates/header.php';
             <h2 class="card-title">Sau sửa (#<?= (int)$runAfter['id'] ?>)</h2>
             <span class="badge badge-pass"><?= e($runAfter['label']) ?></span>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <div style="display: flex; justify-content: space-between;">
-                <span class="text-muted">PASS:</span>
-                <strong class="text-success"><?= (int)$runAfter['pass_count'] ?> / <?= (int)($runAfter['total'] ?: 24) ?> ca</strong>
+        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-muted">Đạt chuẩn (PASS):</span>
+                <strong class="text-success font-mono"><?= (int)$runAfter['pass_count'] ?> / <?= (int)($runAfter['total'] ?: 24) ?> ca</strong>
             </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span class="text-muted">FAIL (Lỗ hổng):</span>
-                <strong class="text-danger"><?= (int)$runAfter['fail_count'] ?> ca</strong>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-muted">Lỗ hổng (FAIL):</span>
+                <strong class="text-danger font-mono"><?= (int)$runAfter['fail_count'] ?> ca</strong>
             </div>
             <?php if ((int)($runAfter['error_count'] ?? 0) > 0): ?>
-            <div style="display: flex; justify-content: space-between;">
-                <span class="text-muted">ERROR (Lỗi kết nối):</span>
-                <strong class="text-warning"><?= (int)$runAfter['error_count'] ?> ca</strong>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="text-muted">Lỗi kết nối (ERROR):</span>
+                <strong class="text-warning font-mono"><?= (int)$runAfter['error_count'] ?> ca</strong>
             </div>
             <?php endif; ?>
-            <div style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-border-light); padding-top: 0.5rem;">
                 <span class="text-muted">Mã băm SHA-256:</span>
                 <code class="font-mono text-muted" style="font-size: 0.72rem;"><?= substr((string)$runAfter['config_hash'], 0, 16) ?>...</code>
             </div>
@@ -197,45 +197,42 @@ require_once __DIR__ . '/../templates/header.php';
     <div class="card" style="grid-column: span 1;">
         <div class="card-header">
             <h2 class="card-title">Biểu đồ đối chiếu</h2>
-            <span class="badge badge-subtle">CHART.JS</span>
+            <span class="badge badge-subtle">KẾT QUẢ ĐỐI SÁT</span>
         </div>
-        <div style="height: 120px;">
+        <div style="height: 130px; position: relative;">
             <canvas id="compareBarChart"></canvas>
         </div>
     </div>
 </div>
 <?php endif; ?>
 
-<!-- Bảng đối chiếu chi tiết từng ca thử -->
-<div class="card mb-6">
+<!-- Bảng đối chiếu chi tiết từng ca thử (Phân trang 8 ca / trang) -->
+<div class="card mb-6" data-paginate data-page-size="8">
     <div class="card-header">
         <div>
-            <h2 class="card-title">Bảng so sánh đối chiếu chi tiết từng ca thử</h2>
+            <h2 class="card-title">Bảng so sánh đối chiếu chi tiết</h2>
             <div class="card-subtitle">Hiển thị thay đổi mã trạng thái HTTP và kết quả thực thi</div>
         </div>
-        <?php if ($runAfterId > 0 && $runBeforeId > 0): ?>
-            <div style="display: flex; gap: 0.5rem;">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" class="form-control" style="width: 220px; font-size: 0.82rem;" placeholder="Lọc nhanh ca kiểm thử..." data-table-search>
+            <?php if ($runAfterId > 0 && $runBeforeId > 0): ?>
                 <a href="/report.php?id=<?= $runAfterId ?>&compare=<?= $runBeforeId ?>" class="btn btn-outline btn-sm" target="_blank">Báo cáo HTML</a>
                 <a href="/report.php?id=<?= $runAfterId ?>&compare=<?= $runBeforeId ?>&format=md" class="btn btn-outline btn-sm">Tải Markdown</a>
-            </div>
-        <?php endif; ?>
-    </div>
-
-    <div style="margin-bottom: 1rem;">
-        <input type="text" class="form-control" style="max-width: 320px; font-size: 0.82rem;" placeholder="Lọc nhanh ca kiểm thử..." data-table-search="#compareTable">
+            <?php endif; ?>
+        </div>
     </div>
 
     <div class="table-responsive">
         <table class="table" id="compareTable">
             <thead>
                 <tr>
-                    <th>Mã ca</th>
-                    <th>Tài khoản</th>
+                    <th style="width: 75px;">Mã ca</th>
+                    <th style="width: 130px;">Tài khoản</th>
                     <th>Yêu cầu HTTP</th>
-                    <th>Kỳ vọng</th>
-                    <th>Trước sửa (#<?= (int)$runBeforeId ?>)</th>
-                    <th>Sau sửa (#<?= (int)$runAfterId ?>)</th>
-                    <th>Đánh giá biến chuyển</th>
+                    <th style="width: 80px; text-align: center;">Kỳ vọng</th>
+                    <th style="width: 140px; text-align: center;">Trước sửa (#<?= (int)$runBeforeId ?>)</th>
+                    <th style="width: 140px; text-align: center;">Sau sửa (#<?= (int)$runAfterId ?>)</th>
+                    <th style="width: 180px; text-align: center;">Đánh giá biến chuyển</th>
                 </tr>
             </thead>
             <tbody>
@@ -252,39 +249,39 @@ require_once __DIR__ . '/../templates/header.php';
                         $isNewErr = (in_array($bOut, ['PASS', 'FAIL'], true) && $aOut === 'ERROR');
                         $methodClass = strtolower($row['method'] ?? 'get');
                     ?>
-                    <tr class="<?= $isFixed || $isResolved ? 'row-fixed' : ($isReg || $isNewErr ? 'row-regression' : '') ?>">
+                    <tr class="<?= $isFixed || $isResolved ? 'row-fixed' : ($isReg || $isNewErr ? 'row-regression' : '') ?>" style="<?= $isFixed ? 'background: #f0fdf4;' : ($isReg ? 'background: #fef2f2;' : '') ?>">
                         <td><strong class="font-mono"><?= e($row['code']) ?></strong></td>
                         <td><?= e($row['account_label'] ?? '') ?></td>
                         <td>
                             <span class="method-chip method-<?= $methodClass ?>"><?= e($row['method'] ?? 'GET') ?></span>
-                            <code style="margin-left: 0.25rem;"><?= e($row['path'] ?? '') ?></code>
+                            <code style="margin-left: 0.25rem; font-size: 12px;"><?= e($row['path'] ?? '') ?></code>
                         </td>
-                        <td><span class="badge badge-<?= strtolower($row['expected'] ?? '') ?>"><?= e($row['expected'] ?? '') ?></span></td>
-                        <td>
+                        <td style="text-align: center;"><span class="badge badge-<?= strtolower($row['expected'] ?? '') ?>"><?= e($row['expected'] ?? '') ?></span></td>
+                        <td style="text-align: center;">
                             <span class="badge badge-<?= strtolower($bOut) ?>"><?= e($bOut) ?></span>
-                            <small class="text-muted font-mono">HTTP <?= e((string)($row['before_status'] ?? '-')) ?></small>
+                            <small class="text-muted font-mono" style="margin-left: 4px;">HTTP <?= e((string)($row['before_status'] ?? '-')) ?></small>
                         </td>
-                        <td>
+                        <td style="text-align: center;">
                             <span class="badge badge-<?= strtolower($aOut) ?>"><?= e($aOut) ?></span>
-                            <small class="text-muted font-mono">HTTP <?= e((string)($row['after_status'] ?? '-')) ?></small>
+                            <small class="text-muted font-mono" style="margin-left: 4px;">HTTP <?= e((string)($row['after_status'] ?? '-')) ?></small>
                         </td>
-                        <td>
+                        <td style="text-align: center;">
                             <?php if ($isFixed): ?>
-                                <span class="badge badge-pass" style="font-weight: 800;">[FIXED] SỬA THÀNH CÔNG</span>
+                                <span class="badge badge-pass" style="font-weight: 700;">[FIXED] ĐÃ KHẮC PHỤC</span>
                             <?php elseif ($isReg): ?>
-                                <span class="badge badge-fail" style="font-weight: 800;">[REGRESSION] LỖI MỚI</span>
+                                <span class="badge badge-fail" style="font-weight: 700;">[REGRESSION] LỖI MỚI</span>
                             <?php elseif ($isResolved): ?>
-                                <span class="badge badge-pass" style="font-weight: 700;">[PHỤC HỒI] KẾT NỐI & PASS</span>
+                                <span class="badge badge-pass" style="font-weight: 600;">[PHỤC HỒI] KẾT NỐI & PASS</span>
                             <?php elseif ($isErrToFail): ?>
-                                <span class="badge badge-fail" style="font-weight: 700;">[LỖ HỔNG] PHÁT HIỆN FAIL</span>
+                                <span class="badge badge-fail" style="font-weight: 600;">[LỖ HỔNG] PHÁT HIỆN FAIL</span>
                             <?php elseif ($isNewErr): ?>
-                                <span class="badge badge-error" style="font-weight: 700;">[MẤT KẾT NỐI] GẶP LỖI</span>
+                                <span class="badge badge-error" style="font-weight: 600;">[MẤT KẾT NỐI] GẶP LỖI</span>
                             <?php elseif ($bOut === 'PASS' && $aOut === 'PASS'): ?>
-                                <span class="text-muted font-mono">Duy trì PASS</span>
+                                <span class="text-muted font-mono" style="font-size: 12px;">Duy trì PASS</span>
                             <?php elseif ($bOut === 'FAIL' && $aOut === 'FAIL'): ?>
                                 <span class="badge badge-fail">Vẫn còn FAIL</span>
                             <?php else: ?>
-                                <span class="text-muted">Không đổi</span>
+                                <span class="text-muted font-mono" style="font-size: 12px;">Không đổi</span>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -292,6 +289,12 @@ require_once __DIR__ . '/../templates/header.php';
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Phân trang chuẩn nghiên cứu 8 ca / trang -->
+    <div class="pagination-container">
+        <div class="pagination-info"></div>
+        <div class="pagination-controls"></div>
     </div>
 </div>
 
@@ -308,12 +311,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Trước (#<?= (int)$runBefore['id'] ?>)',
                         data: [<?= (int)$runBefore['pass_count'] ?>, <?= (int)$runBefore['fail_count'] ?>, <?= (int)$runBefore['error_count'] ?>],
-                        backgroundColor: '#cbd5e1'
+                        backgroundColor: '#94a3b8',
+                        borderRadius: 3
                     },
                     {
                         label: 'Sau (#<?= (int)$runAfter['id'] ?>)',
                         data: [<?= (int)$runAfter['pass_count'] ?>, <?= (int)$runAfter['fail_count'] ?>, <?= (int)$runAfter['error_count'] ?>],
-                        backgroundColor: '#2563eb'
+                        backgroundColor: '#0052cc',
+                        borderRadius: 3
                     }
                 ]
             },
@@ -321,11 +326,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'bottom', labels: { font: { size: 10, family: 'Inter' } } }
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { 
+                            font: { size: 11, family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+                            boxWidth: 12,
+                            boxHeight: 12
+                        } 
+                    }
                 },
                 scales: {
-                    y: { beginAtZero: true, max: 24, ticks: { stepSize: 6, font: { size: 9 } } },
-                    x: { ticks: { font: { size: 10, family: 'Inter' } } }
+                    y: { 
+                        beginAtZero: true, 
+                        max: 24, 
+                        ticks: { stepSize: 6, font: { size: 10 } },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    x: { 
+                        ticks: { font: { size: 11, family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' } },
+                        grid: { display: false }
+                    }
                 }
             }
         });

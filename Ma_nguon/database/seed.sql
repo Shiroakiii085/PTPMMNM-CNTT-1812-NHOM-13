@@ -7,6 +7,8 @@
 --    Chỉ dùng trên máy cục bộ; đổi bằng: bash lab.sh user <tên>
 -- ==========================================================
 INSERT INTO app_users (username, display_name, password_hash) VALUES
+('admin_bv',     'Quản trị viên Bệnh viện (admin_bv)', '$2y$12$DNJuWODx6CAs/B4.UFqSzurpA1BdqEz6rsPnD3rGDdOnCv7ZIj8Q.'),
+('tester_sec',   'Kỹ sư Kiểm thử Bảo mật (tester_sec)', '$2y$12$DNJuWODx6CAs/B4.UFqSzurpA1BdqEz6rsPnD3rGDdOnCv7ZIj8Q.'),
 ('phamle',       'Phạm Lê (trưởng nhóm A)',        '$2y$12$DNJuWODx6CAs/B4.UFqSzurpA1BdqEz6rsPnD3rGDdOnCv7ZIj8Q.'),
 ('dev1',         'Dev 1 (người viết ca – nhóm A)', '$2y$12$DNJuWODx6CAs/B4.UFqSzurpA1BdqEz6rsPnD3rGDdOnCv7ZIj8Q.'),
 ('auditor_user', 'Kiểm toán (chỉ xem báo cáo)',    '$2y$12$DNJuWODx6CAs/B4.UFqSzurpA1BdqEz6rsPnD3rGDdOnCv7ZIj8Q.'),
@@ -23,6 +25,8 @@ ON CONFLICT (id) DO UPDATE SET description = EXCLUDED.description;
 
 -- Thành viên công cụ: owner / editor / viewer. dev2 (nhóm B) chỉ được XEM dự án A.
 INSERT INTO project_members (project_id, username, member_role) VALUES
+(1, 'admin_bv', 'owner'),
+(1, 'tester_sec', 'editor'),
 (1, 'phamle', 'owner'),
 (1, 'dev1', 'editor'),
 (1, 'auditor_user', 'viewer'),

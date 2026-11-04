@@ -2,9 +2,9 @@
     <footer class="site-footer">
         <div class="container footer-inner">
             <div>
-                <p><strong>AccessTester Security Suite</strong> • Học phần Phát triển phần mềm mã nguồn mở (Đề tài 4)</p>
+                <p><strong>MediSec Audit</strong> • Bệnh Viện Bạch Mai • Học phần Phát triển phần mềm mã nguồn mở (Đề tài 4)</p>
                 <p class="text-muted" style="margin-top: 0.2rem; font-size: 0.8rem;">
-                    Bảo mật danh sách cho phép (Target Allowlist) chủ động giới hạn HTTP. Tự động khử định danh Bearer Token và mật khẩu.
+                    Bảo vệ danh sách cho phép (Target Allowlist) giới hạn cổng mạng an toàn. Tự động khử định danh Bearer Token và mật khẩu.
                 </p>
             </div>
             <div class="footer-compliance">

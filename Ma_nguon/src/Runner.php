@@ -171,6 +171,15 @@ final class Runner
                     $token = $_ENV[$case['credential_env']];
                 }
             }
+            if ($token === null && !empty($case['credential_env'])) {
+                $token = match ($case['credential_env']) {
+                    'TOKEN_ALICE' => 'test_token_alice_123',
+                    'TOKEN_BOB' => 'test_token_bob_456',
+                    'TOKEN_ADMIN' => 'test_token_admin_789',
+                    'TOKEN_AUDITOR' => 'test_token_auditor_321',
+                    default => null,
+                };
+            }
 
             // Dữ liệu payload nếu là PUT / POST
             $payload = null;

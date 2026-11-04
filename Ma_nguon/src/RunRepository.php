@@ -244,4 +244,24 @@ final class RunRepository
             [$runId]
         );
     }
+
+    public function deleteRun(int $runId, int $projectId): bool
+    {
+        $result = queryParams(
+            $this->connection,
+            'DELETE FROM runs WHERE id = $1 AND project_id = $2',
+            [$runId, $projectId]
+        );
+        return pg_affected_rows($result) > 0;
+    }
+
+    public function deleteAllForProject(int $projectId): int
+    {
+        $result = queryParams(
+            $this->connection,
+            'DELETE FROM runs WHERE project_id = $1',
+            [$projectId]
+        );
+        return pg_affected_rows($result);
+    }
 }

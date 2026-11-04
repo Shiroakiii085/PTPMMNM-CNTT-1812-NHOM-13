@@ -296,15 +296,17 @@ if (isset($_GET['bug'])) {
     @file_put_contents($flagFile, $bugIdor ? '1' : '0');
 } elseif (isset($_SERVER['HTTP_X_BUG_IDOR'])) {
     $bugIdor = ($_SERVER['HTTP_X_BUG_IDOR'] === '1');
-} elseif (isset($_SESSION['bug_idor_flag'])) {
-    // Ưu tiên session người dùng khi tương tác trên trình duyệt Web
-    $bugIdor = ($_SESSION['bug_idor_flag'] === true);
-} elseif (getenv('BUG_IDOR') !== false && getenv('BUG_IDOR') !== '') {
-    // Dành cho kiểm thử tự động e2e runner
+} elseif (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 8295 && getenv('BUG_IDOR') !== false && getenv('BUG_IDOR') !== '') {
+    // Dành riêng cho kiểm thử tự động e2e runner trên cổng 8295
     $bugIdor = (getenv('BUG_IDOR') === '1');
 } elseif (file_exists($flagFile)) {
     $content = trim((string)@file_get_contents($flagFile));
     $bugIdor = ($content === '1');
+} elseif (isset($_SESSION['bug_idor_flag'])) {
+    // Ưu tiên session người dùng khi tương tác trên trình duyệt Web
+    $bugIdor = ($_SESSION['bug_idor_flag'] === true);
+} elseif (getenv('BUG_IDOR') !== false && getenv('BUG_IDOR') !== '') {
+    $bugIdor = (getenv('BUG_IDOR') === '1');
 }
 
 // =============================================================================
@@ -5571,7 +5573,7 @@ if ($view === 'tester') {
 
             <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; font-size: 13px;">
               <strong>Giải thích ca kiểm thử đặc biệt R02 (Bẫy IDOR):</strong><br>
-              • Khi <code>BUG_IDOR=1</code> (Có lỗ hổng): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#dc2626;font-weight:700;">FAIL</span> do máy chủ trả về HTTP 200 OK và làm rò rỉ bệnh án Bình cho An.<br>
+              • Khi <code>BUG_IDOR=1</code> (Bật lỗi): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#dc2626;font-weight:700;">FAIL</span> do máy chủ trả về HTTP 200 OK và làm rò rỉ bệnh án của bệnh nhân khác.<br>
               • Khi <code>BUG_IDOR=0</code> (Đã vá): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#16a34a;font-weight:700;">PASS</span> do máy chủ chặn lại với HTTP 403 Forbidden!
             </div>
 

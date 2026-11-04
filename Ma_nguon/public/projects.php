@@ -47,6 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'add_member') {
+            if (!Auth::canManagePersonnel($selectedProjectId, $currentUser)) {
+                throw new RuntimeException("Tài khoản '$currentUser' (Nhân viên kiểm thử) không có thẩm quyền quản trị nhân sự. Chỉ Quản trị viên (admin_bv) mới có thẩm quyền này.");
+            }
             $username = trim($_POST['username'] ?? '');
             $role = trim($_POST['member_role'] ?? 'viewer');
             if ($username !== '') {
@@ -124,12 +127,12 @@ require_once __DIR__ . '/../templates/header.php';
 
 <div class="page-header">
     <div class="page-header-info">
-        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;">
-            <span class="badge badge-brand">CHỨC NĂNG 1</span>
-            <span class="badge badge-subtle">RBAC & ABAC SECURITY MATRIX</span>
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+            <span class="badge badge-subtle">Bệnh Viện Bạch Mai</span>
+            <span class="badge badge-subtle">Ma trận RBAC & ABAC</span>
         </div>
-        <h1 class="page-title">Quản lý dự án & Ma trận phân quyền</h1>
-        <p class="page-desc">Định nghĩa vai trò, tài nguyên, bản ghi - chủ sở hữu và ma trận phân quyền. Mọi quyền chưa khai báo mặc định là <strong>DENY</strong>.</p>
+        <h1 class="page-title">Cấu Hình Chính Sách & Ma Trận Phân Quyền</h1>
+        <p class="page-desc">Định nghĩa vai trò nhân sự y tế, tài nguyên bệnh án, chủ sở hữu hồ sơ và ma trận phân quyền. Nguyên tắc bảo vệ: Quyền chưa khai báo mặc định là <strong>DENY (Từ chối)</strong>.</p>
     </div>
     <div class="page-header-actions">
         <form method="GET" action="/projects.php" style="margin: 0;">
@@ -141,8 +144,8 @@ require_once __DIR__ . '/../templates/header.php';
                 <?php endforeach; ?>
             </select>
         </form>
-        <button type="button" class="btn btn-secondary" onclick="const f = document.getElementById('newProjectPanel'); f.style.display = f.style.display === 'none' ? 'block' : 'none';">
-            + Dự án mới
+        <button type="button" class="btn btn-secondary btn-sm" onclick="const f = document.getElementById('newProjectPanel'); f.style.display = f.style.display === 'none' ? 'block' : 'none';">
+            Dự án mới
         </button>
     </div>
 </div>
@@ -164,9 +167,9 @@ require_once __DIR__ . '/../templates/header.php';
 <?php endif; ?>
 
 <!-- Form tạo dự án mới (Ẩn/Hiện) -->
-<div id="newProjectPanel" class="card mb-6" style="display: none; border-left: 4px solid var(--color-brand-accent); animation: slideDown 0.2s ease;">
+<div id="newProjectPanel" class="card mb-6" style="display: none; border-left: 4px solid var(--color-brand-primary);">
     <div class="card-header">
-        <h2 class="card-title">+ Khởi tạo dự án kiểm thử mới</h2>
+        <h2 class="card-title">Khởi tạo dự án kiểm thử mới</h2>
         <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('newProjectPanel').style.display='none';">Đóng</button>
     </div>
     <form method="POST" action="/projects.php">
@@ -223,26 +226,26 @@ require_once __DIR__ . '/../templates/header.php';
         </button>
     </div>
 
-    <!-- TAB 1: Ma trận phân quyền RBAC/ABAC -->
+    <!-- TAB 1: Ma trận phân quyền RBAC/ABAC (Có phân trang 8 dòng / trang) -->
     <div id="tab-matrix" class="tab-pane" style="display: block;">
-        <div class="card mb-6">
+        <div class="card mb-6" data-paginate data-page-size="8">
             <div class="card-header">
                 <div>
                     <h2 class="card-title">Ma trận quy tắc truy cập (Permissions Matrix)</h2>
                     <div class="card-subtitle">Kỹ thuật 1: Quyền chưa được khai báo phải bị từ chối (Mặc định = DENY)</div>
                 </div>
-                <input type="text" class="form-control" style="max-width: 250px; font-size: 0.82rem;" placeholder="Lọc vai trò, tài nguyên..." data-table-search="#matrixTable">
+                <input type="text" class="form-control" style="max-width: 250px; font-size: 0.82rem;" placeholder="Lọc vai trò, tài nguyên..." data-table-search>
             </div>
 
             <div class="table-responsive mb-4">
                 <table class="table" id="matrixTable">
                     <thead>
                         <tr>
-                            <th>Vai trò người dùng</th>
-                            <th>Tài nguyên mục tiêu</th>
-                            <th>Hành động</th>
+                            <th style="width: 160px;">Vai trò người dùng</th>
+                            <th style="width: 180px;">Tài nguyên mục tiêu</th>
+                            <th style="width: 140px;">Hành động</th>
                             <th>Phạm vi quyền (Scope)</th>
-                            <?php if ($canEdit): ?><th style="text-align: right;">Thao tác</th><?php endif; ?>
+                            <?php if ($canEdit): ?><th style="width: 100px; text-align: right;">Thao tác</th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -282,12 +285,18 @@ require_once __DIR__ . '/../templates/header.php';
                 </table>
             </div>
 
+            <!-- Phân trang 8 dòng / trang -->
+            <div class="pagination-container">
+                <div class="pagination-info"></div>
+                <div class="pagination-controls"></div>
+            </div>
+
             <?php if ($canEdit): ?>
-            <div style="background: var(--color-bg-subtle); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--color-border-light);">
+            <div style="background: var(--color-bg-subtle); padding: 1.25rem; border-radius: 6px; border: 1px solid var(--color-border-light); margin-top: 1rem;">
                 <form method="POST">
                     <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
                     <input type="hidden" name="action" value="set_permission">
-                    <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">+ Thêm hoặc cập nhật quyền hạn trong ma trận</div>
+                    <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">Thêm hoặc cập nhật quyền hạn trong ma trận</div>
                     <div class="grid grid-cols-4 gap-4" style="align-items: flex-end;">
                         <div class="form-group" style="margin: 0;">
                             <label class="form-label">Vai trò</label>
@@ -330,24 +339,24 @@ require_once __DIR__ . '/../templates/header.php';
         </div>
     </div>
 
-    <!-- TAB 2: Bản ghi & Quyền sở hữu -->
+    <!-- TAB 2: Bản ghi & Quyền sở hữu (Có phân trang 8 dòng / trang) -->
     <div id="tab-records" class="tab-pane" style="display: none;">
-        <div class="card mb-6">
+        <div class="card mb-6" data-paginate data-page-size="8">
             <div class="card-header">
                 <div>
                     <h2 class="card-title">Bản ghi & Chủ sở hữu dữ liệu (Records & Ownership)</h2>
                     <div class="card-subtitle">Phục vụ cơ chế Policy Oracle đối soát quyền hạn ABAC</div>
                 </div>
-                <span class="badge badge-subtle"><?= count($records) ?> bản ghi</span>
+                <input type="text" class="form-control" style="max-width: 250px; font-size: 0.82rem;" placeholder="Lọc bản ghi, chủ sở hữu..." data-table-search>
             </div>
 
             <div class="table-responsive mb-4">
-                <table class="table">
+                <table class="table" id="recordsTable">
                     <thead>
                         <tr>
-                            <th>Tài nguyên</th>
-                            <th>Mã định danh bản ghi</th>
-                            <th>Chủ sở hữu thực sự</th>
+                            <th style="width: 180px;">Tài nguyên</th>
+                            <th style="width: 180px;">Mã định danh bản ghi</th>
+                            <th style="width: 180px;">Chủ sở hữu thực sự</th>
                             <th>Mô tả bản ghi</th>
                         </tr>
                     </thead>
@@ -370,12 +379,18 @@ require_once __DIR__ . '/../templates/header.php';
                 </table>
             </div>
 
+            <!-- Phân trang 8 dòng / trang -->
+            <div class="pagination-container">
+                <div class="pagination-info"></div>
+                <div class="pagination-controls"></div>
+            </div>
+
             <?php if ($canEdit): ?>
-            <div style="background: var(--color-bg-subtle); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--color-border-light);">
+            <div style="background: var(--color-bg-subtle); padding: 1.25rem; border-radius: 6px; border: 1px solid var(--color-border-light); margin-top: 1rem;">
                 <form method="POST">
                     <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
                     <input type="hidden" name="action" value="add_record">
-                    <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">+ Khai báo bản ghi & chủ sở hữu mới</div>
+                    <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">Khai báo bản ghi & chủ sở hữu mới</div>
                     <div class="grid grid-cols-4 gap-4">
                         <div class="form-group" style="margin: 0;">
                             <label class="form-label">Tài nguyên</label>
@@ -421,9 +436,9 @@ require_once __DIR__ . '/../templates/header.php';
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Tài khoản</th>
+                            <th style="width: 180px;">Tài khoản</th>
                             <th>Tên hiển thị</th>
-                            <th>Vai trò trong công cụ</th>
+                            <th style="width: 180px;">Vai trò trong công cụ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -442,12 +457,12 @@ require_once __DIR__ . '/../templates/header.php';
                 </table>
             </div>
 
-            <?php if ($canEdit): ?>
-            <div style="background: var(--color-bg-subtle); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--color-border-light);">
+            <?php if (Auth::canManagePersonnel($selectedProjectId, $currentUser)): ?>
+            <div style="background: var(--color-bg-subtle); padding: 1.25rem; border-radius: 6px; border: 1px solid var(--color-border-light);">
                 <form method="POST">
                     <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
                     <input type="hidden" name="action" value="add_member">
-                    <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">+ Gán hoặc cập nhật vai trò thành viên</div>
+                    <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 0.95rem;">Gán hoặc cập nhật vai trò thành viên</div>
                     <div class="grid grid-cols-3 gap-4" style="align-items: flex-end;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Tên người dùng (Username)</label>
@@ -464,6 +479,10 @@ require_once __DIR__ . '/../templates/header.php';
                         <button type="submit" class="btn btn-primary" style="height: 2.6rem;">Cập nhật vai trò</button>
                     </div>
                 </form>
+            </div>
+            <?php else: ?>
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px 16px; font-size: 13px; color: #1e40af;">
+                <strong>Giới hạn thẩm quyền:</strong> Bạn đang đăng nhập với tư cách Nhân viên kiểm thử (tester_sec). Bạn có toàn quyền thực thi và cấu hình ca kiểm thử, nhưng không có quyền phân quyền hay quản trị nhân sự.
             </div>
             <?php endif; ?>
         </div>

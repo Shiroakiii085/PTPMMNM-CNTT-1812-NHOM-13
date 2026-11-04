@@ -1,33 +1,57 @@
 /* ==========================================================================
-   AccessTester Design Tokens (Taste-Skill v2 Compliant)
-   Anti-slop house style: Restrained chrome, 3% color budget focused on data,
-   flat surfaces (1px borders, zero blurry drop shadows), tabular figures.
+   Floria Luxury Architectural Design System (Adapted for MediSec Audit)
+   Inspired by: https://floria-landing-page.vercel.app/#weddings
+   Taste-Skill Principles:
+   - Deep architectural zinc/black & luminous stone white
+   - Emerald/sage botanical-security accents (#10b981, #002c22, #a4f4cf)
+   - Organic, high-end bento cards (radius 2rem - 2.5rem)
+   - Floating pill navigation with frosted glass (blur-md)
+   - Zero AI-slop, zero cheesy icons, pure editorial typography
    ========================================================================== */
+
 :root {
-  /* Surface Grounds (Flat, crisp, zero blurred glow) */
-  --color-bg-app: #f8fafc;              /* Slate-50 Crisp neutral ground */
-  --color-bg-card: #ffffff;             /* Pure White flat surface */
-  --color-bg-subtle: #f1f5f9;           /* Slate-100 Recessed surface */
-  --color-bg-muted: #e2e8f0;            /* Slate-200 Hover & divider */
-  --color-bg-inset: #0f172a;            /* Slate-900 High-contrast inset */
+  /* Floria Grounds: Stone White Canvas & Deep Velvet Zinc */
+  --color-bg-app: #fbfbfc;              /* Warm stone-50 porcelain canvas */
+  --color-bg-card: #ffffff;             /* Crisp pure white */
+  --color-bg-subtle: #f4f4f5;           /* Zinc-100 muted blocks */
+  --color-bg-muted: #e4e4e7;            /* Zinc-200 dividers */
+  --color-bg-dark: #09090b;             /* Zinc-950 Dark Architectural surface */
+  --color-bg-dark-card: #18181b;        /* Zinc-900 Dark card */
+  --color-bg-dark-subtle: #27272a;      /* Zinc-800 Dark hover/border */
 
-  /* Neutral Typography (Slate scale) */
-  --color-text-main: #0f172a;           /* Slate-900 High Contrast Text */
-  --color-text-body: #334155;           /* Slate-700 High Readability Body */
-  --color-text-muted: #64748b;          /* Slate-500 Meta/captions */
-  --color-text-subtle: #94a3b8;         /* Slate-400 Secondary hints */
-  --color-text-inverse: #ffffff;        /* Pure white for dark badges */
+  /* Floria High-End Editorial Typography */
+  --color-text-main: #09090b;           /* Zinc-950 Deepest text */
+  --color-text-body: #27272a;           /* Zinc-800 Readable body */
+  --color-text-muted: #71717a;          /* Zinc-500 Editorial subheadings */
+  --color-text-subtle: #a1a1aa;         /* Zinc-400 Subtle captions */
+  --color-text-inverse: #ffffff;        /* Pure white on dark */
+  --color-text-inverse-muted: #d4d4d8;  /* Zinc-300 on dark */
 
-  /* Hairline Borders (Crisp 1px separation instead of blurry shadows) */
-  --color-border-light: #e2e8f0;        /* Slate-200 Hairline divider */
-  --color-border-strong: #cbd5e1;       /* Slate-300 Card and form outline */
-  --color-border-focus: #0f172a;        /* Slate-900 High-intent focus */
+  /* Floria Emerald & Botanical-Security Accents */
+  --color-emerald-primary: #10b981;     /* Floria Emerald-500 */
+  --color-emerald-hover: #059669;       /* Emerald-600 */
+  --color-emerald-dark: #002c22;        /* Floria signature deep emerald-950 */
+  --color-emerald-light: #ecfdf5;       /* Emerald-50 */
+  --color-emerald-border: #a7f3d0;      /* Emerald-200 */
+  --color-emerald-pill: #a4f4cf;        /* Floria selection emerald-200 */
 
-  /* Data-Only Semantic Accents (Color reserved strictly for state) */
+  /* Medical Blue Secondary Accent */
+  --color-primary: #0052cc;             /* Deep Clinical Blue */
+  --color-primary-hover: #0747a6;
+  --color-primary-light: #eff6ff;
+  --color-primary-border: #bfdbfe;
+
+  /* Floria Hairline Borders & Glass Rings */
+  --color-border-light: #e4e4e7;        /* Zinc-200 hairline */
+  --color-border-strong: #d4d4d8;       /* Zinc-300 */
+  --color-border-dark: rgba(255, 255, 255, 0.1); /* 1px ring on dark */
+  --color-border-focus: #10b981;
+
+  /* Data-Driven Semantic State Colors */
   --color-pass-bg: #ecfdf5;             /* Emerald-50 */
   --color-pass-text: #065f46;           /* Emerald-800 */
   --color-pass-border: #a7f3d0;         /* Emerald-200 */
-  --color-pass-accent: #059669;         /* Emerald-600 */
+  --color-pass-accent: #10b981;         /* Emerald-500 */
 
   --color-fail-bg: #fef2f2;             /* Red-50 */
   --color-fail-text: #991b1b;           /* Red-800 */
@@ -39,41 +63,44 @@
   --color-warn-border: #fde68a;         /* Amber-200 */
   --color-warn-accent: #d97706;         /* Amber-600 */
 
-  --color-info-bg: #f0f9ff;             /* Sky-50 */
-  --color-info-text: #075985;           /* Sky-800 */
-  --color-info-border: #bae6fd;         /* Sky-200 */
-  --color-info-accent: #0284c7;         /* Sky-600 */
+  --color-info-bg: #f4f4f5;             /* Zinc-100 */
+  --color-info-text: #18181b;           /* Zinc-900 */
+  --color-info-border: #e4e4e7;         /* Zinc-200 */
+  --color-info-accent: #71717a;         /* Zinc-500 */
 
-  /* HTTP Method Specific Color Tags (Concise, high-legibility) */
-  --color-method-get: #0284c7;          /* Sky-600 */
-  --color-method-get-bg: #f0f9ff;
-  --color-method-get-border: #bae6fd;
+  /* HTTP Method Specific Color Tags */
+  --color-method-get: #0052cc;
+  --color-method-get-bg: #eff6ff;
+  --color-method-get-border: #bfdbfe;
 
-  --color-method-post: #059669;         /* Emerald-600 */
+  --color-method-post: #059669;
   --color-method-post-bg: #ecfdf5;
   --color-method-post-border: #a7f3d0;
 
-  --color-method-put: #d97706;          /* Amber-600 */
+  --color-method-put: #d97706;
   --color-method-put-bg: #fffbeb;
   --color-method-put-border: #fde68a;
 
-  --color-method-delete: #dc2626;       /* Red-600 */
+  --color-method-delete: #dc2626;
   --color-method-delete-bg: #fef2f2;
   --color-method-delete-border: #fecaca;
 
-  /* Taste-Skill Flat Elevation (17 of 23 real product screens have no card shadow) */
-  --shadow-flat: none;
-  --shadow-hairline: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
-  --shadow-overlay: 0 4px 12px 0 rgba(15, 23, 42, 0.08);
+  /* Floria Signature Radii: Generous Architectural Rounded Corners */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-bento: 2rem;                 /* 32px Bento Card Radius */
+  --radius-bento-lg: 2.5rem;            /* 40px Floria Hero/Archive Radius */
+  --radius-pill: 9999px;                /* Perfect circular pill */
 
-  /* Precise Radii Scale */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-pill: 9999px;
+  /* Typography Stacks */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Geist", "Plus Jakarta Sans", "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
 
-  /* Snappy Transitions */
-  --transition-fast: 0.12s cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-normal: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0, 0, 0.2, 1);
+  --transition-luxury: 700ms cubic-bezier(0, 0, 0.2, 1);
 }

@@ -93,21 +93,21 @@ require_once __DIR__ . '/../templates/header.php';
 
 <div class="page-header">
     <div class="page-header-info">
-        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;">
-            <span class="badge badge-brand">CHỨC NĂNG 2</span>
-            <span class="badge badge-subtle"><?= count($cases) ?> CA HIỆN TẠI</span>
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+            <span class="badge badge-subtle">Bệnh Viện Bạch Mai</span>
+            <span class="badge badge-subtle"><?= count($cases) ?> ca kiểm định</span>
         </div>
-        <h1 class="page-title">Bộ ca kiểm thử tự động quyền truy cập</h1>
-        <p class="page-desc">Khai báo tài khoản, phương thức HTTP, đích truy cập, quyền mong đợi và điều kiện kiểm tra dữ liệu phản hồi.</p>
+        <h1 class="page-title">Danh Mục 24 Ca Kiểm Định Phân Quyền Bệnh Án</h1>
+        <p class="page-desc">Hệ thống 24 ca kiểm định RBAC/ABAC trên 6 nhóm nghiệp vụ: Bệnh án điện tử, Đơn thuốc, Cập nhật hồ sơ, Danh bạ nhân viên BV và Thông báo chung.</p>
     </div>
     <div class="page-header-actions">
         <?php if ($canEdit): ?>
-            <button type="button" class="btn btn-secondary" onclick="const p = document.getElementById('addCaseDrawer'); p.style.display = p.style.display === 'none' ? 'block' : 'none';">
-                + Thêm ca thử mới
+            <button type="button" class="btn btn-secondary btn-sm" onclick="const p = document.getElementById('addCaseDrawer'); p.style.display = p.style.display === 'none' ? 'block' : 'none';">
+                Thêm ca thử mới
             </button>
         <?php endif; ?>
-        <a href="/cases.php?project_id=<?= $selectedProjectId ?>&export=json" class="btn btn-outline">Xuất file JSON</a>
-        <a href="/runs.php?project_id=<?= $selectedProjectId ?>" class="btn btn-primary">Chạy kiểm thử ngay</a>
+        <a href="/cases.php?project_id=<?= $selectedProjectId ?>&export=json" class="btn btn-outline btn-sm">Xuất JSON</a>
+        <a href="/runs.php?project_id=<?= $selectedProjectId ?>" class="btn btn-primary btn-sm">Chạy kiểm thử ngay</a>
     </div>
 </div>
 
@@ -129,7 +129,7 @@ require_once __DIR__ . '/../templates/header.php';
 
 <!-- Thanh tìm kiếm & Bộ lọc trực tiếp -->
 <div class="filter-bar">
-    <div class="filter-group" style="flex: 2; min-width: 250px;">
+    <div class="filter-group" style="flex: 2; min-width: 260px;">
         <label for="tableSearchInput">TÌM NHANH:</label>
         <input type="text" id="tableSearchInput" class="form-control" style="width: 100%;" placeholder="Nhập mã ca (R02, U01), endpoint, role..." data-table-search="#casesTable">
     </div>
@@ -178,10 +178,10 @@ require_once __DIR__ . '/../templates/header.php';
 
 <?php if ($canEdit): ?>
 <!-- Form khai báo ca thử mới (Thu gọn / Mở rộng) -->
-<div id="addCaseDrawer" class="card mb-6" style="display: none; border-left: 4px solid var(--color-brand-accent); animation: slideDown 0.2s ease;">
+<div id="addCaseDrawer" class="card mb-6" style="display: none; border-left: 4px solid var(--color-brand-primary);">
     <div class="card-header">
         <div>
-            <h2 class="card-title">+ Khai báo ca kiểm thử mới (Chức năng 2)</h2>
+            <h2 class="card-title">Khai báo ca kiểm thử mới (Chức năng 2)</h2>
             <div class="card-subtitle">Định nghĩa yêu cầu HTTP và điều kiện kiểm chứng quyền tự động</div>
         </div>
         <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('addCaseDrawer').style.display='none';">Đóng</button>
@@ -193,7 +193,7 @@ require_once __DIR__ . '/../templates/header.php';
         <div class="grid grid-cols-4 gap-4 mb-4">
             <div class="form-group">
                 <label class="form-label">Mã ca thử</label>
-                <input type="text" name="code" class="form-control" placeholder="ví dụ: X01" required>
+                <input type="text" name="code" class="form-control font-mono" placeholder="ví dụ: X01" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Tài khoản thực hiện</label>
@@ -251,16 +251,16 @@ require_once __DIR__ . '/../templates/header.php';
         <div class="grid grid-cols-3 gap-4 mb-4">
             <div class="form-group">
                 <label class="form-label">Mã HTTP mong đợi</label>
-                <input type="number" name="expected_status" class="form-control" placeholder="200, 401, 403...">
+                <input type="number" name="expected_status" class="form-control font-mono" placeholder="200, 401, 403...">
                 <span class="form-hint">Để trống nếu muốn tự động suy diễn theo ALLOW/DENY</span>
             </div>
             <div class="form-group">
                 <label class="form-label">Cấm xuất hiện (Data Leak Check)</label>
-                <input type="text" name="must_not_contain" class="form-control" placeholder="Chuỗi bí mật cấm rò rỉ">
+                <input type="text" name="must_not_contain" class="form-control font-mono" placeholder="Chuỗi bí mật cấm rò rỉ">
             </div>
             <div class="form-group">
                 <label class="form-label">Bắt buộc phải chứa</label>
-                <input type="text" name="must_contain" class="form-control" placeholder="Chuỗi xác nhận nội dung">
+                <input type="text" name="must_contain" class="form-control font-mono" placeholder="Chuỗi xác nhận nội dung">
             </div>
         </div>
 
@@ -274,21 +274,31 @@ require_once __DIR__ . '/../templates/header.php';
 </div>
 <?php endif; ?>
 
-<!-- Bảng danh sách ca thử -->
-<div class="card mb-6">
+<!-- Bảng danh sách ca thử có phân trang 8 ca / trang và tìm kiếm -->
+<div class="card mb-6" data-paginate data-page-size="8" data-search-input="#tableSearchInput">
+    <div class="card-header">
+        <div>
+            <h2 class="card-title">Bảng thông số ca kiểm định</h2>
+            <div class="card-subtitle">Mỗi trang hiển thị 8 ca kiểm định có kèm bộ lọc nhanh</div>
+        </div>
+        <div style="font-size: 13px; color: var(--color-text-muted);">
+            Tổng số: <strong><?= count($cases) ?></strong> ca
+        </div>
+    </div>
+
     <div class="table-responsive">
         <table class="table" id="casesTable">
             <thead>
                 <tr>
-                    <th>Mã ca</th>
-                    <th>Tài khoản</th>
+                    <th style="width: 75px;">Mã ca</th>
+                    <th style="width: 140px;">Tài khoản</th>
                     <th>Yêu cầu HTTP</th>
-                    <th>Chủ sở hữu</th>
-                    <th>Kỳ vọng</th>
-                    <th>HTTP Code</th>
+                    <th style="width: 100px;">Chủ sở hữu</th>
+                    <th style="width: 90px; text-align: center;">Kỳ vọng</th>
+                    <th style="width: 95px; text-align: center;">HTTP Code</th>
                     <th>Kiểm tra nội dung (Data Leak)</th>
-                    <th>Đặc điểm kiểm thử</th>
-                    <?php if ($canEdit): ?><th style="text-align: right;">Thao tác</th><?php endif; ?>
+                    <th style="width: 140px;">Đặc điểm kiểm thử</th>
+                    <?php if ($canEdit): ?><th style="width: 70px; text-align: right;">Thao tác</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -300,40 +310,72 @@ require_once __DIR__ . '/../templates/header.php';
                         $isUndeclared = in_array($c['code'], ['U03', 'U04', 'M02', 'M03'], true);
                         $methodClass = strtolower($c['method']);
                     ?>
-                    <tr style="<?= $isBugTrigger ? 'background-color: rgba(254, 243, 199, 0.4);' : '' ?>">
-                        <td><strong class="font-mono"><?= e($c['code']) ?></strong></td>
+                    <tr style="<?= $isBugTrigger ? 'background-color: #fef2f2;' : '' ?>">
                         <td>
-                            <strong><?= e($c['account_label']) ?></strong><br>
-                            <span class="badge badge-subtle"><?= e($c['role_name'] ?? 'anon') ?></span>
+                            <strong class="font-mono" style="<?= $isBugTrigger ? 'color: #dc2626; font-size: 13px;' : '' ?>"><?= e($c['code']) ?></strong>
+                            <?php if ($isBugTrigger): ?>
+                                <span style="display: block; font-size: 10px; color: #dc2626; font-weight: 700;">IDOR TEST</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php 
+                            $acc = $c['account_label'];
+                            if ($acc === 'alice'): ?>
+                                <span class="patient-pill patient-an">BN. An (alice)</span>
+                            <?php elseif ($acc === 'bob'): ?>
+                                <span class="patient-pill patient-binh">BN. Bình (bob)</span>
+                            <?php elseif ($acc === 'admin1'): ?>
+                                <span class="patient-pill medical-admin">Admin BV (admin1)</span>
+                            <?php elseif ($acc === 'auditor1'): ?>
+                                <span class="patient-pill medical-auditor">Kiểm toán (auditor1)</span>
+                            <?php else: ?>
+                                <span class="patient-pill" style="background: #f1f5f9; color: #475569;">Khách (anon)</span>
+                            <?php endif; ?>
+                            <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">
+                                <code style="font-size: 11px;"><?= e($acc) ?></code> (<?= e($c['role_name'] ?? 'anon') ?>)
+                            </div>
                         </td>
                         <td>
                             <span class="method-chip method-<?= $methodClass ?>"><?= e($c['method']) ?></span>
-                            <code style="margin-left: 0.35rem;"><?= e($c['path']) ?></code>
+                            <code style="margin-left: 6px; font-weight: 500; font-size: 12px;"><?= e($c['path']) ?></code>
+                            <?php if ($c['code'] === 'R02'): ?>
+                                <div style="font-size: 11.5px; color: #dc2626; margin-top: 3px; font-weight: 600;">
+                                    An xem trộm Bệnh án #3 của Bình (Lỗ hổng IDOR)
+                                </div>
+                            <?php elseif ($c['code'] === 'R01'): ?>
+                                <div style="font-size: 11.5px; color: #16a34a; margin-top: 3px;">
+                                    An xem Bệnh án #1 của chính mình
+                                </div>
+                            <?php elseif ($c['code'] === 'R03'): ?>
+                                <div style="font-size: 11.5px; color: #0052cc; margin-top: 3px;">
+                                    QTV Viện xem Bệnh án #3 giám sát
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if (!empty($c['target_owner'])): ?>
                                 <span class="badge badge-subtle font-mono"><?= e($c['target_owner']) ?></span>
                             <?php else: ?>
-                                <span class="text-muted">-</span>
+                                <span class="text-muted font-mono">-</span>
                             <?php endif; ?>
                         </td>
-                        <td>
+                        <td style="text-align: center;">
                             <span class="badge badge-<?= strtolower($c['expected']) ?>">
                                 <?= e($c['expected']) ?>
                             </span>
                         </td>
-                        <td>
-                            <?= !empty($c['expected_status']) ? '<span class="font-mono">HTTP ' . (int)$c['expected_status'] . '</span>' : '<span class="text-muted">Tự động</span>' ?>
+                        <td style="text-align: center;">
+                            <?= !empty($c['expected_status']) ? '<span class="font-mono" style="font-size: 12px; font-weight: 600;">HTTP ' . (int)$c['expected_status'] . '</span>' : '<span class="text-muted" style="font-size: 12px;">Tự động</span>' ?>
                         </td>
                         <td>
                             <?php if (!empty($c['must_not_contain'])): ?>
-                                <div><small class="text-danger"><strong>[CẤM]:</strong> <code><?= e($c['must_not_contain']) ?></code></small></div>
+                                <div><small class="text-danger" style="font-size: 11px;"><strong>[CẤM]:</strong> <code><?= e($c['must_not_contain']) ?></code></small></div>
                             <?php endif; ?>
                             <?php if (!empty($c['must_contain'])): ?>
-                                <div><small class="text-success"><strong>[CẦN]:</strong> <code><?= e($c['must_contain']) ?></code></small></div>
+                                <div><small class="text-success" style="font-size: 11px;"><strong>[CẦN]:</strong> <code><?= e($c['must_contain']) ?></code></small></div>
                             <?php endif; ?>
                             <?php if (empty($c['must_not_contain']) && empty($c['must_contain'])): ?>
-                                <span class="text-muted">-</span>
+                                <span class="text-muted font-mono">-</span>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -342,7 +384,7 @@ require_once __DIR__ . '/../templates/header.php';
                             <?php elseif ($isUndeclared): ?>
                                 <span class="badge badge-subtle">[KỸ THUẬT 1] CHƯA KHAI BÁO</span>
                             <?php else: ?>
-                                <span class="text-muted">Ca chuẩn</span>
+                                <span class="badge badge-subtle">Ca chuẩn</span>
                             <?php endif; ?>
                         </td>
                         <?php if ($canEdit): ?>
@@ -351,7 +393,7 @@ require_once __DIR__ . '/../templates/header.php';
                                 <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
                                 <input type="hidden" name="action" value="delete_case">
                                 <input type="hidden" name="case_id" value="<?= (int)$c['id'] ?>">
-                                <button type="submit" class="btn btn-outline btn-sm text-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Xóa</button>
+                                <button type="submit" class="btn btn-outline btn-sm text-danger" style="padding: 2px 6px; font-size: 11px;">Xóa</button>
                             </form>
                         </td>
                         <?php endif; ?>
@@ -360,6 +402,12 @@ require_once __DIR__ . '/../templates/header.php';
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Phân trang chuẩn nghiên cứu 8 ca / trang -->
+    <div class="pagination-container">
+        <div class="pagination-info"></div>
+        <div class="pagination-controls"></div>
     </div>
 </div>
 
