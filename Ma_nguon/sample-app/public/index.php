@@ -578,14 +578,27 @@ function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mo
              . "Mẹo: Bạn có thể nhấn vào nút tròn [USER] ở góc phải để đổi tài khoản chỉ bằng 1 cú nhấp chuột!";
     }
 
-    // 6. Mặc định
-    return "Xin chào " . ($fullName ?: 'bạn') . "! Tôi là Trợ lý AI MediRecord EMR.\n\n"
-         . "Tôi có thể hỗ trợ bạn:\n"
-         . "- Tra cứu thông tin hồ sơ bệnh án cá nhân (chính xác theo phân quyền người dùng).\n"
-         . "- Hướng dẫn sử dụng các chức năng trên website.\n"
-         . "- Giải thích chi tiết lỗ hổng phân quyền IDOR và các kịch bản kiểm thử bảo mật.\n"
-         . "- Cung cấp danh sách tài khoản thực nghiệm và mật khẩu.\n\n"
-         . ($isKeyMissing ? "Gợi ý: Bấm nút [Cài đặt] phía trên và điền OpenRouter API Key (miễn phí) để trò chuyện với các mô hình AI lớn như Qwen 2.5, Llama 3.2, Gemini Flash!" : "");
+    // 6. Xử lý câu chào hỏi hoặc câu hỏi ngoài lề thông dụng
+    if (str_contains($msgLower, 'chào') || str_contains($msgLower, 'hello') || str_contains($msgLower, 'hi') || str_contains($msgLower, 'bạn là ai') || str_contains($msgLower, 'who are you')) {
+        return "Xin chào " . ($fullName ?: 'bạn') . "! Tôi là Trợ lý AI Thông Minh của Hệ thống MediRecord EMR.\n\n"
+             . "Tôi được tích hợp sẵn các mô hình AI mã nguồn mở miễn phí từ OpenRouter (Qwen 2.5, Llama 3.2, Gemini 2.0 Flash, DeepSeek R1). Bạn có thể hỏi tôi bất kỳ điều gì:\n"
+             . "- Tra cứu hồ sơ bệnh án cá nhân của bạn (bảo mật nghiêm ngặt).\n"
+             . "- Hướng dẫn sử dụng các chức năng trên website.\n"
+             . "- Giải thích kiến thức an toàn thông tin IDOR/BOLA.\n"
+             . "- Hoặc bất kỳ câu hỏi nào về khoa học, lập trình, sức khỏe, đời sống thường ngày!";
+    }
+
+    if (str_contains($msgLower, 'lập trình') || str_contains($msgLower, 'code') || str_contains($msgLower, 'php') || str_contains($msgLower, 'python') || str_contains($msgLower, 'javascript') || str_contains($msgLower, 'docker') || str_contains($msgLower, 'render') || str_contains($msgLower, 'git')) {
+        return "VỀ CÂU HỎI KỸ THUẬT & LẬP TRÌNH:\n\n"
+             . "- Dự án MediRecord EMR hiện tại được phát triển bằng PHP 8.2+ và CSDL PostgreSQL, vận hành kiểm soát phân quyền kép RBAC & ABAC.\n"
+             . "- Hệ thống được đóng gói bằng Docker và triển khai trực tiếp trên Render Cloud.\n"
+             . "- Với các câu hỏi lập trình chuyên sâu, mô hình OpenRouter (như Qwen 2.5 hoặc DeepSeek R1) sẽ phân tích cú pháp và sinh code giải pháp chi tiết cho bạn!";
+    }
+
+    // 7. Mặc định (cho phép AI trả lời câu hỏi tự do ngoài lề)
+    return "Tôi đã nhận được câu hỏi của bạn: \"{$msgTrim}\".\n\n"
+         . "Là một Trợ lý AI đa năng, tôi luôn sẵn sàng giải đáp mọi thắc mắc của bạn từ việc tra cứu bệnh án cá nhân, hướng dẫn sử dụng website cho đến các câu hỏi mở rộng về khoa học, công nghệ, y tế và đời sống.\n\n"
+         . "Mẹo: Bạn có thể chọn mô hình AI yêu thích (Qwen 2.5, Llama 3.2, Gemini 2.0 Flash, DeepSeek R1) ở thanh chọn mô hình phía trên để nhận câu trả lời chi tiết và tối ưu nhất!";
 }
 
 // =============================================================================
@@ -600,8 +613,20 @@ if ($action === 'ai_chat') {
     $rawInput = file_get_contents('php://input');
     $data = json_decode((string)$rawInput, true) ?: [];
     $userMsg = trim($data['message'] ?? $_POST['message'] ?? '');
-    $clientApiKey = trim($data['apiKey'] ?? $_POST['apiKey'] ?? '');
+    // Cho phép đổi model nhưng KHÔNG nhận API key từ client gửi lên (cố định dùng API key hệ thống)
     $chosenModel = trim($data['model'] ?? $_POST['model'] ?? 'qwen/qwen-2.5-7b-instruct:free');
+    
+    // Đảm bảo model thuộc danh sách các model free được hỗ trợ
+    $allowedModels = [
+        'qwen/qwen-2.5-7b-instruct:free',
+        'meta-llama/llama-3.2-3b-instruct:free',
+        'google/gemini-2.0-flash-exp:free',
+        'deepseek/deepseek-r1:free',
+        'mistralai/mistral-7b-instruct:free',
+    ];
+    if (!in_array($chosenModel, $allowedModels, true)) {
+        $chosenModel = 'qwen/qwen-2.5-7b-instruct:free';
+    }
     
     if ($userMsg === '') {
         echo json_encode(['error' => 'Vui lòng nhập nội dung câu hỏi!'], JSON_UNESCAPED_UNICODE);
@@ -628,7 +653,7 @@ if ($action === 'ai_chat') {
         $allowedRecordsInfo[] = "Quản trị / Kiểm toán: Toàn quyền giám sát hệ thống y tế. Tổng số bệnh án: " . count($mockRecords);
     }
     
-    $sysPrompt = "Bạn là Trợ lý AI Thông Minh của Hệ Thống Quản Lý Bệnh Án Điện Tử MediRecord EMR (Ứng dụng y tế phòng chống lỗ hổng phân quyền IDOR/BOLA).\n\n"
+    $sysPrompt = "Bạn là Trợ lý AI Thông Minh đa năng của Hệ Thống MediRecord EMR kết hợp OpenRouter Free Models.\n\n"
         . "THÔNG TIN NGƯỜI DÙNG HIỆN TẠI:\n"
         . "- Tên đăng nhập: {$uName}\n"
         . "- Họ và tên: {$fullName}\n"
@@ -636,14 +661,27 @@ if ($action === 'ai_chat') {
         . "- Khoa/Phòng: {$dept}\n\n"
         . "DỮ LIỆU BỆNH ÁN ĐƯỢC PHÉP TRUY CẬP (STRICT ABAC):\n"
         . (empty($allowedRecordsInfo) ? "Người dùng chưa có bệnh án cá nhân hoặc chưa đăng nhập.\n" : implode("\n", $allowedRecordsInfo) . "\n")
-        . "\nQUY TẮC AN TOÀN VÀ PHÂN QUYỀN BẮT BUỘC:\n"
-        . "1. BẢO VỆ DỮ LIỆU BỆNH NHÂN: Bệnh nhân CHỈ ĐƯỢC PHÉP biết thông tin bệnh án của chính mình ở trên. Tuyệt đối KHÔNG ĐƯỢC tiết lộ thông tin bệnh án của người khác (ví dụ nếu bn_an hỏi về bệnh án của bn_binh hoặc bệnh án #3, #4, bạn PHẢI từ chối lịch sự và giải thích về quy định bảo mật chống lỗi IDOR).\n"
-        . "2. HƯỚNG DẪN WEB: Hướng dẫn người dùng các trang: Danh sách bệnh án (/?view=records), Chi tiết bệnh án (/?view=record_detail&id=X), Lập bệnh án (Bác sĩ, /?view=create_record), Quản lý người dùng (Admin, /?view=users), Giám sát an ninh (Tester, /?view=tester), Đăng nhập (/?view=login), Nút [USER] đổi nhanh tài khoản, Nút [>_] mở Terminal điều khiển lỗi IDOR.\n"
-        . "3. KIẾN THỨC IDOR: IDOR (Insecure Direct Object Reference) là lỗ hổng khi hệ thống dùng ID truy vấn dữ liệu mà không kiểm tra quyền sở hữu. Khi BUG_IDOR=1 lỗi được bật, khi BUG_IDOR=0 lỗi đã được vá an toàn.\n"
-        . "4. TÀI KHOẢN MẪU: bs_minh (Doctor), bn_an (Patient), bn_binh (Patient), admin_bv (Admin), tester_sec (Auditor). Mật khẩu: TestPass@2026.\n"
-        . "5. Định dạng câu trả lời bằng tiếng Việt, gạch đầu dòng rõ ràng, ân cần, súc tích, chuẩn phong cách y tế chuyên nghiệp.";
+        . "\nQUY TẮC PHÂN QUYỀN VÀ TRẢ LỜI CỦA AI:\n"
+        . "1. BẢO VỆ DỮ LIỆU BỆNH NHÂN (NGĂN CHẶN RÒ RỈ IDOR): Bệnh nhân CHỈ ĐƯỢC PHÉP biết thông tin bệnh án của chính mình ở trên. Tuyệt đối KHÔNG ĐƯỢC tiết lộ thông tin bệnh án của người khác (ví dụ nếu bn_an hỏi về bệnh án của bn_binh hoặc bệnh án #3, #4, bạn PHẢI từ chối lịch sự và giải thích về quy định bảo mật chống lỗi IDOR).\n"
+        . "2. HỖ TRỢ HỆ THỐNG VÀ BỆNH ÁN: Khi người dùng hỏi về MediRecord EMR, bệnh án, hướng dẫn sử dụng web, tài khoản demo (TestPass@2026), hoặc kiến thức an ninh mạng IDOR/BOLA, hãy trả lời chính xác theo tài liệu hệ thống.\n"
+        . "3. TRẢ LỜI MỌI CÂU HỎI NGOÀI LỀ (GENERAL KNOWLEDGE & OFF-TOPIC): Khi người dùng hỏi các câu hỏi ngoài lề (khoa học, đời sống, lập trình, sức khỏe tổng quát, tin tức, trò chuyện thông thường, tư vấn...), bạn HOÀN TOÀN ĐƯỢC PHÉP và NÊN trả lời nhiệt tình, thông minh, chi tiết, hữu ích và thân thiện như một trợ lý AI toàn năng (không giới hạn trong khuôn khổ website)!\n"
+        . "4. PHONG CÁCH TRẢ LỜI: Trả lời bằng tiếng Việt, ngôn từ tự nhiên, văn minh, định dạng Markdown rõ ràng, dễ đọc.";
 
-    $apiKey = $clientApiKey ?: (getenv('OPENROUTER_API_KEY') ?: '');
+    // API Key cố định do hệ thống quản lý, không cho phép client ghi đè API key khác
+    $serverApiKey = getenv('OPENROUTER_API_KEY') ?: '';
+    if (empty($serverApiKey)) {
+        $keyFile = __DIR__ . '/../../.local/openrouter_api_key.txt';
+        if (file_exists($keyFile)) {
+            $serverApiKey = trim((string)@file_get_contents($keyFile));
+        }
+    }
+    if (empty($serverApiKey) && file_exists(__DIR__ . '/../../.env')) {
+        $envContent = (string)@file_get_contents(__DIR__ . '/../../.env');
+        if (preg_match('/^OPENROUTER_API_KEY\s*=\s*["\']?([^"\'\r\n]+)["\']?/m', $envContent, $m)) {
+            $serverApiKey = trim($m[1]);
+        }
+    }
+    $apiKey = $serverApiKey;
     $aiResponse = '';
     $source = 'openrouter';
 
@@ -6611,40 +6649,31 @@ if ($view === 'tester') {
     <div class="ai-drawer-head">
       <div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">OPENROUTER FREE</span>
-          <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">TRỢ LÝ AI MEDIRECORD</span>
+          <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">AI FREE</span>
+          <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">TRỢ LÝ AI TOÀN NĂNG</span>
         </div>
         <div style="font-size: 11px; color: #c7d2fe; margin-top: 3px;">
           <?= $currentUser ? 'Đang hỗ trợ: <strong>' . htmlspecialchars($currentUser['full_name']) . '</strong> (' . htmlspecialchars($currentUser['role']) . ')' : 'Chế độ: Khách vãng lai' ?>
         </div>
       </div>
-      <div style="display: flex; gap: 6px;">
-        <button onclick="toggleAiSettings()" class="btn btn-outline" style="padding: 2px 7px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Cài đặt</button>
-        <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 2px 7px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
+      <div>
+        <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
       </div>
     </div>
 
-    <!-- Panel Cài đặt API Key & Model (Thu gọn) -->
-    <div id="aiSettingsPanel" style="display: none; background: #1e1b4b; padding: 12px 16px; border-bottom: 1px solid #312e81; color: #e0e7ff; font-size: 12px;">
-      <div style="font-weight: 700; margin-bottom: 6px; color: #a5b4fc;">CẤU HÌNH KẾT NỐI OPENROUTER API</div>
-      <div style="margin-bottom: 8px;">
-        <label style="display: block; font-size: 11px; color: #c7d2fe; margin-bottom: 3px;">OpenRouter API Key (Tạo miễn phí tại openrouter.ai):</label>
-        <input type="password" id="openRouterApiKeyInput" placeholder="sk-or-v1-..." style="width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 6px; border: 1px solid #4338ca; background: #0f172a; color: #fff; font-size: 11px;">
-      </div>
-      <div style="margin-bottom: 10px;">
-        <label style="display: block; font-size: 11px; color: #c7d2fe; margin-bottom: 3px;">Mô hình Free (Miễn phí):</label>
-        <select id="openRouterModelSelect" style="width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 6px; border: 1px solid #4338ca; background: #0f172a; color: #fff; font-size: 11px;">
-          <option value="qwen/qwen-2.5-7b-instruct:free">Qwen 2.5 7B Instruct (Free - Tiếng Việt tối ưu)</option>
-          <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B Instruct (Free - Nhẹ, nhanh)</option>
-          <option value="google/gemini-2.0-flash-exp:free">Google Gemini 2.0 Flash (Free)</option>
-          <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free - Suy luận sâu)</option>
-          <option value="mistralai/mistral-7b-instruct:free">Mistral 7B Instruct (Free)</option>
-        </select>
-      </div>
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span id="aiSettingsStatus" style="font-size: 11px; color: #4ade80;"></span>
-        <button onclick="saveAiSettings()" class="btn btn-pri" style="padding: 4px 10px; font-size: 11px; background: #6366f1;">Lưu Cấu Hình</button>
-      </div>
+    <!-- THANH CHỌN MÔ HÌNH OPENROUTER (MIỄN PHÍ) -->
+    <div style="background: #1e1b4b; padding: 7px 14px; border-bottom: 1px solid #312e81; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+      <span style="color: #a5b4fc; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80;"></span>
+        MÔ HÌNH AI:
+      </span>
+      <select id="openRouterModelSelect" onchange="changeAiModel(this.value)" style="background: #0f172a; color: #38bdf8; border: 1px solid #4338ca; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; outline: none; cursor: pointer;">
+        <option value="qwen/qwen-2.5-7b-instruct:free">Qwen 2.5 7B (Free - Khuyên dùng)</option>
+        <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free - Nhanh)</option>
+        <option value="google/gemini-2.0-flash-exp:free">Google Gemini 2.0 Flash (Free)</option>
+        <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free - Suy luận)</option>
+        <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+      </select>
     </div>
 
     <!-- Danh sách tin nhắn trò chuyện -->
@@ -6671,11 +6700,13 @@ if ($view === 'tester') {
       <?php endif; ?>
       <button onclick="sendQuickPrompt('Hướng dẫn sử dụng toàn bộ chức năng web')" class="ai-chip">Hướng dẫn web</button>
       <button onclick="sendQuickPrompt('Lỗ hổng IDOR là gì?')" class="ai-chip">Lỗ hổng IDOR là gì?</button>
+      <button onclick="sendQuickPrompt('Tư vấn chế độ ăn uống và sinh hoạt tốt cho tim mạch')" class="ai-chip">Sức khỏe tổng quát</button>
+      <button onclick="sendQuickPrompt('Lập trình Web bảo mật là gì và có những nguyên tắc nào?')" class="ai-chip">Hỏi kiến thức tự do</button>
     </div>
 
     <!-- Input Form -->
     <div class="ai-chat-input-row">
-      <input type="text" id="aiChatInput" placeholder="Hỏi AI về bệnh án, chức năng web, IDOR..." autocomplete="off">
+      <input type="text" id="aiChatInput" placeholder="Hỏi bất kỳ điều gì: bệnh án, sử dụng web, IDOR, lập trình, khoa học..." autocomplete="off">
       <button id="aiSendBtn" onclick="submitAiChat()" class="btn btn-pri" style="background: #6366f1; border-color: #4f46e5; padding: 7px 14px; font-weight: 700; font-size: 12px;">Gửi</button>
     </div>
   </div>
@@ -6877,6 +6908,9 @@ if ($view === 'tester') {
         aiDrawer.style.display = 'flex';
         if (accDrawer) accDrawer.style.display = 'none';
         if (termDrawer) termDrawer.style.display = 'none';
+        const savedModel = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
+        const sel = document.getElementById('openRouterModelSelect');
+        if (sel) sel.value = savedModel;
         const input = document.getElementById('aiChatInput');
         if (input) input.focus();
         initAiChatGreeting();
@@ -6885,40 +6919,14 @@ if ($view === 'tester') {
       }
     }
 
-    // Bật/tắt Panel Cài đặt AI (OpenRouter API Key & Model)
-    function toggleAiSettings() {
-      const p = document.getElementById('aiSettingsPanel');
-      if (!p) return;
-      p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'block' : 'none';
-      if (p.style.display === 'block') {
-        const savedKey = localStorage.getItem('openrouter_api_key') || '';
-        const savedModel = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
-        const kIn = document.getElementById('openRouterApiKeyInput');
-        const mSel = document.getElementById('openRouterModelSelect');
-        if (kIn) kIn.value = savedKey;
-        if (mSel) mSel.value = savedModel;
-      }
+    // Đổi Mô hình AI Free (OpenRouter)
+    function changeAiModel(model) {
+      localStorage.setItem('openrouter_model', model);
+      const sel = document.getElementById('openRouterModelSelect');
+      if (sel) sel.value = model;
     }
 
-    // Lưu Cấu hình OpenRouter vào localStorage
-    function saveAiSettings() {
-      const kIn = document.getElementById('openRouterApiKeyInput');
-      const mSel = document.getElementById('openRouterModelSelect');
-      const status = document.getElementById('aiSettingsStatus');
-      if (kIn) {
-        localStorage.setItem('openrouter_api_key', kIn.value.trim());
-      }
-      if (mSel) {
-        localStorage.setItem('openrouter_model', mSel.value);
-      }
-      if (status) {
-        status.innerText = '[Đã lưu cấu hình]';
-        setTimeout(() => { status.innerText = ''; }, 2500);
-      }
-      toggleAiSettings();
-    }
-
-    // Lời chào mở đầu cá nhân hóa theo vai trò người dùng
+    // Lời chào mở đầu cá nhân hóa theo vai trò người dùng (cho phép hỏi cả câu hỏi ngoài lề)
     let aiChatInitialized = false;
     function initAiChatGreeting() {
       if (aiChatInitialized) return;
@@ -6937,15 +6945,15 @@ if ($view === 'tester') {
 
       let greetText = "";
       if (role === 'member') {
-        greetText = `Xin chào <strong>${name} (${uname})</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi có thể hỗ trợ bạn tra cứu các hồ sơ bệnh án cá nhân, xem chẩn đoán, thuốc điều trị và lịch hẹn khám theo đúng thẩm quyền được cấp.\n\nMọi thông tin y tế được kiểm soát nghiêm ngặt chống rò rỉ dữ liệu (lỗ hổng IDOR). Bạn cần hỗ trợ gì hôm nay?`;
+        greetText = `Xin chào <strong>${name} (${uname})</strong>!\n\nTôi là Trợ lý AI Thông Minh của MediRecord EMR. Tôi có thể hỗ trợ bạn tra cứu các hồ sơ bệnh án cá nhân (chống rò rỉ IDOR), hướng dẫn sử dụng web, hoặc giải đáp bất kỳ câu hỏi nào về khoa học, sức khỏe và đời sống thường ngày!\n\nBạn có thể đổi các mô hình AI miễn phí ở thanh phía trên. Bạn cần hỗ trợ gì hôm nay?`;
       } else if (role === 'doctor') {
-        greetText = `Kính chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi có thể hỗ trợ Bác sĩ xem danh sách bệnh án toàn viện, hướng dẫn quy trình tạo hồ sơ bệnh án mới (/?view=create_record) hoặc tra cứu thông tin chuyên môn.`;
+        greetText = `Kính chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi có thể hỗ trợ Bác sĩ xem bệnh án, hướng dẫn tạo hồ sơ mới (/?view=create_record), tra cứu phác đồ điều trị hoặc giải đáp mọi câu hỏi chuyên môn và đời sống!`;
       } else if (role === 'admin') {
-        greetText = `Xin chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi có thể hỗ trợ Quản trị viên trong việc quản lý người dùng y tế (/?view=users), phân quyền hệ thống hoặc giám sát vận hành.`;
+        greetText = `Xin chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi sẵn sàng hỗ trợ Quản trị viên quản lý nhân sự y tế (/?view=users), phân quyền hệ thống và trả lời mọi thắc mắc công nghệ, đời sống!`;
       } else if (role === 'auditor') {
-        greetText = `Xin chào Kỹ sư An ninh <strong>${name}</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi sẵn sàng giải thích cơ chế lỗ hổng phân quyền IDOR/BOLA (CWE-639), hướng dẫn kích hoạt kiểm thử an toàn thông tin và giám sát nhật ký vi phạm.`;
+        greetText = `Xin chào Kỹ sư An ninh <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi sẵn sàng giải thích cơ chế lỗ hổng IDOR/BOLA (CWE-639), hướng dẫn kích hoạt kiểm thử an toàn thông tin hoặc giải đáp mọi chủ đề an ninh mạng và đời sống!`;
       } else {
-        greetText = `Xin chào <strong>Quý khách</strong>!\n\nBạn đang truy cập hệ sinh thái MediRecord EMR ở chế độ Khách vãng lai. Bạn có thể sử dụng nút tròn [USER] ở góc phải để đổi nhanh sang tài khoản Bác sĩ, Bệnh nhân hoặc Admin để trải nghiệm đầy đủ quyền hạn.`;
+        greetText = `Xin chào <strong>Quý khách</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Bạn có thể hỏi tôi bất kỳ điều gì về hệ thống y tế, cách sử dụng các trang, hoặc các câu hỏi kiến thức đời sống tự do. Bấm nút [USER] ở góc phải nếu bạn muốn đổi sang tài khoản Bác sĩ, Bệnh nhân hoặc Admin.`;
       }
 
       appendAiMessage('bot', greetText, 'system');
@@ -7008,13 +7016,12 @@ if ($view === 'tester') {
 
       const typingDiv = appendAiMessage('bot', 'Đang phân tích dữ liệu và sinh câu trả lời...');
 
-      const apiKey = localStorage.getItem('openrouter_api_key') || '';
       const model = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
 
       fetch('/?action=ai_chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, apiKey: apiKey, model: model })
+        body: JSON.stringify({ message: text, model: model })
       })
       .then(res => res.json())
       .then(data => {
