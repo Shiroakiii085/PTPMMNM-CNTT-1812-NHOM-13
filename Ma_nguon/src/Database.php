@@ -2,6 +2,23 @@
 
 declare(strict_types=1);
 
+// Hỗ trợ tự động nhận diện DATABASE_URL từ các nền tảng Cloud (Render, Neon, Supabase, Railway)
+$databaseUrl = getenv('DATABASE_URL');
+if (!empty($databaseUrl)) {
+    $dbParts = parse_url($databaseUrl);
+    if ($dbParts !== false) {
+        if (!empty($dbParts['host'])) putenv('PGHOST=' . $dbParts['host']);
+        if (!empty($dbParts['port'])) putenv('PGPORT=' . (string)$dbParts['port']);
+        if (!empty($dbParts['user'])) putenv('PGUSER=' . $dbParts['user']);
+        if (!empty($dbParts['pass'])) putenv('PGPASSWORD=' . $dbParts['pass']);
+        if (!empty($dbParts['path'])) putenv('PGDATABASE=' . ltrim($dbParts['path'], '/'));
+        if (!empty($dbParts['query'])) {
+            parse_str($dbParts['query'], $queryParts);
+            if (!empty($queryParts['sslmode'])) putenv('PGSSLMODE=' . $queryParts['sslmode']);
+        }
+    }
+}
+
 // Dùng lại biến môi trường cho lệnh psql ngoài PHP. Không nạp mã PHP cấu hình.
 $configPath = __DIR__ . '/../.local/db.json';
 if (is_file($configPath)) {

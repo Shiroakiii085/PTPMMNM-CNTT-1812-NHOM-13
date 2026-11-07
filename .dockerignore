@@ -1,0 +1,8 @@
+.git
+.github
+.agents
+.unity
+.local
+*.log
+runtime
+evidence/private
