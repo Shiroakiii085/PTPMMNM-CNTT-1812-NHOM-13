@@ -5728,19 +5728,83 @@ if ($view === 'tester') {
             </div>
           <?php endif; ?>
 
+          <?php
+            // Lấy danh sách bệnh nhân và các tài khoản người dùng tùy chỉnh
+            $allPatientUsers = [];
+            $otherUsers = [];
+            foreach ($mockUsers as $uKey => $uVal) {
+                if (($uVal['role'] ?? '') === 'member') {
+                    $allPatientUsers[$uKey] = $uVal;
+                } elseif (!in_array($uKey, ['admin_bv', 'bs_minh', 'tester_sec'], true)) {
+                    $otherUsers[$uKey] = $uVal;
+                }
+            }
+            // Đảm bảo luôn có tối thiểu 2 tài khoản mẫu nếu danh sách trống
+            if (empty($allPatientUsers)) {
+                $allPatientUsers['bn_an'] = ['username' => 'bn_an', 'full_name' => 'Nguyễn Văn An', 'department' => 'Điều trị ngoại trú'];
+                $allPatientUsers['bn_binh'] = ['username' => 'bn_binh', 'full_name' => 'Trần Thị Bình', 'department' => 'Khoa Ung Bướu'];
+            }
+
+            // Danh sách các khoa / phòng điều trị lâm sàng chuẩn
+            $presetDepartments = [
+                'Khoa Tim Mạch Can Thiệp',
+                'Khoa Khám Bệnh Yêu Cầu',
+                'Khoa Ung Bướu & Hóa Trị Liệu',
+                'Khoa Tim Mạch & Nội Tiết',
+                'Khoa Hồi Sức Tích Cực & Chống Độc',
+                'Khoa Cấp Cứu & Đột Quỵ',
+                'Khoa Tiêu Hóa - Gan Mật',
+                'Khoa Dược Lâm Sàng',
+                'Khoa Nội Tiết & Đái Tháo Đường',
+                'Khoa Ngoại Tổng Hợp',
+                'Khoa Chấn Thương Chỉnh Hình',
+                'Khoa Thần Kinh & Tâm Thần Y Học',
+                'Khoa Nhi & Sơ Sinh',
+                'Khoa Mắt & Tai Mũi Họng',
+                'Khoa Chẩn Đoán Hình Ảnh',
+                'Khoa Huyết Học - Truyền Máu',
+                'Khoa Phục Hồi Chức Năng'
+            ];
+            $currentDept = $currentUser['department'] ?? 'Khoa Tim Mạch Can Thiệp';
+            if (!in_array($currentDept, $presetDepartments, true) && !empty($currentDept)) {
+                array_unshift($presetDepartments, $currentDept);
+            }
+          ?>
+
           <form action="/?action=create_record_submit" method="POST">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
               <div class="form-group">
-                <label>Bệnh nhân thụ hưởng (Chọn tài khoản):</label>
-                <select name="owner_username" required>
-                  <option value="bn_an">Nguyễn Văn An (bn_an - Điều trị ngoại trú)</option>
-                  <option value="bn_binh">Trần Thị Bình (bn_binh - Khoa Ung Bướu)</option>
+                <label for="owner_username">Bệnh nhân thụ hưởng (Chọn tài khoản):</label>
+                <select id="owner_username" name="owner_username" required style="width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: #fff;">
+                  <option value="">-- Chọn bệnh nhân thụ hưởng --</option>
+                  <optgroup label="Danh sách Bệnh nhân">
+                    <?php foreach ($allPatientUsers as $p): ?>
+                      <option value="<?= htmlspecialchars($p['username']) ?>">
+                        <?= htmlspecialchars($p['full_name'] ?? $p['username']) ?> (<?= htmlspecialchars($p['username']) ?><?= !empty($p['department']) ? ' - ' . htmlspecialchars($p['department']) : '' ?>)
+                      </option>
+                    <?php endforeach; ?>
+                  </optgroup>
+                  <?php if (!empty($otherUsers)): ?>
+                    <optgroup label="Tài khoản khác / Tạo mới">
+                      <?php foreach ($otherUsers as $ou): ?>
+                        <option value="<?= htmlspecialchars($ou['username']) ?>">
+                          <?= htmlspecialchars($ou['full_name'] ?? $ou['username']) ?> (<?= htmlspecialchars($ou['username']) ?> - <?= htmlspecialchars($ou['role'] ?? 'member') ?>)
+                        </option>
+                      <?php endforeach; ?>
+                    </optgroup>
+                  <?php endif; ?>
                 </select>
               </div>
 
               <div class="form-group">
-                <label>Khoa / Phòng điều trị:</label>
-                <input type="text" name="department" value="<?= htmlspecialchars($currentUser['department'] ?? 'Khoa Tim Mạch') ?>" required>
+                <label for="department">Khoa / Phòng điều trị:</label>
+                <select id="department" name="department" required style="width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: #fff;">
+                  <?php foreach ($presetDepartments as $d): ?>
+                    <option value="<?= htmlspecialchars($d) ?>" <?= ($d === $currentDept) ? 'selected' : '' ?>>
+                      <?= htmlspecialchars($d) ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
               </div>
             </div>
 
@@ -6812,6 +6876,29 @@ if ($view === 'tester') {
           <?php endif; ?>
         </div>
       </a>
+
+      <?php
+        $defaultUsersList = ['admin_bv', 'bs_minh', 'bn_an', 'bn_binh', 'tester_sec'];
+        $extraCustomUsers = array_filter($mockUsers, fn($u, $k) => !in_array($k, $defaultUsersList, true), ARRAY_FILTER_USE_BOTH);
+        foreach ($extraCustomUsers as $exU):
+          $fullNameStr = $exU['full_name'] ?? $exU['username'];
+          $rawSub = function_exists('mb_substr') ? mb_substr($fullNameStr, 0, 2, 'UTF-8') : substr($fullNameStr, 0, 2);
+          $exInit = function_exists('mb_strtoupper') ? mb_strtoupper($rawSub, 'UTF-8') : strtoupper($rawSub);
+          $isCurrentEx = ($currentUser && $currentUser['username'] === $exU['username']);
+      ?>
+        <a href="/?action=switch_user&user=<?= urlencode($exU['username']) ?>" class="acc-item <?= $isCurrentEx ? 'active' : '' ?>">
+          <div style="display: flex; align-items: center;">
+            <div class="acc-initial init-pat" style="background: #e0f2fe; color: #0284c7;"><?= htmlspecialchars($exInit) ?></div>
+            <div>
+              <div style="font-weight: 700; font-size: 13px; color: #0f172a;"><?= htmlspecialchars($fullNameStr) ?></div>
+              <div style="font-size: 11px; color: #64748b;"><?= htmlspecialchars($exU['username']) ?> - <?= htmlspecialchars($exU['department'] ?? 'Tài khoản tùy chỉnh') ?> (<?= htmlspecialchars($exU['role'] ?? 'member') ?>)</div>
+            </div>
+          </div>
+          <?php if ($isCurrentEx): ?>
+            <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Đang chọn</span>
+          <?php endif; ?>
+        </a>
+      <?php endforeach; ?>
 
       <!-- Anonymous / Guest -->
       <a href="/?action=switch_user&user=anon" class="acc-item <?= ($currentUser === null) ? 'active' : '' ?>">
