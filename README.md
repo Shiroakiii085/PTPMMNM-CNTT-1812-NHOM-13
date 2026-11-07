@@ -7,7 +7,7 @@
 **Nền tảng khởi tạo:** Nhánh `lab5` (FIT-DNU/Open-Source-Software-Development)  
 **Công nghệ:** PHP 8.1+, PostgreSQL 14+, cURL, HTML5/CSS3 (Google Fonts Plus Jakarta Sans), Bash/WSL  
 **Giấy phép:** [MIT License](Ma_nguon/LICENSE)  
-**Bản triển khai Cloud (Live Demo):** [https://ptpmmnm-cntt-1812-nhom-13.onrender.com/](https://ptpmmnm-cntt-1812-nhom-13.onrender.com/)  
+**Bản triển khai Cloud (Live Demo):** [https://medirecord-emr.abrdns.com](https://medirecord-emr.abrdns.com) *(Mirror: [onrender.com](https://ptpmmnm-cntt-1812-nhom-13.onrender.com/))*  
 **Trạng thái kiểm thử:** [![Tests](https://img.shields.io/badge/Tests-88%2F88%20PASS-brightgreen.svg)](Ma_nguon/tests/) [![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.1-777bb4.svg)](https://www.php.net/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-%3E%3D14-336791.svg)](https://www.postgresql.org/)
 
 ---
@@ -26,7 +26,10 @@ Dự án triển khai hoàn chỉnh một hệ sinh thái kiểm thử thực t�
   - **Bệnh nhân (`bn_an`, `bn_binh`):** Đăng nhập để theo dõi hồ sơ bệnh án riêng tư của chính mình.
   - **Quản trị viên (`admin_bv`):** Quản trị danh sách người dùng toàn viện (thêm, sửa, tìm kiếm thời gian thực).
   - **Kỹ sư An toàn thông tin (`tester_sec`):** Theo dõi nhật ký rò rỉ dữ liệu y tế thời gian thực tại **Trung tâm Giám sát An ninh** và kích hoạt kiểm thử trực tiếp từ Web UI.
-- **Bộ đôi Dock điều khiển nổi (FABs) & Terminal Console:** Cho phép chuyển đổi nhanh 5 tài khoản thực nghiệm chỉ bằng 1 cú nhấp chuột và bật/tắt trực tiếp cờ an ninh `BUG_IDOR=1` / `BUG_IDOR=0`.
+- **Bộ ba Dock điều khiển nổi (FABs) & Trợ lý AI Thông Minh:**
+  - Nút **[AI] Trợ lý MediRecord (OpenRouter Free API):** Tích hợp AI hỗ trợ người dùng tra cứu hồ sơ bệnh án cá nhân theo ngữ cảnh (tuân thủ nghiêm ngặt ABAC - chống rò rỉ IDOR), giải thích an ninh mạng và hướng dẫn sử dụng toàn bộ chức năng web (hỗ trợ mô hình miễn phí: Qwen 2.5 7B, Llama 3.2 3B, Google Gemini 2.0 Flash, DeepSeek R1).
+  - Nút **[USER] Chuyển đổi nhanh vai trò (1-Click Switch):** Cho phép chuyển đổi linh hoạt giữa 5 tài khoản lâm sàng/quản trị.
+  - Nút **[>_] Terminal Console an ninh:** Bật/tắt trực tiếp cờ an ninh `BUG_IDOR=1` / `BUG_IDOR=0` và kiểm thử API thời gian thực.
 - **Cung cấp 6 REST API chuẩn:** `GET /api/me`, `GET /api/notes`, `POST /api/notes`, `GET /api/notes/{id}`, `PUT /api/notes/{id}`, `GET /api/announcements`.
 
 ### 1.2. Động cơ Kiểm thử Tự động Quyền truy cập (AccessTester Engine)
@@ -113,8 +116,8 @@ bash lab.sh cli --project=1 --label="Kiem thu CLI"
 
 ## 5. Danh Mục Tài Liệu Kỹ Thuật Dự Án
 
-- 📘 [Ma_nguon/docs/3_Tutorial.md](Ma_nguon/docs/3_Tutorial.md): Hướng dẫn chi tiết Yêu cầu 3 — Ứng dụng mẫu MediRecord EMR, đặc tả 6 API, cơ chế rò rỉ IDOR, thanh điều khiển Dock FABs và Terminal.
-- 📋 [Ma_nguon/KiemThu.md](Ma_nguon/KiemThu.md): Bảng ma trận phân quyền 24 ca kiểm thử chi tiết và kết quả mong đợi.
+- 📘 [3_Tutorial.md](3_Tutorial.md): Hướng dẫn chi tiết Yêu cầu 3 — Ứng dụng mẫu MediRecord EMR, đặc tả 6 API, cơ chế rò rỉ IDOR, thanh điều khiển Dock FABs và Terminal.
+- 📋 [KiemThu.md](KiemThu.md): Bảng ma trận phân quyền 24 ca kiểm thử chi tiết và kết quả mong đợi.
 - 📖 [Ma_nguon/docs/HUONG_DAN.md](Ma_nguon/docs/HUONG_DAN.md): Hướng dẫn vận hành chi tiết từng bước & Ngân hàng 10 câu hỏi vấn đáp bảo vệ đồ án.
 - 🏛️ [Ma_nguon/docs/KIEN_TRUC.md](Ma_nguon/docs/KIEN_TRUC.md): Tài liệu thiết kế kiến trúc hệ thống C4, sơ đồ luồng dữ liệu & chính sách an toàn.
 - 📜 [Ma_nguon/docs/NGUON.md](Ma_nguon/docs/NGUON.md): Nguồn gốc mã nguồn, thành phần thư viện bên thứ ba và giấy phép ghi công.

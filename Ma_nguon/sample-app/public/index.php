@@ -42,9 +42,9 @@ if (session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 
-// 1. Chỉ lắng nghe trên loopback (127.0.0.1, ::1, localhost)
+// 1. Chỉ lắng nghe trên loopback (127.0.0.1, ::1, localhost) hoặc môi trường Cloud Render/Container
 $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
-if (!in_array($clientIp, ['127.0.0.1', '::1', 'localhost'], true)) {
+if (!in_array($clientIp, ['127.0.0.1', '::1', 'localhost'], true) && !getenv('PORT') && !getenv('RENDER')) {
     http_response_code(403);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => 'FORBIDDEN_HOST'], JSON_UNESCAPED_UNICODE);
@@ -465,9 +465,231 @@ function run24AccessTests(bool $bugIdor): array {
 }
 
 // =============================================================================
+// TRỢ LÝ AI (HỖ TRỢ SỬ DỤNG WEB & TRA CỨU BỆNH ÁN CÁ NHÂN THEO PHÂN QUYỀN)
+// =============================================================================
+function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mockRecords, bool $isKeyMissing): string {
+    $msgTrim = trim($userMsg);
+    $msgLower = function_exists('mb_strtolower') ? mb_strtolower($msgTrim, 'UTF-8') : strtolower($msgTrim);
+    $role = $currentUser['role'] ?? 'guest';
+    $uName = $currentUser['username'] ?? '';
+    $fullName = $currentUser['full_name'] ?? 'Khách vãng lai';
+
+    // 1. Kiểm tra nếu hỏi về bệnh án người khác hoặc cố tình tìm bệnh án không phải của mình
+    $isAskingBob = (str_contains($msgLower, 'bình') || str_contains($msgLower, 'bob') || str_contains($msgLower, 'bn_binh') || str_contains($msgLower, 'bệnh án 3') || str_contains($msgLower, 'bệnh án số 3') || str_contains($msgLower, 'bệnh án #3') || str_contains($msgLower, 'bệnh án 4') || str_contains($msgLower, 'bệnh án số 4') || str_contains($msgLower, 'bệnh án #4'));
+    $isAskingAlice = (str_contains($msgLower, 'an') || str_contains($msgLower, 'alice') || str_contains($msgLower, 'bn_an') || str_contains($msgLower, 'bệnh án 1') || str_contains($msgLower, 'bệnh án số 1') || str_contains($msgLower, 'bệnh án #1') || str_contains($msgLower, 'bệnh án 2') || str_contains($msgLower, 'bệnh án số 2') || str_contains($msgLower, 'bệnh án #2'));
+
+    if ($role === 'member') {
+        if (($uName === 'bn_an' || $uName === 'alice') && $isAskingBob) {
+            return "CẢNH BÁO BẢO MẬT (CHỐNG RÒ RỈ DỮ LIỆU IDOR):\n\n"
+                 . "- Bạn đang đăng nhập với tư cách Bệnh nhân Nguyễn Văn An (bn_an).\n"
+                 . "- Bệnh án #03 và #04 thuộc quyền sở hữu của Bệnh nhân Trần Thị Bình (bn_binh).\n"
+                 . "- Theo chính sách kiểm soát truy cập dựa trên thuộc tính (ABAC), bạn KHÔNG CÓ QUYỀN xem dữ liệu này.\n"
+                 . "- Hệ thống MediRecord EMR bảo vệ nghiêm ngặt quyền riêng tư y tế của bệnh nhân.";
+        }
+        if (($uName === 'bn_binh' || $uName === 'bob') && $isAskingAlice) {
+            return "CẢNH BÁO BẢO MẬT (CHỐNG RÒ RỈ DỮ LIỆU IDOR):\n\n"
+                 . "- Bạn đang đăng nhập với tư cách Bệnh nhân Trần Thị Bình (bn_binh).\n"
+                 . "- Bệnh án #01 và #02 thuộc quyền sở hữu của Bệnh nhân Nguyễn Văn An (bn_an).\n"
+                 . "- Theo chính sách kiểm soát truy cập dựa trên thuộc tính (ABAC), bạn KHÔNG CÓ QUYỀN xem dữ liệu này.\n"
+                 . "- Hệ thống MediRecord EMR bảo vệ nghiêm ngặt quyền riêng tư y tế của bệnh nhân.";
+        }
+    }
+
+    // 2. Tra cứu bệnh án của chính mình
+    if (str_contains($msgLower, 'bệnh án') || str_contains($msgLower, 'hồ sơ') || str_contains($msgLower, 'xét nghiệm') || str_contains($msgLower, 'chẩn đoán') || str_contains($msgLower, 'sức khỏe') || str_contains($msgLower, 'thuốc') || str_contains($msgLower, 'tra cứu') || str_contains($msgLower, 'tim mạch') || str_contains($msgLower, 'ung bướu')) {
+        if ($role === 'member') {
+            $myRecords = [];
+            foreach ($mockRecords as $rec) {
+                if (checkRecordOwnerMatch($rec['owner_username'], $uName)) {
+                    $myRecords[] = $rec;
+                }
+            }
+            if (empty($myRecords)) {
+                return "Chào {$fullName}, hiện tại hệ thống chưa ghi nhận hồ sơ bệnh án nào thuộc quyền sở hữu của bạn.";
+            }
+            $out = "HỒ SƠ BỆNH ÁN CỦA BẠN ({$fullName} - {$uName}):\n\n";
+            foreach ($myRecords as $r) {
+                $out .= "Mã hồ sơ: Bệnh án #{$r['id']}\n";
+                $out .= "- Tiêu đề: {$r['title']}\n";
+                $out .= "- Khoa điều trị: {$r['department']}\n";
+                $out .= "- Bác sĩ điều trị: {$r['doctor_name']}\n";
+                $out .= "- Chẩn đoán lâm sàng: {$r['diagnosis']}\n";
+                $out .= "- Phác đồ / Ghi chú thuốc: {$r['content']}\n";
+                $out .= "- Ngày lập: {$r['created_at']}\n\n";
+            }
+            $out .= "Lưu ý: Bệnh nhân có quyền xem chi tiết từng hồ sơ tại mục 'Hồ Sơ Bệnh Án' trên menu (chế độ chỉ xem).";
+            return $out;
+        } elseif ($role === 'doctor') {
+            return "Kính chào BS. Lê Hoàng Minh! Với vai trò Bác sĩ lâm sàng, bác sĩ có toàn quyền xem các bệnh án và tạo bệnh án mới:\n\n"
+                 . "- Xem danh sách: Menu 'Hồ Sơ Bệnh Án' (/?view=records)\n"
+                 . "- Lập hồ sơ mới: Nút 'Lập Bệnh Án Mới' (/?view=create_record)\n"
+                 . "- Hệ thống hiện có " . count($mockRecords) . " bệnh án lâm sàng đang được quản lý.";
+        } elseif ($role === 'admin' || $role === 'auditor') {
+            return "Xin chào {$fullName}! Bạn đang đăng nhập với quyền Quản trị / Kiểm toán. Toàn viện hiện có " . count($mockRecords) . " bệnh án. Bạn có thể mở menu 'Hồ Sơ Bệnh Án' để duyệt đầy đủ danh sách.";
+        } else {
+            return "Bạn hiện chưa đăng nhập vào hệ thống MediRecord EMR.\n\n"
+                 . "Để tra cứu bệnh án cá nhân, vui lòng:\n"
+                 . "1. Bấm nút tròn nổi [USER] ở góc phải màn hình.\n"
+                 . "2. Chọn đăng nhập nhanh bằng tài khoản Bệnh nhân: bn_an (An) hoặc bn_binh (Bình).\n"
+                 . "3. Hoặc vào trang Đăng nhập (mật khẩu chung: TestPass@2026).";
+        }
+    }
+
+    // 3. Hướng dẫn sử dụng toàn bộ chức năng web
+    if (str_contains($msgLower, 'hướng dẫn') || str_contains($msgLower, 'sử dụng web') || str_contains($msgLower, 'chức năng') || str_contains($msgLower, 'cách dùng') || str_contains($msgLower, 'các trang') || str_contains($msgLower, 'menu')) {
+        return "CẨM NANG HƯỚNG DẪN SỬ DỤNG HỆ THỐNG MEDIRECORD EMR:\n\n"
+             . "1. TỔNG QUAN (/?view=landing / ?view=home):\n"
+             . "   - Trang giới thiệu năng lực SaaS y tế và bảng đối chiếu cơ chế bảo mật IDOR.\n\n"
+             . "2. DANH SÁCH BỆNH ÁN (/?view=records):\n"
+             . "   - Tìm kiếm bệnh án theo ID không giới hạn số lượng.\n"
+             . "   - Xem chi tiết hồ sơ bệnh án, chẩn đoán, thuốc và lịch tái khám.\n"
+             . "   - Bác sĩ có nút 'Lập Bệnh Án Mới' để bổ sung hồ sơ điều trị.\n\n"
+             . "3. BẢNG THÔNG BÁO BỆNH VIỆN (/?view=announcements):\n"
+             . "   - Phân loại rõ ràng: 'Thông Báo Cho Bệnh Nhân' (công khai) và 'Thông Báo Nội Bộ' (dành riêng cho cán bộ y tế).\n\n"
+             . "4. QUẢN LÝ NGƯỜI DÙNG (/?view=users):\n"
+             . "   - Dành cho Admin: Quản lý danh sách nhân sự y tế (thêm, sửa, tìm kiếm thời gian thực).\n\n"
+             . "5. TRUNG TÂM GIÁM SÁT AN NINH (/?view=tester):\n"
+             . "   - Dành cho Tester/Admin: Theo dõi cảnh báo rò rỉ dữ liệu y tế và kích hoạt chạy kiểm thử 88 ca test.\n\n"
+             . "6. BỘ BA NÚT ĐIỀU KHIỂN NỔI (GÓC DƯỚI BÊN PHẢI):\n"
+             . "   - Nút [AI]: Mở Trợ lý AI thông minh hỗ trợ tra cứu và hướng dẫn.\n"
+             . "   - Nút [USER]: Chuyển đổi nhanh 5 tài khoản thực nghiệm (1-Click Switch).\n"
+             . "   - Nút [>_]: Mở Terminal điều khiển bảo mật (bật/tắt lỗi IDOR).";
+    }
+
+    // 4. Giải thích lỗ hổng IDOR / An toàn thông tin
+    if (str_contains($msgLower, 'idor') || str_contains($msgLower, 'bola') || str_contains($msgLower, 'lỗ hổng') || str_contains($msgLower, 'bảo mật') || str_contains($msgLower, 'an ninh') || str_contains($msgLower, 'kiểm thử') || str_contains($msgLower, 'test') || str_contains($msgLower, 'cwe')) {
+        return "TỔNG QUAN VỀ LỖ HỔNG IDOR (INSECURE DIRECT OBJECT REFERENCE):\n\n"
+             . "- Khái niệm: Lỗ hổng kiểm soát truy cập trực tiếp đối tượng (IDOR / BOLA - Top 1 OWASP API Security) xuất hiện khi ứng dụng sử dụng ID do máy trạm gửi lên để truy vấn dữ liệu mà không kiểm tra quyền sở hữu.\n\n"
+             . "- Cơ chế trong MediRecord EMR:\n"
+             . "  + Khi BẬT lỗi (BUG_IDOR=1): Bệnh nhân An (bn_an) truy cập /api/notes/3 sẽ đọc được hồ sơ bệnh án nhạy cảm của Bệnh nhân Bình (bn_binh)!\n"
+             . "  + Khi VÁ lỗi (BUG_IDOR=0): Hệ thống áp dụng chính sách kép RBAC & ABAC, chặn ngay lập tức với mã HTTP 403 Forbidden và ghi nhật ký vi phạm an ninh.\n\n"
+             . "- Kiểm thử tự động: Động cơ AccessTester tự động gửi 24 ca HTTP cURL thật để kiểm tra toàn diện các kịch bản.";
+    }
+
+    // 5. Danh sách tài khoản thực nghiệm
+    if (str_contains($msgLower, 'tài khoản') || str_contains($msgLower, 'mật khẩu') || str_contains($msgLower, 'đăng nhập') || str_contains($msgLower, 'login') || str_contains($msgLower, 'password')) {
+        return "DANH SÁCH 5 TÀI KHOẢN THỰC NGHIỆM TRÊN HỆ THỐNG:\n"
+             . "Mật khẩu chung: TestPass@2026\n\n"
+             . "1. Bác sĩ Lê Hoàng Minh: bs_minh (Khoa Tim Mạch - Quyền Doctor)\n"
+             . "2. Bệnh nhân Nguyễn Văn An: bn_an (Ngoại trú - Quyền Member, sở hữu bệnh án #1, #2)\n"
+             . "3. Bệnh nhân Trần Thị Bình: bn_binh (Nội trú - Quyền Member, sở hữu bệnh án #3, #4)\n"
+             . "4. Quản trị viên Bệnh viện: admin_bv (Phòng CNTT - Quyền Admin)\n"
+             . "5. Kỹ sư Bảo mật Nguyễn Kiểm Thử: tester_sec (Ban An Toàn Thông Tin - Quyền Auditor)\n\n"
+             . "Mẹo: Bạn có thể nhấn vào nút tròn [USER] ở góc phải để đổi tài khoản chỉ bằng 1 cú nhấp chuột!";
+    }
+
+    // 6. Mặc định
+    return "Xin chào " . ($fullName ?: 'bạn') . "! Tôi là Trợ lý AI MediRecord EMR.\n\n"
+         . "Tôi có thể hỗ trợ bạn:\n"
+         . "- Tra cứu thông tin hồ sơ bệnh án cá nhân (chính xác theo phân quyền người dùng).\n"
+         . "- Hướng dẫn sử dụng các chức năng trên website.\n"
+         . "- Giải thích chi tiết lỗ hổng phân quyền IDOR và các kịch bản kiểm thử bảo mật.\n"
+         . "- Cung cấp danh sách tài khoản thực nghiệm và mật khẩu.\n\n"
+         . ($isKeyMissing ? "Gợi ý: Bấm nút [Cài đặt] phía trên và điền OpenRouter API Key (miễn phí) để trò chuyện với các mô hình AI lớn như Qwen 2.5, Llama 3.2, Gemini Flash!" : "");
+}
+
+// =============================================================================
 // XỬ LÝ CÁC HÀNH ĐỘNG WEB (QUICK SWITCH, LOGIN, REGISTER, USER CRUD, EDIT RECORD)
 // =============================================================================
 $action = $_GET['action'] ?? '';
+
+// Xử lý Chatbot AI (OpenRouter Free Model + Local Knowledge Engine)
+if ($action === 'ai_chat') {
+    header('Content-Type: application/json; charset=utf-8');
+    
+    $rawInput = file_get_contents('php://input');
+    $data = json_decode((string)$rawInput, true) ?: [];
+    $userMsg = trim($data['message'] ?? $_POST['message'] ?? '');
+    $clientApiKey = trim($data['apiKey'] ?? $_POST['apiKey'] ?? '');
+    $chosenModel = trim($data['model'] ?? $_POST['model'] ?? 'qwen/qwen-2.5-7b-instruct:free');
+    
+    if ($userMsg === '') {
+        echo json_encode(['error' => 'Vui lòng nhập nội dung câu hỏi!'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    $u = $currentUser;
+    $role = $u ? $u['role'] : 'guest';
+    $uName = $u ? $u['username'] : 'anon';
+    $fullName = $u ? $u['full_name'] : 'Khách vãng lai';
+    $dept = $u ? ($u['department'] ?? 'Chưa xác định') : 'Không';
+    
+    // Thu thập danh sách bệnh án được phép xem (Strict ABAC)
+    $allowedRecordsInfo = [];
+    if ($role === 'member') {
+        foreach ($mockRecords as $rec) {
+            if (checkRecordOwnerMatch($rec['owner_username'], $uName)) {
+                $allowedRecordsInfo[] = "Bệnh án #{$rec['id']}: '{$rec['title']}' | Bác sĩ: {$rec['doctor_name']} | Chẩn đoán: {$rec['diagnosis']} | Nội dung/Thuốc: {$rec['content']} | Ngày tạo: {$rec['created_at']}";
+            }
+        }
+    } elseif ($role === 'doctor') {
+        $allowedRecordsInfo[] = "Bác sĩ lâm sàng: Có quyền xem danh sách bệnh án toàn viện và lập hồ sơ chẩn đoán mới cho bệnh nhân (/?view=create_record). Tổng số bệnh án hiện có: " . count($mockRecords);
+    } elseif ($role === 'admin' || $role === 'auditor') {
+        $allowedRecordsInfo[] = "Quản trị / Kiểm toán: Toàn quyền giám sát hệ thống y tế. Tổng số bệnh án: " . count($mockRecords);
+    }
+    
+    $sysPrompt = "Bạn là Trợ lý AI Thông Minh của Hệ Thống Quản Lý Bệnh Án Điện Tử MediRecord EMR (Ứng dụng y tế phòng chống lỗ hổng phân quyền IDOR/BOLA).\n\n"
+        . "THÔNG TIN NGƯỜI DÙNG HIỆN TẠI:\n"
+        . "- Tên đăng nhập: {$uName}\n"
+        . "- Họ và tên: {$fullName}\n"
+        . "- Vai trò: {$role}\n"
+        . "- Khoa/Phòng: {$dept}\n\n"
+        . "DỮ LIỆU BỆNH ÁN ĐƯỢC PHÉP TRUY CẬP (STRICT ABAC):\n"
+        . (empty($allowedRecordsInfo) ? "Người dùng chưa có bệnh án cá nhân hoặc chưa đăng nhập.\n" : implode("\n", $allowedRecordsInfo) . "\n")
+        . "\nQUY TẮC AN TOÀN VÀ PHÂN QUYỀN BẮT BUỘC:\n"
+        . "1. BẢO VỆ DỮ LIỆU BỆNH NHÂN: Bệnh nhân CHỈ ĐƯỢC PHÉP biết thông tin bệnh án của chính mình ở trên. Tuyệt đối KHÔNG ĐƯỢC tiết lộ thông tin bệnh án của người khác (ví dụ nếu bn_an hỏi về bệnh án của bn_binh hoặc bệnh án #3, #4, bạn PHẢI từ chối lịch sự và giải thích về quy định bảo mật chống lỗi IDOR).\n"
+        . "2. HƯỚNG DẪN WEB: Hướng dẫn người dùng các trang: Danh sách bệnh án (/?view=records), Chi tiết bệnh án (/?view=record_detail&id=X), Lập bệnh án (Bác sĩ, /?view=create_record), Quản lý người dùng (Admin, /?view=users), Giám sát an ninh (Tester, /?view=tester), Đăng nhập (/?view=login), Nút [USER] đổi nhanh tài khoản, Nút [>_] mở Terminal điều khiển lỗi IDOR.\n"
+        . "3. KIẾN THỨC IDOR: IDOR (Insecure Direct Object Reference) là lỗ hổng khi hệ thống dùng ID truy vấn dữ liệu mà không kiểm tra quyền sở hữu. Khi BUG_IDOR=1 lỗi được bật, khi BUG_IDOR=0 lỗi đã được vá an toàn.\n"
+        . "4. TÀI KHOẢN MẪU: bs_minh (Doctor), bn_an (Patient), bn_binh (Patient), admin_bv (Admin), tester_sec (Auditor). Mật khẩu: TestPass@2026.\n"
+        . "5. Định dạng câu trả lời bằng tiếng Việt, gạch đầu dòng rõ ràng, ân cần, súc tích, chuẩn phong cách y tế chuyên nghiệp.";
+
+    $apiKey = $clientApiKey ?: (getenv('OPENROUTER_API_KEY') ?: '');
+    $aiResponse = '';
+    $source = 'openrouter';
+
+    if (!empty($apiKey)) {
+        $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'model' => $chosenModel,
+            'messages' => [
+                ['role' => 'system', 'content' => $sysPrompt],
+                ['role' => 'user', 'content' => $userMsg]
+            ],
+            'temperature' => 0.5,
+            'max_tokens' => 1000
+        ]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+            'HTTP-Referer: https://medirecord-emr.abrdns.com',
+            'X-Title: MediRecord EMR Assistant'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+        $res = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($res && $code >= 200 && $code < 300) {
+            $parsed = json_decode($res, true);
+            $aiResponse = $parsed['choices'][0]['message']['content'] ?? '';
+        }
+    }
+
+    if (empty($aiResponse)) {
+        $source = 'local_fallback';
+        $aiResponse = generateLocalAiResponse($userMsg, $currentUser, $mockRecords, empty($apiKey));
+    }
+
+    echo json_encode([
+        'reply' => $aiResponse,
+        'source' => $source,
+        'model' => $chosenModel,
+        'has_api_key' => !empty($apiKey)
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 // Chuyển đổi tài khoản nhanh 1-Click
 if ($action === 'switch_user') {
@@ -3766,6 +3988,161 @@ if ($view === 'tester') {
     }
 
     /* Floating Action Buttons (FABs) at Bottom Right (Nút tròn nổi) */
+    .ai-fab {
+      position: fixed;
+      bottom: 152px;
+      right: 24px;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+      border: 2px solid #818cf8;
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      color: #fff;
+      transition: all 0.2s ease;
+    }
+    .ai-fab:hover {
+      transform: scale(1.08);
+      border-color: #c7d2fe;
+      box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+    }
+    .ai-fab-badge-top {
+      font-size: 8px;
+      font-weight: 800;
+      color: #a5f3fc;
+      text-transform: uppercase;
+      line-height: 1;
+      margin-bottom: 2px;
+      letter-spacing: 0.5px;
+    }
+    .ai-fab-text {
+      color: #ffffff;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    /* AI CHATBOT DRAWER */
+    .ai-chat-drawer {
+      position: fixed;
+      bottom: 24px;
+      right: 92px;
+      width: 410px;
+      height: 570px;
+      max-height: calc(100vh - 48px);
+      background: #ffffff;
+      border-radius: 16px;
+      border: 1px solid #c7d2fe;
+      box-shadow: 0 20px 50px rgba(67, 56, 202, 0.22);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 9998;
+      animation: slideUpDrawer 0.25s ease-out;
+    }
+    @media (max-width: 600px) {
+      .ai-chat-drawer {
+        right: 12px;
+        left: 12px;
+        width: auto;
+        bottom: 88px;
+        height: 500px;
+      }
+    }
+    .ai-drawer-head {
+      background: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .ai-chat-body {
+      flex: 1;
+      padding: 14px 16px;
+      overflow-y: auto;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 13px;
+    }
+    .ai-msg {
+      max-width: 88%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .ai-msg-user {
+      align-self: flex-end;
+      background: #4f46e5;
+      color: #ffffff;
+      border-bottom-right-radius: 2px;
+    }
+    .ai-msg-bot {
+      align-self: flex-start;
+      background: #ffffff;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+      border-bottom-left-radius: 2px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    }
+    .ai-msg-bot strong {
+      color: #1e1b4b;
+    }
+    .ai-quick-prompts {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #ffffff;
+      border-top: 1px solid #f1f5f9;
+      overflow-x: auto;
+    }
+    .ai-chip {
+      white-space: nowrap;
+      padding: 4px 10px;
+      font-size: 11px;
+      background: #f1f5f9;
+      color: #4338ca;
+      border: 1px solid #e0e7ff;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .ai-chip:hover {
+      background: #e0e7ff;
+      border-color: #c7d2fe;
+    }
+    .ai-chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #ffffff;
+      border-top: 1px solid #e2e8f0;
+    }
+    .ai-chat-input-row input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+    }
+    .ai-chat-input-row input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+
     .account-fab {
       position: fixed;
       bottom: 88px;
@@ -6223,6 +6600,86 @@ if ($view === 'tester') {
   <!-- =======================================================================
        CÁC NÚT TRÒN NỔI (FAB) & CỬA SỔ ĐIỀU KHIỂN (HIỂN THỊ TOÀN HỆ THỐNG)
        ======================================================================= -->
+  <!-- NÚT TRÒN NỔI (FAB) TRỢ LÝ AI CHATBOT (NẰM TRÊN NÚT USER) -->
+  <button id="aiFab" onclick="toggleAiChat()" class="ai-fab" title="Trợ lý AI MediRecord (Hỗ trợ tra cứu & sử dụng web)">
+    <span class="ai-fab-badge-top">FREE</span>
+    <span class="ai-fab-text">AI</span>
+  </button>
+
+  <!-- CỬA SỔ CHATBOT AI TRỢ LÝ MEDIRECORD -->
+  <div id="aiChatDrawer" class="ai-chat-drawer" style="display: none;">
+    <div class="ai-drawer-head">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">OPENROUTER FREE</span>
+          <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">TRỢ LÝ AI MEDIRECORD</span>
+        </div>
+        <div style="font-size: 11px; color: #c7d2fe; margin-top: 3px;">
+          <?= $currentUser ? 'Đang hỗ trợ: <strong>' . htmlspecialchars($currentUser['full_name']) . '</strong> (' . htmlspecialchars($currentUser['role']) . ')' : 'Chế độ: Khách vãng lai' ?>
+        </div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button onclick="toggleAiSettings()" class="btn btn-outline" style="padding: 2px 7px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Cài đặt</button>
+        <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 2px 7px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
+      </div>
+    </div>
+
+    <!-- Panel Cài đặt API Key & Model (Thu gọn) -->
+    <div id="aiSettingsPanel" style="display: none; background: #1e1b4b; padding: 12px 16px; border-bottom: 1px solid #312e81; color: #e0e7ff; font-size: 12px;">
+      <div style="font-weight: 700; margin-bottom: 6px; color: #a5b4fc;">CẤU HÌNH KẾT NỐI OPENROUTER API</div>
+      <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 11px; color: #c7d2fe; margin-bottom: 3px;">OpenRouter API Key (Tạo miễn phí tại openrouter.ai):</label>
+        <input type="password" id="openRouterApiKeyInput" placeholder="sk-or-v1-..." style="width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 6px; border: 1px solid #4338ca; background: #0f172a; color: #fff; font-size: 11px;">
+      </div>
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; font-size: 11px; color: #c7d2fe; margin-bottom: 3px;">Mô hình Free (Miễn phí):</label>
+        <select id="openRouterModelSelect" style="width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 6px; border: 1px solid #4338ca; background: #0f172a; color: #fff; font-size: 11px;">
+          <option value="qwen/qwen-2.5-7b-instruct:free">Qwen 2.5 7B Instruct (Free - Tiếng Việt tối ưu)</option>
+          <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B Instruct (Free - Nhẹ, nhanh)</option>
+          <option value="google/gemini-2.0-flash-exp:free">Google Gemini 2.0 Flash (Free)</option>
+          <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free - Suy luận sâu)</option>
+          <option value="mistralai/mistral-7b-instruct:free">Mistral 7B Instruct (Free)</option>
+        </select>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="aiSettingsStatus" style="font-size: 11px; color: #4ade80;"></span>
+        <button onclick="saveAiSettings()" class="btn btn-pri" style="padding: 4px 10px; font-size: 11px; background: #6366f1;">Lưu Cấu Hình</button>
+      </div>
+    </div>
+
+    <!-- Danh sách tin nhắn trò chuyện -->
+    <div id="aiChatMessages" class="ai-chat-body">
+    </div>
+
+    <!-- Gợi ý câu hỏi nhanh (Quick Chips) -->
+    <div class="ai-quick-prompts" id="aiQuickPrompts">
+      <?php if ($currentUser && $currentUser['role'] === 'member'): ?>
+        <button onclick="sendQuickPrompt('Tra cứu bệnh án của tôi')" class="ai-chip">Tra cứu bệnh án của tôi</button>
+        <button onclick="sendQuickPrompt('Tóm tắt tình trạng sức khỏe của tôi')" class="ai-chip">Tóm tắt sức khỏe</button>
+      <?php elseif ($currentUser && $currentUser['role'] === 'doctor'): ?>
+        <button onclick="sendQuickPrompt('Hướng dẫn quy trình tạo bệnh án mới')" class="ai-chip">Cách tạo bệnh án mới</button>
+        <button onclick="sendQuickPrompt('Mẫu chẩn đoán lâm sàng')" class="ai-chip">Mẫu chẩn đoán</button>
+      <?php elseif ($currentUser && $currentUser['role'] === 'admin'): ?>
+        <button onclick="sendQuickPrompt('Hướng dẫn quản lý nhân sự y tế')" class="ai-chip">Quản lý người dùng</button>
+        <button onclick="sendQuickPrompt('Quy tắc phân quyền RBAC toàn viện')" class="ai-chip">Phân quyền RBAC</button>
+      <?php elseif ($currentUser && $currentUser['role'] === 'auditor'): ?>
+        <button onclick="sendQuickPrompt('Giải thích cơ chế lỗ hổng IDOR')" class="ai-chip">Cơ chế IDOR</button>
+        <button onclick="sendQuickPrompt('Cách chạy bộ 88 kiểm thử tự động')" class="ai-chip">Chạy 88 ca test</button>
+      <?php else: ?>
+        <button onclick="sendQuickPrompt('Hướng dẫn đăng nhập và các tài khoản mẫu')" class="ai-chip">Tài khoản thực nghiệm</button>
+        <button onclick="sendQuickPrompt('Giới thiệu hệ sinh thái MediRecord EMR')" class="ai-chip">Giới thiệu MediRecord</button>
+      <?php endif; ?>
+      <button onclick="sendQuickPrompt('Hướng dẫn sử dụng toàn bộ chức năng web')" class="ai-chip">Hướng dẫn web</button>
+      <button onclick="sendQuickPrompt('Lỗ hổng IDOR là gì?')" class="ai-chip">Lỗ hổng IDOR là gì?</button>
+    </div>
+
+    <!-- Input Form -->
+    <div class="ai-chat-input-row">
+      <input type="text" id="aiChatInput" placeholder="Hỏi AI về bệnh án, chức năng web, IDOR..." autocomplete="off">
+      <button id="aiSendBtn" onclick="submitAiChat()" class="btn btn-pri" style="background: #6366f1; border-color: #4f46e5; padding: 7px 14px; font-weight: 700; font-size: 12px;">Gửi</button>
+    </div>
+  </div>
+
   <!-- NÚT TRÒN NỔI (FAB) CHUYỂN TÀI KHOẢN NHANH (NẰM TRÊN NÚT TERMINAL) -->
   <button id="accountFab" onclick="toggleAccountDrawer()" class="account-fab" title="Chuyển Nhanh Tài Khoản (1-Click Switch)">
     <span class="account-fab-icon" style="font-size: 11px; font-weight: 800; color: #fff;">USER</span>
@@ -6382,10 +6839,12 @@ if ($view === 'tester') {
     function toggleAccountDrawer() {
       const accDrawer = document.getElementById('accountDrawer');
       const termDrawer = document.getElementById('termDrawer');
+      const aiDrawer = document.getElementById('aiChatDrawer');
       if (!accDrawer) return;
       if (accDrawer.style.display === 'none' || accDrawer.style.display === '') {
         accDrawer.style.display = 'block';
         if (termDrawer) termDrawer.style.display = 'none';
+        if (aiDrawer) aiDrawer.style.display = 'none';
       } else {
         accDrawer.style.display = 'none';
       }
@@ -6395,16 +6854,204 @@ if ($view === 'tester') {
     function toggleTerminal() {
       const termDrawer = document.getElementById('termDrawer');
       const accDrawer = document.getElementById('accountDrawer');
+      const aiDrawer = document.getElementById('aiChatDrawer');
       if (!termDrawer) return;
       if (termDrawer.style.display === 'none' || termDrawer.style.display === '') {
         termDrawer.style.display = 'block';
         if (accDrawer) accDrawer.style.display = 'none';
+        if (aiDrawer) aiDrawer.style.display = 'none';
         const tIn = document.getElementById('termInput');
         if (tIn) tIn.focus();
       } else {
         termDrawer.style.display = 'none';
       }
     }
+
+    // Bật/tắt Cửa sổ Trợ lý AI
+    function toggleAiChat() {
+      const aiDrawer = document.getElementById('aiChatDrawer');
+      const accDrawer = document.getElementById('accountDrawer');
+      const termDrawer = document.getElementById('termDrawer');
+      if (!aiDrawer) return;
+      if (aiDrawer.style.display === 'none' || aiDrawer.style.display === '') {
+        aiDrawer.style.display = 'flex';
+        if (accDrawer) accDrawer.style.display = 'none';
+        if (termDrawer) termDrawer.style.display = 'none';
+        const input = document.getElementById('aiChatInput');
+        if (input) input.focus();
+        initAiChatGreeting();
+      } else {
+        aiDrawer.style.display = 'none';
+      }
+    }
+
+    // Bật/tắt Panel Cài đặt AI (OpenRouter API Key & Model)
+    function toggleAiSettings() {
+      const p = document.getElementById('aiSettingsPanel');
+      if (!p) return;
+      p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'block' : 'none';
+      if (p.style.display === 'block') {
+        const savedKey = localStorage.getItem('openrouter_api_key') || '';
+        const savedModel = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
+        const kIn = document.getElementById('openRouterApiKeyInput');
+        const mSel = document.getElementById('openRouterModelSelect');
+        if (kIn) kIn.value = savedKey;
+        if (mSel) mSel.value = savedModel;
+      }
+    }
+
+    // Lưu Cấu hình OpenRouter vào localStorage
+    function saveAiSettings() {
+      const kIn = document.getElementById('openRouterApiKeyInput');
+      const mSel = document.getElementById('openRouterModelSelect');
+      const status = document.getElementById('aiSettingsStatus');
+      if (kIn) {
+        localStorage.setItem('openrouter_api_key', kIn.value.trim());
+      }
+      if (mSel) {
+        localStorage.setItem('openrouter_model', mSel.value);
+      }
+      if (status) {
+        status.innerText = '[Đã lưu cấu hình]';
+        setTimeout(() => { status.innerText = ''; }, 2500);
+      }
+      toggleAiSettings();
+    }
+
+    // Lời chào mở đầu cá nhân hóa theo vai trò người dùng
+    let aiChatInitialized = false;
+    function initAiChatGreeting() {
+      if (aiChatInitialized) return;
+      aiChatInitialized = true;
+      const box = document.getElementById('aiChatMessages');
+      if (!box) return;
+
+      <?php
+        $role = $currentUser['role'] ?? 'guest';
+        $name = $currentUser['full_name'] ?? 'Quý khách';
+        $uname = $currentUser['username'] ?? '';
+      ?>
+      const role = "<?= addslashes($role) ?>";
+      const name = "<?= addslashes($name) ?>";
+      const uname = "<?= addslashes($uname) ?>";
+
+      let greetText = "";
+      if (role === 'member') {
+        greetText = `Xin chào <strong>${name} (${uname})</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi có thể hỗ trợ bạn tra cứu các hồ sơ bệnh án cá nhân, xem chẩn đoán, thuốc điều trị và lịch hẹn khám theo đúng thẩm quyền được cấp.\n\nMọi thông tin y tế được kiểm soát nghiêm ngặt chống rò rỉ dữ liệu (lỗ hổng IDOR). Bạn cần hỗ trợ gì hôm nay?`;
+      } else if (role === 'doctor') {
+        greetText = `Kính chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi có thể hỗ trợ Bác sĩ xem danh sách bệnh án toàn viện, hướng dẫn quy trình tạo hồ sơ bệnh án mới (/?view=create_record) hoặc tra cứu thông tin chuyên môn.`;
+      } else if (role === 'admin') {
+        greetText = `Xin chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi có thể hỗ trợ Quản trị viên trong việc quản lý người dùng y tế (/?view=users), phân quyền hệ thống hoặc giám sát vận hành.`;
+      } else if (role === 'auditor') {
+        greetText = `Xin chào Kỹ sư An ninh <strong>${name}</strong>!\n\nTôi là Trợ lý AI MediRecord EMR. Tôi sẵn sàng giải thích cơ chế lỗ hổng phân quyền IDOR/BOLA (CWE-639), hướng dẫn kích hoạt kiểm thử an toàn thông tin và giám sát nhật ký vi phạm.`;
+      } else {
+        greetText = `Xin chào <strong>Quý khách</strong>!\n\nBạn đang truy cập hệ sinh thái MediRecord EMR ở chế độ Khách vãng lai. Bạn có thể sử dụng nút tròn [USER] ở góc phải để đổi nhanh sang tài khoản Bác sĩ, Bệnh nhân hoặc Admin để trải nghiệm đầy đủ quyền hạn.`;
+      }
+
+      appendAiMessage('bot', greetText, 'system');
+    }
+
+    function appendAiMessage(sender, text, source) {
+      const box = document.getElementById('aiChatMessages');
+      if (!box) return;
+
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'ai-msg ' + (sender === 'user' ? 'ai-msg-user' : 'ai-msg-bot');
+
+      // Chuyển đổi định dạng văn bản sang HTML an toàn
+      let formatted = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+
+      if (sender === 'bot' && source) {
+        let tag = '';
+        if (source === 'openrouter') {
+          tag = `<div style="font-size: 10px; color: #6366f1; margin-bottom: 4px; font-weight: 700;">[OPENROUTER AI]</div>`;
+        } else if (source === 'local_fallback') {
+          tag = `<div style="font-size: 10px; color: #0284c7; margin-bottom: 4px; font-weight: 700;">[TRỢ LÝ MEDIRECORD]</div>`;
+        }
+        msgDiv.innerHTML = tag + formatted;
+      } else {
+        msgDiv.innerHTML = formatted;
+      }
+
+      box.appendChild(msgDiv);
+      box.scrollTop = box.scrollHeight;
+      return msgDiv;
+    }
+
+    function sendQuickPrompt(promptText) {
+      const input = document.getElementById('aiChatInput');
+      if (!input) return;
+      input.value = promptText;
+      submitAiChat();
+    }
+
+    function submitAiChat() {
+      const input = document.getElementById('aiChatInput');
+      const sendBtn = document.getElementById('aiSendBtn');
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+
+      appendAiMessage('user', text);
+      input.value = '';
+
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.innerText = '...';
+      }
+
+      const typingDiv = appendAiMessage('bot', 'Đang phân tích dữ liệu và sinh câu trả lời...');
+
+      const apiKey = localStorage.getItem('openrouter_api_key') || '';
+      const model = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
+
+      fetch('/?action=ai_chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, apiKey: apiKey, model: model })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (typingDiv && typingDiv.parentNode) {
+          typingDiv.parentNode.removeChild(typingDiv);
+        }
+        if (data.reply) {
+          appendAiMessage('bot', data.reply, data.source);
+        } else if (data.error) {
+          appendAiMessage('bot', '[LỖI] ' + data.error);
+        }
+      })
+      .catch(err => {
+        if (typingDiv && typingDiv.parentNode) {
+          typingDiv.parentNode.removeChild(typingDiv);
+        }
+        appendAiMessage('bot', '[LỖI KẾT NỐI] Không thể gửi yêu cầu tới máy chủ: ' + err);
+      })
+      .finally(() => {
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.innerText = 'Gửi';
+        }
+      });
+    }
+
+    // Lắng nghe sự kiện phím Enter trên ô nhập Chatbot AI
+    document.addEventListener('DOMContentLoaded', function() {
+      const aiIn = document.getElementById('aiChatInput');
+      if (aiIn) {
+        aiIn.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            submitAiChat();
+          }
+        });
+      }
+    });
 
     // Điền nhanh thông tin đăng nhập
     function fillLogin(username, password) {
