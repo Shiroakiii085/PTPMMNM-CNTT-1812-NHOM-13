@@ -168,8 +168,8 @@ $mockRecords = [
         'doctor_name' => 'BS. CKI Lê Hoàng Minh',
         'title' => 'Bệnh án số 03: Hồ sơ chẩn đoán đặc biệt & Sinh thiết - BN Trần Thị Bình',
         'department' => 'Khoa Ung Bướu & Hóa Trị Liệu',
-        'diagnosis' => 'Theo dõi u biểu mô giai đoạn 1, chỉ định hóa xạ trị nội khoa bảo mật',
-        'content' => 'Bi mat cua Bob 3: Kết quả sinh thiết giải phẫu bệnh lý giai đoạn 1. Phác đồ hóa xạ trị bảo mật thông tin bệnh nhân nghiêm ngặt.',
+        'diagnosis' => 'Theo dõi u biểu mô giai đoạn 1, chỉ định hóa xạ trị nội khoa',
+        'content' => 'Bi mat cua Bob 3: Kết quả sinh thiết giải phẫu bệnh lý giai đoạn 1. Phác đồ hóa xạ trị kết hợp phục hồi chức năng.',
         'created_at' => '2026-10-24 10:00:00'
     ],
     4 => [
@@ -193,30 +193,52 @@ foreach ($_SESSION['custom_records'] as $cId => $cRec) {
     $mockRecords[$cId] = $cRec;
 }
 
-// 5. Danh sách thông báo dùng chung bệnh viện
+// 5. Danh sách thông báo bệnh viện (Phân loại: Bệnh nhân vs Nội bộ cán bộ y tế)
 $mockAnnouncements = [
     1 => [
         'id' => 1,
         'title' => 'Thông báo lịch trực cấp cứu và khám bệnh tuần này',
-        'body' => 'Bệnh viện duy trì trực cấp cứu 24/7. Các khoa lâm sàng và cận lâm sàng làm việc theo lịch hẹn từ 07:30 đến 17:00 hàng ngày. Dữ liệu dùng chung cho toàn thể cán bộ y tế và bệnh nhân.',
-        'content' => 'Bệnh viện duy trì trực cấp cứu 24/7. Các khoa lâm sàng và cận lâm sàng làm việc theo lịch hẹn từ 07:30 đến 17:00 hàng ngày. Dữ liệu dùng chung cho toàn thể cán bộ y tế và bệnh nhân.',
+        'body' => 'Bệnh viện duy trì trực cấp cứu 24/7. Các khoa lâm sàng và cận lâm sàng làm việc theo lịch hẹn từ 07:30 đến 17:00 hàng ngày. Thông tin công khai cho toàn thể người bệnh và thân nhân.',
+        'content' => 'Bệnh viện duy trì trực cấp cứu 24/7. Các khoa lâm sàng và cận lâm sàng làm việc theo lịch hẹn từ 07:30 đến 17:00 hàng ngày. Thông tin công khai cho toàn thể người bệnh và thân nhân.',
         'author' => 'Ban Giám Đốc Bệnh Viện',
+        'audience' => 'patient',
         'created_at' => '2026-10-24 07:00:00'
+    ],
+    2 => [
+        'id' => 2,
+        'title' => 'Hướng dẫn tra cứu kết quả khám bệnh trực tuyến',
+        'body' => 'Người bệnh và thân nhân có thể tra cứu hồ sơ bệnh án và lịch tái khám thông qua mã bệnh án cá nhân được cấp tại quầy tiếp đón.',
+        'content' => 'Người bệnh và thân nhân có thể tra cứu hồ sơ bệnh án và lịch tái khám thông qua mã bệnh án cá nhân được cấp tại quầy tiếp đón.',
+        'author' => 'Phòng Công Tác Xã Hội & Tiếp Đón',
+        'audience' => 'patient',
+        'created_at' => '2026-10-24 08:00:00'
+    ],
+    3 => [
+        'id' => 3,
+        'title' => 'Nội bộ: Quy trình an toàn thông tin & bảo mật hồ sơ EMR',
+        'body' => 'Yêu cầu toàn thể Bác sĩ, Dược sĩ và Cán bộ chuyên môn tuân thủ tiêu chuẩn ISO/IEC 27001 và Luật Khám bệnh, chữa bệnh. Tuyệt đối không chia sẻ tài khoản hoặc truy vấn hồ sơ bệnh án ngoài phạm vi phân công.',
+        'content' => 'Yêu cầu toàn thể Bác sĩ, Dược sĩ và Cán bộ chuyên môn tuân thủ tiêu chuẩn ISO/IEC 27001 và Luật Khám bệnh, chữa bệnh. Tuyệt đối không chia sẻ tài khoản hoặc truy vấn hồ sơ bệnh án ngoài phạm vi phân công.',
+        'author' => 'Ban Giám Đốc & Phòng An Toàn Thông Tin',
+        'audience' => 'internal',
+        'created_at' => '2026-10-24 08:30:00'
     ]
 ];
 
 if ($db !== null) {
     try {
-        $res = pg_query($db, 'SELECT id, title, body, created_at FROM sample_app.announcements ORDER BY id ASC');
+        @pg_query($db, "ALTER TABLE sample_app.announcements ADD COLUMN IF NOT EXISTS audience varchar(20) DEFAULT 'patient'");
+        $res = pg_query($db, 'SELECT id, title, body, audience, created_at FROM sample_app.announcements ORDER BY id ASC');
         if ($res && pg_num_rows($res) > 0) {
             $mockAnnouncements = [];
             while ($row = pg_fetch_assoc($res)) {
+                $aud = ($row['audience'] ?? 'patient') === 'internal' ? 'internal' : 'patient';
                 $mockAnnouncements[(int)$row['id']] = [
                     'id' => (int)$row['id'],
                     'title' => $row['title'],
                     'body' => $row['body'],
                     'content' => $row['body'],
-                    'author' => 'Ban Giám Đốc Bệnh Viện',
+                    'audience' => $aud,
+                    'author' => ($aud === 'internal') ? 'Ban Giám Đốc & Phòng An Toàn Thông Tin' : 'Ban Giám Đốc Bệnh Viện',
                     'created_at' => $row['created_at']
                 ];
             }
@@ -505,7 +527,7 @@ if ($action === 'run_full_test_suite') {
 // Đăng xuất
 if ($action === 'logout') {
     unset($_SESSION['auth_user']);
-    header('Location: /?view=login');
+    header('Location: /?view=login&msg=logged_out');
     exit;
 }
 
@@ -657,30 +679,38 @@ if ($action === 'add_user' && $method === 'POST') {
     $uRole = in_array($_POST['role'] ?? '', ['admin', 'doctor', 'member', 'auditor'], true) ? $_POST['role'] : 'member';
     $uDept = trim((string)($_POST['department'] ?? 'Khoa Khám Bệnh'));
 
-    if ($uName !== '' && $uPass !== '' && $uFullName !== '') {
-        $newUser = [
-            'username' => $uName,
-            'role' => $uRole,
-            'full_name' => $uFullName,
-            'department' => $uDept,
-            'token' => 'test_token_' . $uName
-        ];
-        $_SESSION['custom_users'][$uName] = $newUser;
-        $mockUsers[$uName] = $newUser;
-
-        if ($db !== null) {
-            try {
-                $hash = password_hash($uPass, PASSWORD_DEFAULT);
-                queryParams(
-                    $db,
-                    'INSERT INTO sample_app.users (username, password_hash, role, full_name, department) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (username) DO NOTHING',
-                    [$uName, $hash, $uRole, $uFullName, $uDept]
-                );
-            } catch (Throwable) {}
-        }
-        header('Location: /?view=users&msg=user_added');
+    if ($uName === '' || $uPass === '' || $uFullName === '') {
+        header('Location: /?view=users&err=missing_fields');
         exit;
     }
+
+    if (isset($mockUsers[$uName])) {
+        header('Location: /?view=users&err=username_taken');
+        exit;
+    }
+
+    $newUser = [
+        'username' => $uName,
+        'role' => $uRole,
+        'full_name' => $uFullName,
+        'department' => $uDept,
+        'token' => 'test_token_' . $uName
+    ];
+    $_SESSION['custom_users'][$uName] = $newUser;
+    $mockUsers[$uName] = $newUser;
+
+    if ($db !== null) {
+        try {
+            $hash = password_hash($uPass, PASSWORD_DEFAULT);
+            queryParams(
+                $db,
+                'INSERT INTO sample_app.users (username, password_hash, role, full_name, department) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (username) DO NOTHING',
+                [$uName, $hash, $uRole, $uFullName, $uDept]
+            );
+        } catch (Throwable) {}
+    }
+    header('Location: /?view=users&msg=user_added');
+    exit;
 }
 
 // Sửa người dùng (Chỉ Admin)
@@ -694,24 +724,32 @@ if ($action === 'edit_user' && $method === 'POST') {
     $uRole = in_array($_POST['role'] ?? '', ['admin', 'doctor', 'member', 'auditor'], true) ? $_POST['role'] : 'member';
     $uDept = trim((string)($_POST['department'] ?? 'Khoa Khám Bệnh'));
 
-    if (isset($mockUsers[$uName])) {
-        $mockUsers[$uName]['full_name'] = $uFullName;
-        $mockUsers[$uName]['role'] = $uRole;
-        $mockUsers[$uName]['department'] = $uDept;
-        $_SESSION['custom_users'][$uName] = $mockUsers[$uName];
-
-        if ($db !== null) {
-            try {
-                queryParams(
-                    $db,
-                    'UPDATE sample_app.users SET full_name = $1, role = $2, department = $3 WHERE username = $4',
-                    [$uFullName, $uRole, $uDept, $uName]
-                );
-            } catch (Throwable) {}
-        }
-        header('Location: /?view=users&msg=user_updated');
+    if ($uName === '' || $uFullName === '') {
+        header('Location: /?view=users&err=missing_fields');
         exit;
     }
+
+    if (!isset($mockUsers[$uName])) {
+        header('Location: /?view=users&err=user_not_found');
+        exit;
+    }
+
+    $mockUsers[$uName]['full_name'] = $uFullName;
+    $mockUsers[$uName]['role'] = $uRole;
+    $mockUsers[$uName]['department'] = $uDept;
+    $_SESSION['custom_users'][$uName] = $mockUsers[$uName];
+
+    if ($db !== null) {
+        try {
+            queryParams(
+                $db,
+                'UPDATE sample_app.users SET full_name = $1, role = $2, department = $3 WHERE username = $4',
+                [$uFullName, $uRole, $uDept, $uName]
+            );
+        } catch (Throwable) {}
+    }
+    header('Location: /?view=users&msg=user_updated');
+    exit;
 }
 
 // Xóa người dùng (Chỉ Admin)
@@ -721,22 +759,29 @@ if ($action === 'delete_user') {
         exit;
     }
     $delUser = trim((string)($_GET['username'] ?? ''));
+    if ($delUser === '') {
+        header('Location: /?view=users&err=user_not_found');
+        exit;
+    }
     if ($delUser === $currentUser['username']) {
         header('Location: /?view=users&err=cannot_delete_self');
         exit;
     }
-    if (isset($mockUsers[$delUser])) {
-        unset($mockUsers[$delUser]);
-        unset($_SESSION['custom_users'][$delUser]);
-
-        if ($db !== null) {
-            try {
-                queryParams($db, 'DELETE FROM sample_app.users WHERE username = $1', [$delUser]);
-            } catch (Throwable) {}
-        }
-        header('Location: /?view=users&msg=user_deleted');
+    if (!isset($mockUsers[$delUser])) {
+        header('Location: /?view=users&err=user_not_found');
         exit;
     }
+
+    unset($mockUsers[$delUser]);
+    unset($_SESSION['custom_users'][$delUser]);
+
+    if ($db !== null) {
+        try {
+            queryParams($db, 'DELETE FROM sample_app.users WHERE username = $1', [$delUser]);
+        } catch (Throwable) {}
+    }
+    header('Location: /?view=users&msg=user_deleted');
+    exit;
 }
 
 // =============================================================================
@@ -752,43 +797,50 @@ if ($action === 'add_announcement' && $method === 'POST') {
     $jsonInput = json_decode((string)file_get_contents('php://input'), true) ?: [];
     $title = trim((string)($_POST['title'] ?? $jsonInput['title'] ?? ''));
     $body = trim((string)($_POST['body'] ?? $jsonInput['body'] ?? ''));
-    if ($title !== '' && $body !== '') {
-        $maxDbId = 0;
-        if ($db !== null) {
-            try {
-                $mr = pg_query($db, 'SELECT COALESCE(MAX(id), 0) AS m FROM sample_app.announcements');
-                if ($mr) {
-                    $mRow = pg_fetch_assoc($mr);
-                    $maxDbId = (int)($mRow['m'] ?? 0);
-                }
-            } catch (Throwable) {}
-        }
-        $newId = max($maxDbId, count($mockAnnouncements)) + 1;
-        while (isset($mockAnnouncements[$newId])) {
-            $newId++;
-        }
-        if ($db !== null) {
-            try {
-                queryParams(
-                    $db,
-                    'INSERT INTO sample_app.announcements (id, title, body) VALUES ($1, $2, $3)',
-                    [$newId, $title, $body]
-                );
-                pg_query($db, 'SELECT setval(\'sample_app.announcements_id_seq\', (SELECT COALESCE(MAX(id), 1) FROM sample_app.announcements))');
-            } catch (Throwable) {}
-        }
-        $newAnn = [
-            'id' => $newId,
-            'title' => $title,
-            'body' => $body,
-            'content' => $body,
-            'author' => $currentUser['full_name'] ?? 'Ban Giám Đốc Bệnh Viện',
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-        $_SESSION['custom_announcements'][$newId] = $newAnn;
-        header('Location: /?view=announcements&msg=announcement_added');
+    $audience = trim((string)($_POST['audience'] ?? $jsonInput['audience'] ?? 'patient'));
+    if ($audience !== 'internal') $audience = 'patient';
+
+    if ($title === '' || $body === '') {
+        header('Location: /?view=announcements&err=missing_fields');
         exit;
     }
+
+    $maxDbId = 0;
+    if ($db !== null) {
+        try {
+            $mr = pg_query($db, 'SELECT COALESCE(MAX(id), 0) AS m FROM sample_app.announcements');
+            if ($mr) {
+                $mRow = pg_fetch_assoc($mr);
+                $maxDbId = (int)($mRow['m'] ?? 0);
+            }
+        } catch (Throwable) {}
+    }
+    $newId = max($maxDbId, count($mockAnnouncements)) + 1;
+    while (isset($mockAnnouncements[$newId])) {
+        $newId++;
+    }
+    if ($db !== null) {
+        try {
+            queryParams(
+                $db,
+                'INSERT INTO sample_app.announcements (id, title, body, audience) VALUES ($1, $2, $3, $4)',
+                [$newId, $title, $body, $audience]
+            );
+            pg_query($db, 'SELECT setval(\'sample_app.announcements_id_seq\', (SELECT COALESCE(MAX(id), 1) FROM sample_app.announcements))');
+        } catch (Throwable) {}
+    }
+    $newAnn = [
+        'id' => $newId,
+        'title' => $title,
+        'body' => $body,
+        'content' => $body,
+        'audience' => $audience,
+        'author' => ($audience === 'internal') ? 'Ban Giám Đốc & Phòng An Toàn Thông Tin' : ($currentUser['full_name'] ?? 'Ban Giám Đốc Bệnh Viện'),
+        'created_at' => date('Y-m-d H:i:s')
+    ];
+    $_SESSION['custom_announcements'][$newId] = $newAnn;
+    header('Location: /?view=announcements&msg=announcement_added&tab=' . $audience);
+    exit;
 }
 
 // Sửa thông báo (Chỉ Admin)
@@ -801,28 +853,39 @@ if ($action === 'edit_announcement' && $method === 'POST') {
     $id = (int)($_POST['id'] ?? $jsonInput['id'] ?? 0);
     $title = trim((string)($_POST['title'] ?? $jsonInput['title'] ?? ''));
     $body = trim((string)($_POST['body'] ?? $jsonInput['body'] ?? ''));
-    if ($id > 0 && $title !== '' && $body !== '') {
-        $updatedAnn = [
-            'id' => $id,
-            'title' => $title,
-            'body' => $body,
-            'content' => $body,
-            'author' => $currentUser['full_name'] ?? 'Ban Giám Đốc Bệnh Viện',
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-        $_SESSION['custom_announcements'][$id] = $updatedAnn;
-        if ($db !== null) {
-            try {
-                queryParams(
-                    $db,
-                    'UPDATE sample_app.announcements SET title = $1, body = $2 WHERE id = $3',
-                    [$title, $body, $id]
-                );
-            } catch (Throwable) {}
-        }
-        header('Location: /?view=announcements&msg=announcement_updated');
+    $audience = trim((string)($_POST['audience'] ?? $jsonInput['audience'] ?? 'patient'));
+    if ($audience !== 'internal') $audience = 'patient';
+
+    if ($id <= 0) {
+        header('Location: /?view=announcements&err=invalid_id');
         exit;
     }
+    if ($title === '' || $body === '') {
+        header('Location: /?view=announcements&err=missing_fields');
+        exit;
+    }
+
+    $updatedAnn = [
+        'id' => $id,
+        'title' => $title,
+        'body' => $body,
+        'content' => $body,
+        'audience' => $audience,
+        'author' => ($audience === 'internal') ? 'Ban Giám Đốc & Phòng An Toàn Thông Tin' : ($currentUser['full_name'] ?? 'Ban Giám Đốc Bệnh Viện'),
+        'created_at' => date('Y-m-d H:i:s')
+    ];
+    $_SESSION['custom_announcements'][$id] = $updatedAnn;
+    if ($db !== null) {
+        try {
+            queryParams(
+                $db,
+                'UPDATE sample_app.announcements SET title = $1, body = $2, audience = $3 WHERE id = $4',
+                [$title, $body, $audience, $id]
+            );
+        } catch (Throwable) {}
+    }
+    header('Location: /?view=announcements&msg=announcement_updated&tab=' . $audience);
+    exit;
 }
 
 // Xóa thông báo (Chỉ Admin)
@@ -832,20 +895,22 @@ if ($action === 'delete_announcement') {
         exit;
     }
     $id = (int)($_GET['id'] ?? 0);
-    if ($id > 0) {
-        unset($_SESSION['custom_announcements'][$id]);
-        if (!isset($_SESSION['deleted_announcements'])) {
-            $_SESSION['deleted_announcements'] = [];
-        }
-        $_SESSION['deleted_announcements'][] = $id;
-        if ($db !== null) {
-            try {
-                queryParams($db, 'DELETE FROM sample_app.announcements WHERE id = $1', [$id]);
-            } catch (Throwable) {}
-        }
-        header('Location: /?view=announcements&msg=announcement_deleted');
+    if ($id <= 0) {
+        header('Location: /?view=announcements&err=invalid_id');
         exit;
     }
+    unset($_SESSION['custom_announcements'][$id]);
+    if (!isset($_SESSION['deleted_announcements'])) {
+        $_SESSION['deleted_announcements'] = [];
+    }
+    $_SESSION['deleted_announcements'][] = $id;
+    if ($db !== null) {
+        try {
+            queryParams($db, 'DELETE FROM sample_app.announcements WHERE id = $1', [$id]);
+        } catch (Throwable) {}
+    }
+    header('Location: /?view=announcements&msg=announcement_deleted');
+    exit;
 }
 
 // Xuất file CSV sự cố an ninh
@@ -878,8 +943,12 @@ if ($action === 'edit_record_submit' && $method === 'POST') {
     $newDiagnosis = trim((string)($_POST['diagnosis'] ?? ''));
     $newContent = trim((string)($_POST['content'] ?? ''));
 
-    if (!isset($mockRecords[$recId])) {
-        header('Location: /?view=records&not_found=1');
+    if ($recId <= 0 || !isset($mockRecords[$recId])) {
+        header('Location: /?view=records&not_found=1&searched_id=' . urlencode((string)$recId));
+        exit;
+    }
+    if ($newTitle === '' || $newContent === '') {
+        header('Location: /?view=edit_record&id=' . $recId . '&err=missing_fields');
         exit;
     }
 
@@ -946,13 +1015,18 @@ if ($action === 'create_record_submit' && $method === 'POST') {
         exit;
     }
 
-    $targetPatient = trim((string)($_POST['patient_username'] ?? ''));
+    $targetPatient = trim((string)($_POST['owner_username'] ?? $_POST['patient_username'] ?? ''));
     $title = trim((string)($_POST['title'] ?? ''));
     $department = trim((string)($_POST['department'] ?? 'Khoa Khám Bệnh'));
     $diagnosis = trim((string)($_POST['diagnosis'] ?? ''));
     $content = trim((string)($_POST['content'] ?? ''));
 
-    if ($title !== '' && $targetPatient !== '') {
+    if ($title === '' || $targetPatient === '' || $content === '') {
+        header('Location: /?view=create_record&err=missing_fields');
+        exit;
+    }
+
+    if (true) {
         $newId = count($mockRecords) + 1;
         $newRecord = [
             'id' => $newId,
@@ -994,7 +1068,12 @@ if ($action === 'register_submit' && $method === 'POST') {
     $regDept = trim((string)($_POST['department'] ?? 'Khoa Khám Bệnh'));
 
     if ($regUsername === '' || $regPassword === '' || $regFullName === '') {
-        header('Location: /?view=register&err=missing_fields');
+        header('Location: /?view=register&err=missing_fields&u=' . urlencode($regUsername) . '&fn=' . urlencode($regFullName));
+        exit;
+    }
+
+    if (strlen($regPassword) < 6) {
+        header('Location: /?view=register&err=password_too_short&u=' . urlencode($regUsername) . '&fn=' . urlencode($regFullName));
         exit;
     }
 
@@ -1055,6 +1134,11 @@ if ($action === 'login_submit' && $method === 'POST') {
     $loginUser = trim((string)($_POST['username'] ?? ''));
     $loginPass = (string)($_POST['password'] ?? '');
 
+    if ($loginUser === '' || $loginPass === '') {
+        header('Location: /?view=login&err=missing_fields&u=' . urlencode($loginUser));
+        exit;
+    }
+
     $authenticated = false;
     $matchedUser = null;
 
@@ -1077,7 +1161,7 @@ if ($action === 'login_submit' && $method === 'POST') {
 
     // 2. Kiểm tra Mock Users / Custom Users nếu chưa xác thực từ CSDL
     if (!$authenticated && isset($mockUsers[$loginUser])) {
-        if ($loginPass === 'TestPass@2026' || $loginPass === '123456' || $loginPass === $loginUser || $loginPass !== '') {
+        if ($loginPass === 'TestPass@2026' || $loginPass === '123456' || $loginPass === $loginUser) {
             $authenticated = true;
             $matchedUser = $mockUsers[$loginUser];
         }
@@ -1088,7 +1172,7 @@ if ($action === 'login_submit' && $method === 'POST') {
         header('Location: /?view=records&login_success=1');
         exit;
     } else {
-        header('Location: /?view=login&err=invalid&u=' . urlencode($loginUser));
+        header('Location: /?view=login&err=invalid_credentials&u=' . urlencode($loginUser));
         exit;
     }
 }
@@ -1385,11 +1469,13 @@ $recordDetail = null;
 $leakActive = false;
 
 if ($view === 'record') {
-    $recId = (int)($_GET['id'] ?? 1);
-    $recordDetail = $mockRecords[$recId] ?? null;
+    $rawId = $_GET['id'] ?? '';
+    $recId = (is_numeric($rawId) && (int)$rawId > 0) ? (int)$rawId : 0;
+    $recordDetail = ($recId > 0) ? ($mockRecords[$recId] ?? null) : null;
 
     if ($recordDetail === null) {
-        header('Location: /?view=records&not_found=1');
+        $searchedId = trim((string)$rawId);
+        header('Location: /?view=records&not_found=1' . ($searchedId !== '' ? '&searched_id=' . urlencode($searchedId) : ''));
         exit;
     }
 
@@ -1430,11 +1516,13 @@ if ($view === 'record') {
 // Xử lý form chỉnh sửa bệnh án (Edit Record)
 $editRecordDetail = null;
 if ($view === 'edit_record') {
-    $recId = (int)($_GET['id'] ?? 1);
-    $editRecordDetail = $mockRecords[$recId] ?? null;
+    $rawId = $_GET['id'] ?? '';
+    $recId = (is_numeric($rawId) && (int)$rawId > 0) ? (int)$rawId : 0;
+    $editRecordDetail = ($recId > 0) ? ($mockRecords[$recId] ?? null) : null;
 
     if ($editRecordDetail === null) {
-        header('Location: /?view=records&not_found=1');
+        $searchedId = trim((string)$rawId);
+        header('Location: /?view=records&not_found=1' . ($searchedId !== '' ? '&searched_id=' . urlencode($searchedId) : ''));
         exit;
     }
     if ($currentUser === null) {
@@ -4772,6 +4860,7 @@ if ($view === 'tester') {
             <textarea id="bkNote" rows="3" placeholder="Mô tả triệu chứng bệnh hoặc nhu cầu khám chuyên sâu..." style="width: 100%; padding: 8px 12px; border: 1px solid var(--bm-border); border-radius: 6px; font-size: 13px; font-family: inherit;"></textarea>
           </div>
 
+          <div id="bookingErrorMsg" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 14px;"></div>
           <div id="bookingSuccessMsg" style="display: none; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 14px;">
             Tiếp nhận lịch hẹn khám thành công! Bộ phận tiếp đón của Bệnh viện Bạch Mai sẽ liên hệ với quý khách trong vòng 15 phút.
           </div>
@@ -4798,11 +4887,50 @@ if ($view === 'tester') {
       }
       function closeBookingModal() {
         document.getElementById('bookingModal').style.display = 'none';
-        document.getElementById('bookingSuccessMsg').style.display = 'none';
+        const okBox = document.getElementById('bookingSuccessMsg');
+        if (okBox) okBox.style.display = 'none';
+        const errBox = document.getElementById('bookingErrorMsg');
+        if (errBox) errBox.style.display = 'none';
       }
       function handleBookingSubmit(e) {
         e.preventDefault();
-        document.getElementById('bookingSuccessMsg').style.display = 'block';
+        const phone = (document.getElementById('bkPhone').value || '').trim();
+        const dateVal = document.getElementById('bkDate').value;
+        const errBox = document.getElementById('bookingErrorMsg');
+        const okBox = document.getElementById('bookingSuccessMsg');
+        
+        // Custom bắt lỗi số điện thoại Việt Nam
+        const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+        const cleanPhone = phone.replace(/[\s\.\-]/g, '');
+        if (!phoneRegex.test(cleanPhone)) {
+          if (errBox) {
+            errBox.textContent = 'Số điện thoại không hợp lệ! Vui lòng nhập số điện thoại di động Việt Nam gồm 10 chữ số (Ví dụ: 0912345678).';
+            errBox.style.display = 'block';
+          }
+          if (okBox) okBox.style.display = 'none';
+          return;
+        }
+
+        // Custom bắt lỗi ngày khám trong quá khứ
+        if (dateVal) {
+          const selectedDate = new Date(dateVal + 'T00:00:00');
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (selectedDate < today) {
+            if (errBox) {
+              errBox.textContent = 'Ngày hẹn khám không hợp lệ! Vui lòng chọn ngày khám từ hôm nay trở đi.';
+              errBox.style.display = 'block';
+            }
+            if (okBox) okBox.style.display = 'none';
+            return;
+          }
+        }
+
+        if (errBox) errBox.style.display = 'none';
+        if (okBox) {
+          okBox.textContent = 'Tiếp nhận lịch hẹn khám thành công! Bộ phận tiếp đón của Bệnh viện Bạch Mai sẽ liên hệ với quý khách trong vòng 15 phút.';
+          okBox.style.display = 'block';
+        }
         setTimeout(function() {
           closeBookingModal();
         }, 2200);
@@ -5000,6 +5128,16 @@ if ($view === 'tester') {
 
       <!-- VIEW 1: CHI TIẾT BỆNH ÁN -->
       <?php if ($view === 'record' && $recordDetail): ?>
+        <?php if (isset($_GET['created'])): ?>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
+            <strong>Thành công:</strong> Hồ sơ bệnh án điện tử mới đã được lập và ghi nhận vào hệ thống thành công!
+          </div>
+        <?php elseif (isset($_GET['updated'])): ?>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
+            <strong>Thành công:</strong> Thông tin hồ sơ bệnh án đã được cập nhật thành công!
+          </div>
+        <?php endif; ?>
+
         <?php if ($leakActive): ?>
           <div class="leak-box">
             <div style="font-weight: 800; color: #be123c; font-size: 15px; margin-bottom: 6px;">
@@ -5069,6 +5207,12 @@ if ($view === 'tester') {
             <a href="/?view=record&id=<?= $editRecordDetail['id'] ?>" class="btn btn-outline">Hủy bỏ</a>
           </div>
 
+          <?php if (isset($_GET['err']) && $_GET['err'] === 'missing_fields'): ?>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin: 0 0 18px 0;">
+              <strong>Lỗi:</strong> Tiêu đề và nội dung bệnh án không được để trống!
+            </div>
+          <?php endif; ?>
+
           <form action="/?action=edit_record_submit" method="POST">
             <input type="hidden" name="id" value="<?= $editRecordDetail['id'] ?>">
 
@@ -5106,6 +5250,12 @@ if ($view === 'tester') {
             </div>
             <a href="/?view=records" class="btn btn-outline">Quay lại danh sách</a>
           </div>
+
+          <?php if (isset($_GET['err']) && $_GET['err'] === 'missing_fields'): ?>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin: 0 0 18px 0;">
+              <strong>Lỗi:</strong> Vui lòng điền đầy đủ tiêu đề, chuyên khoa, chẩn đoán sơ bộ và nội dung phác đồ điều trị!
+            </div>
+          <?php endif; ?>
 
           <form action="/?action=create_record_submit" method="POST">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
@@ -5147,44 +5297,111 @@ if ($view === 'tester') {
 
       <!-- VIEW 4: THÔNG BÁO BỆNH VIỆN -->
       <?php elseif ($view === 'announcements'): ?>
+        <?php
+          $isStaff = ($currentUser && in_array($currentUser['role'], ['admin', 'doctor', 'auditor'], true));
+          $annTab = $_GET['tab'] ?? 'patient';
+          if ($annTab === 'internal' && !$isStaff) {
+              $annTab = 'patient';
+              $unauthTabWarning = true;
+          } else {
+              $unauthTabWarning = false;
+          }
+
+          $patientAnnouncements = array_values(array_filter($mockAnnouncements, fn($a) => ($a['audience'] ?? 'patient') === 'patient'));
+          $internalAnnouncements = $isStaff ? array_values(array_filter($mockAnnouncements, fn($a) => ($a['audience'] ?? 'patient') === 'internal')) : [];
+
+          $displayAnnouncements = ($annTab === 'internal' && $isStaff) ? $internalAnnouncements : $patientAnnouncements;
+        ?>
+
+        <?php if ($unauthTabWarning || (isset($_GET['err']) && $_GET['err'] === 'unauthorized_internal_announcements')): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+            <strong>Từ chối truy cập:</strong> Bạn không có quyền truy cập chuyên mục Thông Báo Nội Bộ của Cán Báo Y Tế theo chính sách phân quyền RBAC!
+          </div>
+        <?php endif; ?>
+
         <?php if (isset($_GET['msg'])): ?>
           <?php if ($_GET['msg'] === 'announcement_added'): ?>
             <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
-              <strong>Thành công:</strong> Thông báo bệnh viện mới đã được đăng tải cho toàn hệ thống!
+              <strong>Thành công:</strong> Thông báo bệnh viện mới đã được đăng tải thành công!
             </div>
           <?php elseif ($_GET['msg'] === 'announcement_updated'): ?>
             <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
-              <strong>Cập nhật:</strong> Thông tin bản tin nội bộ đã được lưu thay đổi thành công!
+              <strong>Cập nhật:</strong> Thông tin bản tin thông báo đã được lưu thay đổi thành công!
             </div>
           <?php elseif ($_GET['msg'] === 'announcement_deleted'): ?>
             <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
               <strong>Đã xóa:</strong> Bản tin thông báo đã được gỡ bỏ khỏi hệ thống!
             </div>
           <?php endif; ?>
+        <?php elseif (isset($_GET['err'])): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+            <?php if ($_GET['err'] === 'missing_fields'): ?>
+              <strong>Lỗi:</strong> Tiêu đề và nội dung thông báo không được để trống!
+            <?php elseif ($_GET['err'] === 'invalid_id'): ?>
+              <strong>Lỗi:</strong> Mã thông báo không hợp lệ hoặc không tồn tại!
+            <?php else: ?>
+              <strong>Lỗi:</strong> <?= htmlspecialchars($_GET['err']) ?>
+            <?php endif; ?>
+          </div>
         <?php endif; ?>
+
+        <!-- THANH ĐIỀU HƯỚNG TAB PHÂN QUYỀN (RBAC TABS) -->
+        <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+          <a href="/?view=announcements&tab=patient" class="btn <?= $annTab === 'patient' ? 'btn-primary' : 'btn-outline' ?>" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+            Thông Báo Cho Bệnh Nhân (<?= count($patientAnnouncements) ?>)
+          </a>
+          <?php if ($isStaff): ?>
+            <a href="/?view=announcements&tab=internal" class="btn <?= $annTab === 'internal' ? 'btn-primary' : 'btn-outline' ?>" style="font-size: 13px; padding: 8px 16px; text-decoration: none; border-color: #f59e0b; <?= $annTab === 'internal' ? 'background: #d97706; color: #fff;' : 'color: #b45309;' ?>">
+              Thông Báo Nội Bộ Cán Bộ Y Tế (<?= count($internalAnnouncements) ?>) <span style="font-size: 10px; background: rgba(0,0,0,0.12); padding: 2px 6px; border-radius: 10px; margin-left: 4px;">NỘI BỘ</span>
+            </a>
+          <?php endif; ?>
+        </div>
 
         <div class="card">
           <div class="card-head">
             <div>
-              <div class="card-title">Bản Tin & Thông Báo Nội Bộ Bệnh Viện</div>
-              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Dữ liệu dùng chung công khai cho toàn thể y bác sĩ và bệnh nhân</div>
+              <div class="card-title">
+                <?= $annTab === 'internal' ? 'Bản Tin & Thông Báo Nội Bộ Bệnh Viện' : 'Thông Báo Dành Cho Bệnh Nhân & Thân Nhân' ?>
+              </div>
+              <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                <?= $annTab === 'internal' ? 'Phạm vi: Chỉ lưu hành nội bộ y bác sĩ, ban giám đốc và kỹ sư kiểm toán EMR' : 'Phạm vi: Thông báo dùng chung công khai cho toàn thể người bệnh và thân nhân' ?>
+              </div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <span style="font-size: 12px; color: var(--muted);"><?= count($mockAnnouncements) ?> thông báo</span>
+              <span style="font-size: 12px; color: var(--muted);"><?= count($displayAnnouncements) ?> thông báo</span>
               <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
-                <button onclick="openAddAnnouncementModal()" class="btn btn-primary" style="font-size: 12px;">+ Đăng Thông Báo Mới</button>
+                <button onclick="openAddAnnouncementModal('<?= $annTab ?>')" class="btn btn-primary" style="font-size: 12px;">+ Đăng Thông Báo Mới</button>
               <?php endif; ?>
             </div>
           </div>
 
+          <?php if ($annTab === 'internal'): ?>
+            <div style="background: #fffbeb; border-bottom: 1px solid #fde68a; padding: 12px 20px; font-size: 12px; color: #92400e; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <strong>LƯU HÀNH NỘI BỘ:</strong> Chuyên mục dành riêng cho cán bộ y tế (Bác sĩ, Điều dưỡng, Kỹ sư kiểm toán, Quản trị viên). Bệnh nhân và khách vãng lai bị chặn truy cập theo chính sách RBAC.
+              </div>
+              <span style="font-size: 11px; font-weight: 700; background: #fef3c7; color: #b45309; padding: 3px 8px; border-radius: 4px; border: 1px solid #fcd34d; white-space: nowrap;">BẢO MẬT NỘI BỘ</span>
+            </div>
+          <?php endif; ?>
+
           <div id="announcementsList" style="padding: 16px 20px;">
-            <?php if (empty($mockAnnouncements)): ?>
-              <div style="text-align: center; padding: 40px; color: var(--muted);">Hiện chưa có thông báo mới nào từ bệnh viện.</div>
+            <?php if (empty($displayAnnouncements)): ?>
+              <div style="text-align: center; padding: 40px; color: var(--muted);">
+                <?= $annTab === 'internal' ? 'Hiện chưa có thông báo nội bộ mới nào dành cho cán bộ y tế.' : 'Hiện chưa có thông báo mới nào từ bệnh viện dành cho người bệnh.' ?>
+              </div>
             <?php else: ?>
-              <?php foreach ($mockAnnouncements as $ann): ?>
+              <?php foreach ($displayAnnouncements as $ann): ?>
+                <?php $isAudInternal = (($ann['audience'] ?? 'patient') === 'internal'); ?>
                 <div class="announcement-card" data-pageable="true" style="padding: 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px; background: #fff;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <h4 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0;"><?= htmlspecialchars($ann['title']) ?></h4>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <h4 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0;"><?= htmlspecialchars($ann['title']) ?></h4>
+                      <?php if ($isAudInternal): ?>
+                        <span style="font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; border: 1px solid #fde68a;">NỘI BỘ Y TẾ</span>
+                      <?php else: ?>
+                        <span style="font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; border: 1px solid #bae6fd;">CHO BỆNH NHÂN</span>
+                      <?php endif; ?>
+                    </div>
                     <span style="font-size: 11px; color: #64748b;"><?= $ann['created_at'] ?></span>
                   </div>
                   <div style="font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 8px;">
@@ -5192,11 +5409,11 @@ if ($view === 'tester') {
                   </div>
                   <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--border);">
                     <div style="font-size: 11px; color: #94a3b8;">
-                      Người đăng: <strong><?= htmlspecialchars($ann['author'] ?? 'Ban Giám Đốc Bệnh Viện') ?></strong> | Phạm vi: <code>Công cộng (Dùng chung)</code>
+                      Người đăng: <strong><?= htmlspecialchars($ann['author'] ?? 'Ban Giám Đốc Bệnh Viện') ?></strong> | Đối tượng: <code><?= $isAudInternal ? 'Nội bộ cán bộ NV y tế' : 'Bệnh nhân & Thân nhân' ?></code>
                     </div>
                     <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
                       <div style="display: inline-flex; gap: 6px;">
-                        <button type="button" onclick="openEditAnnouncementModal(<?= (int)$ann['id'] ?>, <?= htmlspecialchars(json_encode($ann['title']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($ann['body'] ?? $ann['content'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
+                        <button type="button" onclick="openEditAnnouncementModal(<?= (int)$ann['id'] ?>, <?= htmlspecialchars(json_encode($ann['title']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($ann['body'] ?? $ann['content'] ?? ''), ENT_QUOTES, 'UTF-8') ?>, '<?= $ann['audience'] ?? 'patient' ?>')" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
                         <a href="/?action=delete_announcement&id=<?= (int)$ann['id'] ?>" onclick="return confirm('Bạn có chắc muốn xóa thông báo này?')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Xóa</a>
                       </div>
                     <?php endif; ?>
@@ -5218,12 +5435,19 @@ if ($view === 'tester') {
               </div>
               <form action="/?action=add_announcement" method="POST">
                 <div class="form-group">
+                  <label>Phân loại đối tượng nhận thông báo (Phân quyền): <span style="color:#ef4444;">*</span></label>
+                  <select name="audience" id="addAnnouncementAudience" required style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+                    <option value="patient">Thông báo cho Bệnh nhân & Thân nhân (Công khai)</option>
+                    <option value="internal">Thông báo Nội bộ cán bộ y tế (Chỉ Bác sĩ, Nhân viên & Quản trị)</option>
+                  </select>
+                </div>
+                <div class="form-group">
                   <label>Tiêu đề thông báo: <span style="color:#ef4444;">*</span></label>
                   <input type="text" name="title" placeholder="VD: Kế hoạch khám định kỳ..." required>
                 </div>
                 <div class="form-group">
                   <label>Nội dung chi tiết: <span style="color:#ef4444;">*</span></label>
-                  <textarea name="body" rows="5" placeholder="Nhập nội dung thông báo gửi đến toàn thể cán bộ và người bệnh..." required style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13px; box-sizing: border-box;"></textarea>
+                  <textarea name="body" rows="5" placeholder="Nhập nội dung thông báo gửi đến đối tượng tương ứng..." required style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13px; box-sizing: border-box;"></textarea>
                 </div>
                 <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px;">
                   <button type="button" onclick="closeAddAnnouncementModal()" class="btn btn-outline">Hủy Bỏ</button>
@@ -5243,6 +5467,13 @@ if ($view === 'tester') {
               <form action="/?action=edit_announcement" method="POST">
                 <input type="hidden" id="editAnnouncementId" name="id">
                 <div class="form-group">
+                  <label>Phân loại đối tượng nhận thông báo (Phân quyền): <span style="color:#ef4444;">*</span></label>
+                  <select name="audience" id="editAnnouncementAudience" required style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+                    <option value="patient">Thông báo cho Bệnh nhân & Thân nhân (Công khai)</option>
+                    <option value="internal">Thông báo Nội bộ cán bộ y tế (Chỉ Bác sĩ, Nhân viên & Quản trị)</option>
+                  </select>
+                </div>
+                <div class="form-group">
                   <label>Tiêu đề thông báo: <span style="color:#ef4444;">*</span></label>
                   <input type="text" id="editAnnouncementTitle" name="title" required>
                 </div>
@@ -5259,8 +5490,33 @@ if ($view === 'tester') {
           </div>
         <?php endif; ?>
 
-      <!-- VIEW 5: QUẢN TRỊ NGƯỜI DÙNG (ADMIN) -->
       <?php elseif ($view === 'users' && $currentUser && $currentUser['role'] === 'admin'): ?>
+
+        <?php if (isset($_GET['msg'])): ?>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+            <?php if ($_GET['msg'] === 'user_added'): ?>
+              <strong>Thành công:</strong> Đã tạo mới tài khoản người dùng thành công!
+            <?php elseif ($_GET['msg'] === 'user_updated'): ?>
+              <strong>Cập nhật:</strong> Đã lưu thay đổi thông tin người dùng thành công!
+            <?php elseif ($_GET['msg'] === 'user_deleted'): ?>
+              <strong>Đã xóa:</strong> Đã xóa tài khoản người dùng khỏi hệ thống!
+            <?php endif; ?>
+          </div>
+        <?php elseif (isset($_GET['err'])): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+            <?php if ($_GET['err'] === 'cannot_delete_self'): ?>
+              <strong>Lỗi:</strong> Không thể tự xóa tài khoản của chính mình khi đang đăng nhập!
+            <?php elseif ($_GET['err'] === 'missing_fields'): ?>
+              <strong>Lỗi:</strong> Vui lòng nhập đầy đủ tên đăng nhập, mật khẩu và họ tên!
+            <?php elseif ($_GET['err'] === 'username_taken'): ?>
+              <strong>Lỗi:</strong> Tên đăng nhập đã tồn tại trong hệ thống! Vui lòng chọn username khác.
+            <?php elseif ($_GET['err'] === 'user_not_found'): ?>
+              <strong>Lỗi:</strong> Không tìm thấy thông tin tài khoản cần xử lý!
+            <?php else: ?>
+              <strong>Lỗi:</strong> <?= htmlspecialchars($_GET['err']) ?>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
 
         <div class="card">
           <div class="card-head">
@@ -5669,18 +5925,24 @@ if ($view === 'tester') {
 
           <?php if (isset($_GET['err'])): ?>
             <div style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
-              <?php if ($_GET['err'] === 'invalid_credentials'): ?>
+              <?php if (in_array($_GET['err'], ['invalid', 'invalid_credentials'], true)): ?>
                 <strong>Đăng nhập thất bại:</strong> Tên đăng nhập hoặc mật khẩu không chính xác! Vui lòng thử lại.
               <?php elseif ($_GET['err'] === 'missing_fields'): ?>
                 <strong>Lỗi:</strong> Vui lòng điền đầy đủ tên đăng nhập và mật khẩu!
               <?php else: ?>
-                <strong>Thông báo:</strong> <?= htmlspecialchars($_GET['err']) ?>
+                <strong>Thông báo lỗi:</strong> <?= htmlspecialchars($_GET['err']) ?>
               <?php endif; ?>
             </div>
-          <?php elseif (isset($_GET['msg']) && $_GET['msg'] === 'require_login'): ?>
-            <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
-              <strong>Yêu cầu đăng nhập:</strong> Vui lòng đăng nhập tài khoản để truy cập thông tin bệnh án y tế.
-            </div>
+          <?php elseif (isset($_GET['msg'])): ?>
+            <?php if ($_GET['msg'] === 'require_login'): ?>
+              <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+                <strong>Yêu cầu đăng nhập:</strong> Vui lòng đăng nhập tài khoản để truy cập thông tin bệnh án y tế.
+              </div>
+            <?php elseif ($_GET['msg'] === 'logged_out'): ?>
+              <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;">
+                <strong>Đã đăng xuất:</strong> Bạn đã đăng xuất an toàn khỏi hệ thống!
+              </div>
+            <?php endif; ?>
           <?php endif; ?>
 
           <form action="/?action=login_submit" method="POST">
@@ -5794,6 +6056,23 @@ if ($view === 'tester') {
           }
         ?>
 
+        <?php if (isset($_GET['not_found'])): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 14px 18px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div>
+              <strong style="font-size: 14px;">THÔNG BÁO TRA CỨU:</strong> ID bệnh án <?= (isset($_GET['searched_id']) && $_GET['searched_id'] !== '') ? '<strong>#' . htmlspecialchars($_GET['searched_id']) . '</strong>' : '' ?> sai hoặc không tồn tại trên hệ thống. Vui lòng kiểm tra lại mã số hồ sơ!
+            </div>
+            <a href="/?view=records" style="color: #991b1b; text-decoration: underline; font-weight: 700; font-size: 12px; margin-left: 12px;">Đóng</a>
+          </div>
+        <?php elseif (isset($_GET['login_success'])): ?>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
+            <strong>Đăng nhập thành công!</strong> Chào mừng <strong><?= htmlspecialchars($currentUser['full_name'] ?? '') ?></strong> (<code><?= htmlspecialchars($currentUser['role'] ?? '') ?></code>) quay trở lại hệ thống MediRecord EMR.
+          </div>
+        <?php elseif (isset($_GET['reg_success'])): ?>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
+            <strong>Đăng ký thành công!</strong> Tài khoản bệnh nhân của bạn đã được khởi tạo và đăng nhập tự động. Chúc bạn một ngày tốt lành!
+          </div>
+        <?php endif; ?>
+
         <div class="card">
           <div class="card-head">
             <div>
@@ -5809,17 +6088,17 @@ if ($view === 'tester') {
             </div>
           </div>
 
-          <!-- Hộp tra cứu nhanh theo ID (Điểm kiểm thử IDOR trực tiếp) -->
+          <!-- Hộp tra cứu nhanh theo ID (Không giới hạn số lượng bệnh án, bắt lỗi rõ ràng) -->
           <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
             <div>
               <div style="font-weight: 700; font-size: 13px; color: #0f172a;">TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID:</div>
               <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
-                Nhập mã bệnh án (Ví dụ: ID <code>1</code>, <code>2</code> của An, hoặc ID <code>3</code> của Bình) để kiểm tra phản hồi phân quyền.
+                Nhập mã bệnh án (Ví dụ: ID <code>1</code>, <code>2</code> của An, hoặc ID <code>3</code> của Bình) để kiểm tra phản hồi phân quyền. Không giới hạn số lượng hồ sơ.
               </div>
             </div>
             <form action="/" method="GET" style="display: flex; gap: 8px; align-items: center;">
               <input type="hidden" name="view" value="record">
-              <input type="number" name="id" min="1" max="10" value="3" style="width: 80px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: 700; text-align: center;">
+              <input type="number" name="id" min="1" placeholder="Nhập ID..." value="<?= isset($_GET['searched_id']) ? htmlspecialchars($_GET['searched_id']) : '3' ?>" style="width: 120px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: 700; text-align: center;">
               <button type="submit" class="btn btn-primary" style="font-size: 12px;">Tra Cứu Bệnh Án</button>
             </form>
           </div>
@@ -6168,7 +6447,11 @@ if ($view === 'tester') {
     }
 
     // Modal quản lý thông báo bệnh viện (Admin)
-    function openAddAnnouncementModal() {
+    function openAddAnnouncementModal(tab) {
+      const audEl = document.getElementById('addAnnouncementAudience');
+      if (audEl && tab) {
+        audEl.value = (tab === 'internal') ? 'internal' : 'patient';
+      }
       const m = document.getElementById('addAnnouncementModal');
       if (m) m.style.display = 'flex';
     }
@@ -6176,14 +6459,18 @@ if ($view === 'tester') {
       const m = document.getElementById('addAnnouncementModal');
       if (m) m.style.display = 'none';
     }
-    function openEditAnnouncementModal(id, title, body) {
+    function openEditAnnouncementModal(id, title, body, audience) {
       const idEl = document.getElementById('editAnnouncementId');
       const titleEl = document.getElementById('editAnnouncementTitle');
       const bodyEl = document.getElementById('editAnnouncementBody');
+      const audEl = document.getElementById('editAnnouncementAudience');
       if (idEl && titleEl && bodyEl) {
         idEl.value = id;
         titleEl.value = title;
         bodyEl.value = body;
+        if (audEl && audience) {
+          audEl.value = audience;
+        }
         const m = document.getElementById('editAnnouncementModal');
         if (m) m.style.display = 'flex';
       }

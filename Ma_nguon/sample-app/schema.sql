@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS sample_app.announcements (
   id bigserial PRIMARY KEY,
   title varchar(200) NOT NULL,
   body text NOT NULL,
+  audience varchar(20) NOT NULL DEFAULT 'patient',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -92,10 +93,14 @@ INSERT INTO sample_app.notes (id, owner_username, doctor_username, title, conten
  'Báo cáo chi tiết các đợt phát thuốc bảo hiểm y tế đặc biệt. Đáp ứng thuốc tốt sau chu kỳ 1.', 
  'Khoa Dược Lâm Sàng', 'Phục hồi thể trạng sau chu kỳ điều trị đầu tiên');
 
--- 8. Nạp Thông báo dùng chung của bệnh viện
-INSERT INTO sample_app.announcements (id, title, body) VALUES
+-- 8. Nạp Thông báo dùng chung của bệnh viện (Phân loại: Bệnh nhân vs Nội bộ cán bộ y tế)
+INSERT INTO sample_app.announcements (id, title, body, audience) VALUES
 (1, 'Thông báo lịch trực cấp cứu và khám bệnh tuần này', 
- 'Bệnh viện Bạch Mai duy trì trực cấp cứu 24/7. Các khoa lâm sàng và cận lâm sàng làm việc theo lịch hẹn từ 07:30 đến 17:00 hàng ngày. Dữ liệu dùng chung cho mọi cán bộ y tế và bệnh nhân.');
+ 'Bệnh viện Bạch Mai duy trì trực cấp cứu 24/7. Các khoa lâm sàng và cận lâm sàng làm việc theo lịch hẹn từ 07:30 đến 17:00 hàng ngày. Dữ liệu dùng chung cho mọi cán bộ y tế và bệnh nhân.', 'patient'),
+(2, 'Hướng dẫn tra cứu kết quả khám bệnh trực tuyến',
+ 'Người bệnh và thân nhân có thể tra cứu hồ sơ bệnh án và lịch tái khám thông qua mã bệnh án cá nhân được cấp tại quầy tiếp đón.', 'patient'),
+(3, 'Nội bộ: Quy trình an toàn thông tin & bảo mật hồ sơ EMR',
+ 'Yêu cầu toàn thể Bác sĩ, Dược sĩ và Cán bộ chuyên môn tuân thủ tiêu chuẩn ISO/IEC 27001 và Luật Khám bệnh, chữa bệnh. Tuyệt đối không chia sẻ tài khoản hoặc truy vấn hồ sơ bệnh án ngoài phạm vi phân công.', 'internal');
 
 -- Đặt lại giá trị Sequence
 SELECT setval('sample_app.notes_id_seq', (SELECT COALESCE(MAX(id), 1) FROM sample_app.notes));
