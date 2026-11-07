@@ -953,15 +953,36 @@ if ($action === 'edit_record_submit' && $method === 'POST') {
     }
 
     $targetRecord = $mockRecords[$recId];
-    $isOwner = ($currentUser && $currentUser['username'] === $targetRecord['owner_username']);
     $isStaff = ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true));
 
-    // =========================================================================
-    // LỖ HỔNG IDOR TRÊN THAO TÁC SỬA BỆNH ÁN:
-    // Khi BUG_IDOR = 1: Bệnh nhân An (bn_an) được phép sửa trái phép bệnh án 3 của Bình!
-    // Khi BUG_IDOR = 0: Máy chủ chặn lại với HTTP 403 Forbidden!
-    // =========================================================================
-    if (!$isOwner && !$isStaff) {
+    // Phân quyền: Bệnh nhân chỉ có quyền xem, không được sửa bệnh án
+    if (!$isStaff) {
+        if ($bugIdor && $recId === 3) {
+            // Cho phép sửa trái phép khi bật lỗi IDOR
+            $_SESSION['idor_exploit_success'] = true;
+            recordSecurityIncident(
+                'IDOR_TAMPERING_EXPLOIT',
+                'CRITICAL',
+                $currentUser,
+                "Bệnh án số 03 (BN Trần Thị Bình)",
+                "VI PHẠM BẢO MẬT NGHIÊM TRỌNG: Người dùng " . ($currentUser['full_name'] ?? $currentUser['username']) . " đã lợi dụng lỗ hổng IDOR để sửa đổi trái phép dữ liệu hồ sơ bệnh án #03 của bệnh nhân khác!",
+                ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
+        } else {
+            recordSecurityIncident(
+                'PATIENT_TAMPERING_DENIED',
+                'HIGH',
+                $currentUser,
+                "Bệnh án số {$recId} (" . ($targetRecord['owner_username'] ?? 'Khác') . ")",
+                "Phát hiện hành vi sửa đổi trái phép: Bệnh nhân " . ($currentUser['full_name'] ?? $currentUser['username']) . " cố tình gửi lệnh ghi đè bệnh án số {$recId} nhưng đã bị hệ thống ABAC chặn đứng với quyền CHỈ XEM.",
+                ['status_code' => 403, 'cwe' => 'CWE-285 (Improper Authorization)']
+            );
+            header('Location: /?view=record&id=' . $recId . '&err=patient_read_only');
+            exit;
+        }
+    }
+
+    if (false) {
         if ($bugIdor && $recId === 3) {
             // Cho phép sửa trái phép khi bật lỗi
             $_SESSION['idor_exploit_success'] = true;
@@ -1530,10 +1551,36 @@ if ($view === 'edit_record') {
         exit;
     }
 
-    $isOwner = ($editRecordDetail['owner_username'] === $currentUser['username']);
     $isStaff = in_array($currentUser['role'], ['doctor', 'admin'], true);
 
-    if (!$isOwner && !$isStaff) {
+    // Phân quyền: Bệnh nhân chỉ có quyền xem, không được vào trang chỉnh sửa bệnh án
+    if (!$isStaff) {
+        if ($bugIdor && $recId === 3) {
+            // Cho phép truy cập form sửa khi bật lỗi để test trực tiếp
+            $leakActive = true;
+            recordSecurityIncident(
+                'IDOR_EDIT_PROBE',
+                'HIGH',
+                $currentUser,
+                "Bệnh án số 03 (BN {$editRecordDetail['owner_username']})",
+                "Mở màn hình sửa bệnh án #03 trái phép khi cờ lỗi IDOR đang bật. Người dùng có thể chuẩn bị sửa đổi dữ liệu bệnh nhân khác.",
+                ['status_code' => 200, 'cwe' => 'CWE-639 (BOLA/IDOR)']
+            );
+        } else {
+            recordSecurityIncident(
+                'PATIENT_EDIT_DENIED',
+                'WARNING',
+                $currentUser,
+                "Bệnh án số 0{$recId} (BN {$editRecordDetail['owner_username']})",
+                "Bệnh nhân " . ($currentUser['full_name'] ?? $currentUser['username']) . " cố mở màn hình sửa bệnh án nhưng hệ thống đã chặn lại do Bệnh nhân chỉ có quyền XEM.",
+                ['status_code' => 403, 'cwe' => 'CWE-285 (Improper Authorization)']
+            );
+            header('Location: /?view=record&id=' . $recId . '&err=patient_read_only');
+            exit;
+        }
+    }
+
+    if (false) {
         if ($bugIdor && $recId === 3) {
             // Cho phép truy cập form sửa khi bật lỗi để test trực tiếp
             $leakActive = true;
@@ -5128,6 +5175,11 @@ if ($view === 'tester') {
 
       <!-- VIEW 1: CHI TIẾT BỆNH ÁN -->
       <?php if ($view === 'record' && $recordDetail): ?>
+        <?php if (isset($_GET['err']) && $_GET['err'] === 'patient_read_only'): ?>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
+            <strong>Từ chối quyền chỉnh sửa:</strong> Bệnh nhân chỉ có quyền xem hồ sơ bệnh án, không có thẩm quyền sửa đổi chẩn đoán y khoa và phác đồ điều trị! Thao tác sửa bệnh án chỉ dành cho Bác sĩ điều trị hoặc Quản trị viên.
+          </div>
+        <?php endif; ?>
         <?php if (isset($_GET['created'])): ?>
           <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
             <strong>Thành công:</strong> Hồ sơ bệnh án điện tử mới đã được lập và ghi nhận vào hệ thống thành công!
@@ -5159,9 +5211,13 @@ if ($view === 'tester') {
                 Mã hồ sơ: #<?= $recordDetail['id'] ?> | Khoa: <?= htmlspecialchars($recordDetail['department']) ?> | Ngày lập: <?= $recordDetail['created_at'] ?>
               </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-              <a href="/?view=edit_record&id=<?= $recordDetail['id'] ?>" class="btn btn-outline" style="border-color: var(--primary); color: var(--primary);">Chỉnh Sửa Bệnh Án Này</a>
-              <a href="/?view=records" class="btn btn-outline">Quay lại danh sách</a>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
+                <a href="/?view=edit_record&id=<?= $recordDetail['id'] ?>" class="btn btn-primary" style="font-size: 12px;">+ Chỉnh Sửa Bệnh Án</a>
+              <?php else: ?>
+                <span style="font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);">CHẾ ĐỘ CHỈ XEM (BỆNH NHÂN)</span>
+              <?php endif; ?>
+              <a href="/?view=records" class="btn btn-outline" style="font-size: 12px;">Quay lại danh sách</a>
             </div>
           </div>
 
@@ -6137,9 +6193,7 @@ if ($view === 'tester') {
                     <td><code>#<?= $rec['id'] ?></code></td>
                     <td>
                       <strong><?= htmlspecialchars($rec['title']) ?></strong>
-                      <?php if ($rec['id'] === 3): ?>
-                        <span style="font-size: 10px; background: #fee2e2; color: #b91c1c; padding: 1px 6px; border-radius: 8px; font-weight: 800; margin-left: 4px;">BẢO MẬT</span>
-                      <?php endif; ?>
+
                     </td>
                     <td><?= htmlspecialchars($rec['department']) ?></td>
                     <td>
