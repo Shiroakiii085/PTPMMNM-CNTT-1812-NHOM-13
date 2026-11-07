@@ -4417,6 +4417,500 @@ if ($view === 'tester') {
       from { opacity: 0; transform: scale(0.96); }
       to { opacity: 1; transform: scale(1); }
     }
+
+    /* =========================================================================
+       16. COMPREHENSIVE MOBILE-FIRST RESPONSIVE OPTIMIZATION
+       ========================================================================= */
+    .mobile-nav-toggle-wrap {
+      display: none;
+    }
+    .mobile-bottom-bar {
+      display: none;
+    }
+    .table-mobile-hint {
+      display: none;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--primary-border);
+      text-align: right;
+      letter-spacing: 0.3px;
+    }
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+      position: relative;
+    }
+    .table-responsive table {
+      width: 100%;
+      margin-bottom: 0;
+    }
+
+    /* Fixed min-widths to prevent any data crunching on mobile */
+    #recordsTable { min-width: 820px; }
+    #userTable { min-width: 680px; }
+    #incidentsTable { min-width: 780px; }
+    #testCasesTable { min-width: 880px; }
+
+    /* Nav tab responsive strip */
+    .nav-tabs-responsive {
+      display: flex;
+      gap: 8px;
+      border-bottom: 2px solid #e2e8f0;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .nav-tabs-responsive::-webkit-scrollbar {
+      display: none;
+    }
+    .nav-tabs-responsive a {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Form grid responsive */
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* RESPONSIVE BREAKPOINT: TABLETS & MOBILE (<= 992px) */
+    @media (max-width: 992px) {
+      /* 1. INTERNAL NAVBAR */
+      header {
+        padding: 10px 16px;
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background: rgba(255, 255, 255, 0.98);
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        gap: 8px;
+      }
+      .brand-title {
+        font-size: 15px;
+      }
+      .badge-port {
+        display: none;
+      }
+      .status-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+      }
+
+      .mobile-nav-toggle-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .mobile-user-btn {
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 17px;
+        background: var(--primary-light);
+        border: 1px solid var(--primary-border);
+        color: var(--primary);
+        font-weight: 800;
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        text-transform: uppercase;
+      }
+      .mobile-nav-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 8px;
+        background: #f1f5f9;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+      .nav-bar-icon {
+        position: relative;
+        display: block;
+        width: 18px;
+        height: 2px;
+        background: #0f172a;
+        transition: all 0.2s ease;
+      }
+      .nav-bar-icon::before,
+      .nav-bar-icon::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        width: 18px;
+        height: 2px;
+        background: #0f172a;
+        transition: all 0.2s ease;
+      }
+      .nav-bar-icon::before { top: -6px; }
+      .nav-bar-icon::after { top: 6px; }
+
+      .mobile-nav-btn.is-active .nav-bar-icon {
+        background: transparent;
+      }
+      .mobile-nav-btn.is-active .nav-bar-icon::before {
+        top: 0;
+        transform: rotate(45deg);
+      }
+      .mobile-nav-btn.is-active .nav-bar-icon::after {
+        top: 0;
+        transform: rotate(-45deg);
+      }
+
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #ffffff;
+        border-bottom: 2px solid var(--primary);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+        padding: 16px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        max-height: calc(100vh - 65px);
+        overflow-y: auto;
+        z-index: 1000;
+        animation: mobileSlideDown 0.2s ease-out forwards;
+      }
+      .nav-links.mobile-open {
+        display: flex;
+      }
+      .nav-links a {
+        padding: 12px 14px;
+        font-size: 13.5px;
+        font-weight: 600;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .nav-links a.active {
+        background: var(--primary);
+        color: #ffffff;
+        border-color: var(--primary);
+      }
+      .nav-user-section {
+        margin-top: 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .nav-user-text {
+        font-size: 12px;
+        color: var(--muted);
+        background: #f1f5f9;
+        padding: 8px 12px;
+        border-radius: 6px;
+        display: block;
+      }
+      .nav-logout-btn {
+        width: 100%;
+        text-align: center;
+        padding: 10px;
+      }
+
+      /* 2. LANDING NAVBAR & TOPBAR */
+      .bm-topbar-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 8px 14px;
+      }
+      .bm-topbar-left, .bm-topbar-right {
+        gap: 10px;
+        width: 100%;
+        justify-content: space-between;
+      }
+      .bm-topbar-item:nth-child(3) {
+        display: none;
+      }
+      .bm-header-inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px 14px;
+      }
+      .bm-brand {
+        gap: 12px;
+      }
+      .bm-logo-emblem {
+        width: 44px;
+        height: 44px;
+      }
+      .bm-logo-cross {
+        width: 22px;
+        height: 22px;
+      }
+      .bm-logo-cross::before {
+        left: 8px;
+        width: 6px;
+        height: 22px;
+      }
+      .bm-logo-cross::after {
+        top: 8px;
+        width: 22px;
+        height: 6px;
+      }
+      .bm-brand-title {
+        font-size: 20px;
+      }
+      .bm-brand-desc {
+        display: none;
+      }
+      .bm-header-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        width: 100%;
+      }
+      .bm-header-hotline {
+        display: none;
+      }
+      .bm-btn-booking, .bm-btn-emr {
+        padding: 10px;
+        font-size: 12px;
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+      }
+      .bm-nav-inner {
+        padding: 0 10px;
+      }
+      .bm-nav-link {
+        padding: 12px 10px;
+        font-size: 12px;
+      }
+    }
+
+    @keyframes mobileSlideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* RESPONSIVE BREAKPOINT: SMARTPHONES (<= 768px) */
+    @media (max-width: 768px) {
+      body {
+        padding-bottom: 64px !important;
+      }
+      .container {
+        width: 100% !important;
+        margin: 14px auto !important;
+        padding: 0 10px !important;
+      }
+      .card {
+        padding: 16px 12px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+      }
+      .card-head {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+      }
+      .card-head > div:last-child {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        width: 100%;
+      }
+      .card-head > div:last-child .btn,
+      .card-head > div:last-child input {
+        flex: 1;
+        min-width: 0;
+      }
+      .bezel-shell {
+        padding: 2px !important;
+        border-radius: 14px !important;
+        margin-bottom: 16px !important;
+      }
+      .bezel-core {
+        padding: 14px 12px !important;
+        border-radius: 12px !important;
+      }
+
+      /* Show table swipe hint */
+      .table-mobile-hint {
+        display: block;
+      }
+
+      /* Table Toolbar & Search forms */
+      .table-toolbar-responsive {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+      }
+      .table-toolbar-responsive form {
+        width: 100% !important;
+      }
+      .table-toolbar-responsive input {
+        flex: 1 !important;
+        width: auto !important;
+      }
+
+      /* User Management Search Actions */
+      .user-search-actions {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 8px;
+      }
+      .user-search-actions input,
+      .user-search-actions button {
+        width: 100% !important;
+      }
+
+      /* Form layouts */
+      .form-grid-2,
+      .form-row-responsive {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+      .form-actions-responsive {
+        flex-direction: column !important;
+        gap: 8px !important;
+      }
+      .form-actions-responsive .btn {
+        width: 100% !important;
+      }
+
+      /* Pagination */
+      .pagination-wrap {
+        flex-direction: column !important;
+        gap: 10px !important;
+        align-items: center !important;
+        padding: 10px 8px !important;
+      }
+      .pagination-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+      }
+      .page-btn {
+        padding: 6px 9px !important;
+        font-size: 11px !important;
+        min-width: 30px;
+      }
+
+      /* IDOR Banners */
+      .idor-banner {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 14px !important;
+        gap: 10px !important;
+      }
+      .idor-banner > div:last-child {
+        width: 100%;
+        display: flex;
+        gap: 8px;
+      }
+      .idor-banner .btn {
+        flex: 1;
+        text-align: center;
+      }
+
+      /* Floating Action Buttons (FABs) */
+      .term-fab {
+        bottom: 68px !important;
+        right: 14px !important;
+        width: 44px !important;
+        height: 44px !important;
+      }
+      .account-fab {
+        bottom: 118px !important;
+        right: 14px !important;
+        width: 44px !important;
+        height: 44px !important;
+      }
+      .ai-fab {
+        display: none !important;
+      }
+      .account-drawer,
+      .term-drawer {
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        bottom: 64px !important;
+        max-height: 80vh !important;
+        border-radius: 16px !important;
+      }
+      .ai-chat-drawer {
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        bottom: 60px !important;
+        height: calc(100vh - 120px) !important;
+        max-height: 540px !important;
+        border-radius: 14px !important;
+      }
+
+      /* MOBILE BOTTOM APP BAR */
+      .mobile-bottom-bar {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        background: #ffffff;
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+        z-index: 9990;
+        align-items: center;
+        justify-content: space-around;
+        padding: 0 4px;
+      }
+      .mobile-tab {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #64748b;
+        text-decoration: none;
+        font-size: 11px;
+        font-weight: 700;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .mobile-tab.active {
+        color: var(--primary);
+      }
+      .mobile-tab.tab-ai {
+        color: #4f46e5;
+      }
+      .mobile-tab:active {
+        background: #f1f5f9;
+      }
+    }
   </style>
 </head>
 <body>
@@ -4543,7 +5037,17 @@ if ($view === 'tester') {
         <?php endif; ?>
       </div>
 
-      <nav class="nav-links">
+      <!-- Nút điều khiển Menu & Chuyển tài khoản trên Mobile -->
+      <div class="mobile-nav-toggle-wrap">
+        <button type="button" onclick="toggleAccountDrawer()" class="mobile-user-btn" title="Chuyển tài khoản nhanh">
+          <?= $currentUser ? htmlspecialchars(function_exists('mb_substr') ? mb_substr($currentUser['full_name'] ?? $currentUser['username'], 0, 2, 'UTF-8') : substr($currentUser['full_name'] ?? $currentUser['username'], 0, 2)) : 'Khách' ?>
+        </button>
+        <button type="button" class="mobile-nav-btn" onclick="toggleMobileNav()" aria-label="Mở menu" id="mobileNavBtn">
+          <span class="nav-bar-icon"></span>
+        </button>
+      </div>
+
+      <nav class="nav-links" id="mainNavLinks">
         <a href="/?view=landing" class="<?= $view === 'landing' ? 'active' : '' ?>">Trang Chủ BV</a>
         <a href="/?view=records" class="<?= $view === 'records' ? 'active' : '' ?>"><?= ($currentUser && $currentUser['role'] === 'member') ? 'Bệnh Án Của Tôi' : 'Danh Sách Bệnh Án' ?></a>
 
@@ -4563,15 +5067,17 @@ if ($view === 'tester') {
           </a>
         <?php endif; ?>
 
-        <?php if ($currentUser): ?>
-          <span style="color: var(--muted); font-size: 12px; margin-left: 8px;">
-            Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['role']) ?></code>)
-          </span>
-          <a href="/?action=logout" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px;">Đăng xuất</a>
-        <?php else: ?>
-          <a href="/?view=login" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px;">Đăng nhập</a>
-          <a href="/?view=register" class="btn btn-primary" style="padding: 5px 12px; font-size: 12px;">Đăng ký</a>
-        <?php endif; ?>
+        <div class="nav-user-section">
+          <?php if ($currentUser): ?>
+            <span class="nav-user-text">
+              Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['role']) ?></code>)
+            </span>
+            <a href="/?action=logout" class="btn btn-outline nav-logout-btn">Đăng xuất</a>
+          <?php else: ?>
+            <a href="/?view=login" class="btn btn-outline" style="padding: 9px 14px; font-size: 13px; text-align: center;">Đăng nhập</a>
+            <a href="/?view=register" class="btn btn-primary" style="padding: 9px 14px; font-size: 13px; text-align: center;">Đăng ký</a>
+          <?php endif; ?>
+        </div>
       </nav>
     </header>
   <?php endif; ?>
@@ -6061,43 +6567,46 @@ if ($view === 'tester') {
                 Tổng số tài khoản: <strong id="totalUserCount"><?= count($mockUsers) ?></strong> người dùng
               </div>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div class="user-search-actions">
               <input type="text" id="userSearchInput" onkeyup="filterUsers()" placeholder="Tìm kiếm nhanh họ tên, username..." style="padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; width: 240px;">
               <button onclick="openAddUserModal()" class="btn btn-primary" style="font-size: 12px;">+ Thêm Người Dùng</button>
             </div>
           </div>
 
-          <table id="userTable">
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Họ và Tên</th>
-                <th>Vai trò</th>
-                <th>Khoa / Phòng</th>
-                <th style="text-align: right; min-width: 120px; white-space: nowrap;">Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($mockUsers as $u): ?>
+          <div class="table-responsive">
+            <div class="table-mobile-hint">Vuốt ngang để xem toàn bộ thông tin & thao tác &raquo;</div>
+            <table id="userTable">
+              <thead>
                 <tr>
-                  <td><code><?= htmlspecialchars($u['username']) ?></code></td>
-                  <td><strong><?= htmlspecialchars($u['full_name']) ?></strong></td>
-                  <td>
-                    <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: #e0f2fe; color: #0369a1;">
-                      <?= htmlspecialchars($u['role']) ?>
-                    </span>
-                  </td>
-                  <td><?= htmlspecialchars($u['department'] ?? 'Chưa cập nhật') ?></td>
-                  <td style="text-align: right; min-width: 120px; white-space: nowrap;">
-                    <button onclick="openEditUserModal('<?= htmlspecialchars($u['username']) ?>', '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars($u['role']) ?>', '<?= htmlspecialchars(addslashes($u['department'] ?? '')) ?>')" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
-                    <?php if ($u['username'] !== 'admin_bv'): ?>
-                      <a href="/?action=delete_user&username=<?= urlencode($u['username']) ?>" onclick="return confirm('Bạn có chắc muốn xóa tài khoản này?')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px;">Xóa</a>
-                    <?php endif; ?>
-                  </td>
+                  <th>Username</th>
+                  <th>Họ và Tên</th>
+                  <th>Vai trò</th>
+                  <th>Khoa / Phòng</th>
+                  <th style="text-align: right; min-width: 120px; white-space: nowrap;">Hành động</th>
                 </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                <?php foreach ($mockUsers as $u): ?>
+                  <tr>
+                    <td><code><?= htmlspecialchars($u['username']) ?></code></td>
+                    <td><strong><?= htmlspecialchars($u['full_name']) ?></strong></td>
+                    <td>
+                      <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: #e0f2fe; color: #0369a1;">
+                        <?= htmlspecialchars($u['role']) ?>
+                      </span>
+                    </td>
+                    <td><?= htmlspecialchars($u['department'] ?? 'Chưa cập nhật') ?></td>
+                    <td style="text-align: right; min-width: 120px; white-space: nowrap;">
+                      <button onclick="openEditUserModal('<?= htmlspecialchars($u['username']) ?>', '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars($u['role']) ?>', '<?= htmlspecialchars(addslashes($u['department'] ?? '')) ?>')" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
+                      <?php if ($u['username'] !== 'admin_bv'): ?>
+                        <a href="/?action=delete_user&username=<?= urlencode($u['username']) ?>" onclick="return confirm('Bạn có chắc muốn xóa tài khoản này?')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px;">Xóa</a>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
           <div id="usersPagination" class="pagination-wrap"></div>
         </div>
 
@@ -6248,7 +6757,7 @@ if ($view === 'tester') {
         </div>
 
         <!-- TABS CHỨC NĂNG KIỂM THỬ -->
-        <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px;">
+        <div class="nav-tabs-responsive">
           <a href="/?view=tester&tab=incidents" class="btn <?= $testerTab === 'incidents' ? 'btn-primary' : 'btn-outline' ?>" style="font-size: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
             Nhật Ký Cảnh Báo Xâm Phạm Thời Gian Thực (<?= $incidentCount ?>)
           </a>
@@ -6282,7 +6791,8 @@ if ($view === 'tester') {
                 Chưa có sự cố an ninh nào được ghi nhận. Hệ thống đang an toàn tuyệt đối.
               </div>
             <?php else: ?>
-              <div style="overflow-x: auto;">
+              <div class="table-responsive">
+                <div class="table-mobile-hint">Vuốt ngang để xem chi tiết mã lỗi & URI &raquo;</div>
                 <table id="incidentsTable">
                   <thead>
                     <tr>
@@ -6368,8 +6878,41 @@ if ($view === 'tester') {
               • Khi <code>BUG_IDOR=0</code> (Đã vá): Ca kiểm thử <strong>R02</strong> trả về kết quả <span style="color:#16a34a;font-weight:700;">PASS</span> do máy chủ chặn lại với HTTP 403 Forbidden!
             </div>
 
-            <div style="overflow-x: auto;">
+            <div class="table-responsive">
+              <div class="table-mobile-hint">Vuốt ngang để xem đủ ma trận 24 ca kiểm thử &raquo;</div>
               <table id="testCasesTable">
+                <thead>
+                  <tr>
+                    <th>Mã Test</th>
+                    <th>Phương Thức & API</th>
+                    <th>Tài Khoản Thử Nghiệm</th>
+                    <th>Vai Trò</th>
+                    <th>Mô Tả Mục Tiêu Kiểm Thử</th>
+                    <th>Kỳ Vọng</th>
+                    <th>Kết Quả Thực Tế</th>
+                    <th>Trạng Thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach ($testCases as $tc): ?>
+                    <tr style="<?= $tc['code'] === 'R02' ? ($tc['status'] === 'FAIL' ? 'background: #fff1f2;' : 'background: #f0fdf4;') : '' ?>">
+                      <td><strong style="color: #0369a1;"><?= $tc['code'] ?></strong></td>
+                      <td><code><?= $tc['method'] ?> <?= $tc['api'] ?></code></td>
+                      <td><?= htmlspecialchars($tc['user']) ?></td>
+                      <td><span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 700;"><?= $tc['role'] ?></span></td>
+                      <td><?= htmlspecialchars($tc['desc']) ?></td>
+                      <td><code style="color: #334155;"><?= $tc['expect'] ?></code></td>
+                      <td style="font-size: 12px;"><?= htmlspecialchars($tc['actual']) ?></td>
+                      <td>
+                        <span style="font-weight: 800; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: <?= $tc['status'] === 'PASS' ? '#dcfce7' : '#fee2e2' ?>; color: <?= $tc['status'] === 'PASS' ? '#15803d' : '#b91c1c' ?>;">
+                          <?= $tc['status'] ?>
+                        </span>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
                 <thead>
                   <tr>
                     <th>Mã Test</th>
@@ -6624,7 +7167,7 @@ if ($view === 'tester') {
           </div>
 
           <!-- Hộp tra cứu nhanh theo ID (Không giới hạn số lượng bệnh án, bắt lỗi rõ ràng) -->
-          <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+          <div class="table-toolbar-responsive" style="background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
             <div>
               <div style="font-weight: 700; font-size: 13px; color: #0f172a;">TRA CỨU & MỞ HỒ SƠ BỆNH ÁN THEO MÃ ID:</div>
               <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
@@ -6638,60 +7181,63 @@ if ($view === 'tester') {
             </form>
           </div>
 
-          <table id="recordsTable">
-            <thead>
-              <tr>
-                <th style="width: 70px;">Mã HS</th>
-                <th>Tiêu Đề Bệnh Án</th>
-                <th>Khoa Khám</th>
-                <th>Bệnh Nhân Sở Hữu</th>
-                <th>Bác Sĩ Phụ Trách</th>
-                <th>Chẩn Đoán Sơ Bộ</th>
-                <th>Ngày Lập</th>
-                <th style="text-align: right; min-width: 120px; white-space: nowrap;">Thao Tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (empty($displayRecords)): ?>
+          <div class="table-responsive">
+            <div class="table-mobile-hint">Vuốt ngang để xem đủ 8 cột dữ liệu &raquo;</div>
+            <table id="recordsTable">
+              <thead>
                 <tr>
-                  <td colspan="8" style="text-align: center; padding: 36px 16px; color: var(--muted); font-size: 13px;">
-                    <?php if (!$currentUser): ?>
-                      Bạn chưa đăng nhập. Vui lòng <a href="/?view=login" style="color: var(--primary); font-weight: 700;">đăng nhập</a> để xem hồ sơ bệnh án.
-                    <?php else: ?>
-                      Hiện tại bạn chưa có hồ sơ bệnh án nào được ghi nhận trên hệ thống.
-                    <?php endif; ?>
-                  </td>
+                  <th style="width: 70px;">Mã HS</th>
+                  <th>Tiêu Đề Bệnh Án</th>
+                  <th>Khoa Khám</th>
+                  <th>Bệnh Nhân Sở Hữu</th>
+                  <th>Bác Sĩ Phụ Trách</th>
+                  <th>Chẩn Đoán Sơ Bộ</th>
+                  <th>Ngày Lập</th>
+                  <th style="text-align: right; min-width: 120px; white-space: nowrap;">Thao Tác</th>
                 </tr>
-              <?php else: ?>
-                <?php foreach ($displayRecords as $rec): ?>
-                  <?php
-                    $isOwn = ($currentUser && checkRecordOwnerMatch($rec['owner_username'], $currentUser['username']));
-                    $isStaff = ($currentUser && in_array($currentUser['role'], ['doctor', 'admin', 'auditor'], true));
-                  ?>
+              </thead>
+              <tbody>
+                <?php if (empty($displayRecords)): ?>
                   <tr>
-                    <td><code>#<?= $rec['id'] ?></code></td>
-                    <td>
-                      <strong><?= htmlspecialchars($rec['title']) ?></strong>
-
-                    </td>
-                    <td><?= htmlspecialchars($rec['department']) ?></td>
-                    <td>
-                      <code><?= htmlspecialchars($rec['owner_username']) ?></code>
-                      <?php if ($isOwn): ?>
-                        <span style="font-size: 10px; background: #dcfce7; color: #15803d; padding: 1px 5px; border-radius: 6px; font-weight: 700; margin-left: 2px;">Của bạn</span>
+                    <td colspan="8" style="text-align: center; padding: 36px 16px; color: var(--muted); font-size: 13px;">
+                      <?php if (!$currentUser): ?>
+                        Bạn chưa đăng nhập. Vui lòng <a href="/?view=login" style="color: var(--primary); font-weight: 700;">đăng nhập</a> để xem hồ sơ bệnh án.
+                      <?php else: ?>
+                        Hiện tại bạn chưa có hồ sơ bệnh án nào được ghi nhận trên hệ thống.
                       <?php endif; ?>
                     </td>
-                    <td><?= htmlspecialchars($rec['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?></td>
-                    <td><span style="color: #0369a1;"><?= htmlspecialchars($rec['diagnosis'] ?? 'Đang cập nhật') ?></span></td>
-                    <td style="white-space: nowrap;"><?= $rec['created_at'] ?></td>
-                    <td style="text-align: right; min-width: 120px; white-space: nowrap;">
-                      <a href="/?view=record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px; white-space: nowrap;">Xem Chi Tiết</a>
-                    </td>
                   </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
+                <?php else: ?>
+                  <?php foreach ($displayRecords as $rec): ?>
+                    <?php
+                      $isOwn = ($currentUser && checkRecordOwnerMatch($rec['owner_username'], $currentUser['username']));
+                      $isStaff = ($currentUser && in_array($currentUser['role'], ['doctor', 'admin', 'auditor'], true));
+                    ?>
+                    <tr>
+                      <td><code>#<?= $rec['id'] ?></code></td>
+                      <td>
+                        <strong><?= htmlspecialchars($rec['title']) ?></strong>
+
+                      </td>
+                      <td><?= htmlspecialchars($rec['department']) ?></td>
+                      <td>
+                        <code><?= htmlspecialchars($rec['owner_username']) ?></code>
+                        <?php if ($isOwn): ?>
+                          <span style="font-size: 10px; background: #dcfce7; color: #15803d; padding: 1px 5px; border-radius: 6px; font-weight: 700; margin-left: 2px;">Của bạn</span>
+                        <?php endif; ?>
+                      </td>
+                      <td><?= htmlspecialchars($rec['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?></td>
+                      <td><span style="color: #0369a1;"><?= htmlspecialchars($rec['diagnosis'] ?? 'Đang cập nhật') ?></span></td>
+                      <td style="white-space: nowrap;"><?= $rec['created_at'] ?></td>
+                      <td style="text-align: right; min-width: 120px; white-space: nowrap;">
+                        <a href="/?view=record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px; white-space: nowrap;">Xem Chi Tiết</a>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
           <div id="recordsPagination" class="pagination-wrap"></div>
         </div>
       <?php endif; ?>
@@ -6952,7 +7498,64 @@ if ($view === 'tester') {
     </div>
   </div>
 
+  <!-- MOBILE BOTTOM APP BAR (Dành riêng cho màn hình di động) -->
+  <nav class="mobile-bottom-bar">
+    <a href="/?view=landing" class="mobile-tab <?= $view === 'landing' ? 'active' : '' ?>">
+      <span>Trang Chủ</span>
+    </a>
+    <a href="/?view=records" class="mobile-tab <?= $view === 'records' ? 'active' : '' ?>">
+      <span>Bệnh Án</span>
+    </a>
+    <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
+      <a href="/?view=create_record" class="mobile-tab <?= $view === 'create_record' ? 'active' : '' ?>">
+        <span>Lập Hồ Sơ</span>
+      </a>
+    <?php else: ?>
+      <a href="/?view=announcements" class="mobile-tab <?= $view === 'announcements' ? 'active' : '' ?>">
+        <span>Thông Báo</span>
+      </a>
+    <?php endif; ?>
+    <?php if ($currentUser && in_array($currentUser['role'], ['auditor', 'admin'], true)): ?>
+      <a href="/?view=tester" class="mobile-tab <?= $view === 'tester' ? 'active' : '' ?>">
+        <span>Kiểm Thử</span>
+      </a>
+    <?php else: ?>
+      <button type="button" onclick="toggleAccountDrawer()" class="mobile-tab">
+        <span>Đổi TK</span>
+      </button>
+    <?php endif; ?>
+    <button type="button" onclick="toggleAiChat()" class="mobile-tab tab-ai">
+      <span>Trợ Lý AI</span>
+    </button>
+  </nav>
+
   <script>
+    // Bật/tắt Menu điều hướng trên Mobile
+    function toggleMobileNav() {
+      const nav = document.getElementById('mainNavLinks');
+      const btn = document.getElementById('mobileNavBtn');
+      if (!nav) return;
+      const isOpen = nav.classList.contains('mobile-open');
+      if (isOpen) {
+        nav.classList.remove('mobile-open');
+        if (btn) btn.classList.remove('is-active');
+      } else {
+        nav.classList.add('mobile-open');
+        if (btn) btn.classList.add('is-active');
+      }
+    }
+
+    // Tự động đóng menu mobile khi nhấn ra ngoài
+    document.addEventListener('click', function(e) {
+      const nav = document.getElementById('mainNavLinks');
+      const btn = document.getElementById('mobileNavBtn');
+      if (!nav || !btn) return;
+      if (!nav.contains(e.target) && !btn.contains(e.target) && nav.classList.contains('mobile-open')) {
+        nav.classList.remove('mobile-open');
+        btn.classList.remove('is-active');
+      }
+    });
+
     // Bật/tắt Cửa sổ Chuyển Tài Khoản Nhanh
     function toggleAccountDrawer() {
       const accDrawer = document.getElementById('accountDrawer');
