@@ -7,6 +7,7 @@
 **Nền tảng khởi tạo:** Nhánh `lab5` (FIT-DNU/Open-Source-Software-Development)  
 **Công nghệ:** PHP 8.1+, PostgreSQL 14+, cURL, HTML5/CSS3 (Google Fonts Plus Jakarta Sans), Bash/WSL  
 **Giấy phép:** [MIT License](Ma_nguon/LICENSE)  
+**Bản triển khai Cloud (Live Demo):** [https://ptpmmnm-cntt-1812-nhom-13.onrender.com/](https://ptpmmnm-cntt-1812-nhom-13.onrender.com/)  
 **Trạng thái kiểm thử:** [![Tests](https://img.shields.io/badge/Tests-88%2F88%20PASS-brightgreen.svg)](Ma_nguon/tests/) [![PHP Version](https://img.shields.io/badge/PHP-%3E%3D8.1-777bb4.svg)](https://www.php.net/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-%3E%3D14-336791.svg)](https://www.postgresql.org/)
 
 ---
@@ -48,7 +49,7 @@ Dự án triển khai hoàn chỉnh một hệ sinh thái kiểm thử thực t�
 | **IV** | **Dữ liệu & An toàn** | **1.0đ** | **1.0 / 1.0** | - Bảng `runs` gắn `config_hash` (SHA-256) và snapshot cấu hình.<br>- Bảng `run_results` lưu snapshot độc lập từng ca.<br>- `src/TargetAllowlist.php` chỉ cho phép `127.0.0.1` và `localhost` tại các cổng duyệt.<br>- `src/Redactor.php` loại bỏ 100% token bí mật, mật khẩu khỏi log và báo cáo. |
 | **V** | **Kiểm thử & Sửa lỗi** | **1.5đ** | **1.5 / 1.5** | - Đáp án chuẩn: `tests/fixtures/answer_key.json`.<br>- Tự động hóa hoàn toàn **5 phép thử bắt buộc** trong `tests/e2e.php`.<br>- Đạt **88/88 test assertions PASS** (Unit: 39, Integration: 29, E2E: 20).<br>- So sánh lần chạy trước sửa (`FAIL` ca R02) và sau sửa (`PASS` 24/24 ca). |
 | **VI** | **Mã nguồn mở & Bàn giao** | **1.5đ** | **1.5 / 1.5** | - Giấy phép tự do [MIT License](Ma_nguon/LICENSE).<br>- Tài liệu nguồn gốc và ghi công chi tiết tại [Ma_nguon/docs/NGUON.md](Ma_nguon/docs/NGUON.md).<br>- CI tự động GitHub Actions `.github/workflows/ci.yml`.<br>- Lệnh đóng gói bản phát hành tự động `bash lab.sh release`. |
-| **VII**| **Đóng góp cá nhân & Vấn đáp** | **1.0đ** | **1.0 / 1.0** | - Tài liệu thiết kế kiến trúc [Ma_nguon/docs/KIEN_TRUC.md](Ma_nguon/docs/KIEN_TRUC.md).<br>- Hướng dẫn thực hành & ngân hàng câu hỏi vấn đáp tại [Ma_nguon/docs/HUONG_DAN.md](Ma_nguon/docs/HUONG_DAN.md).<br>- Tài liệu đặc tả Yêu cầu 3 [3_Tutorial.md](3_Tutorial.md). |
+| **VII**| **Đóng góp cá nhân & Vấn đáp** | **1.0đ** | **1.0 / 1.0** | - Tài liệu thiết kế kiến trúc [Ma_nguon/docs/KIEN_TRUC.md](Ma_nguon/docs/KIEN_TRUC.md).<br>- Hướng dẫn thực hành & ngân hàng câu hỏi vấn đáp tại [Ma_nguon/docs/HUONG_DAN.md](Ma_nguon/docs/HUONG_DAN.md).<br>- Tài liệu đặc tả Yêu cầu 3 [Ma_nguon/docs/3_Tutorial.md](Ma_nguon/docs/3_Tutorial.md). |
 | **TỔNG**| **TOÀN BỘ ĐỀ TÀI** | **10.0đ** | **10.0 / 10.0** | **Đạt xuất sắc mọi tiêu chí theo đề cương yêu cầu.** |
 
 ---
@@ -112,8 +113,8 @@ bash lab.sh cli --project=1 --label="Kiem thu CLI"
 
 ## 5. Danh Mục Tài Liệu Kỹ Thuật Dự Án
 
-- 📘 [3_Tutorial.md](3_Tutorial.md): Hướng dẫn chi tiết Yêu cầu 3 — Ứng dụng mẫu MediRecord EMR, đặc tả 6 API, cơ chế rò rỉ IDOR, thanh điều khiển Dock FABs và Terminal.
-- 📋 [KiemThu.md](KiemThu.md): Bảng ma trận phân quyền 24 ca kiểm thử chi tiết và kết quả mong đợi.
+- 📘 [Ma_nguon/docs/3_Tutorial.md](Ma_nguon/docs/3_Tutorial.md): Hướng dẫn chi tiết Yêu cầu 3 — Ứng dụng mẫu MediRecord EMR, đặc tả 6 API, cơ chế rò rỉ IDOR, thanh điều khiển Dock FABs và Terminal.
+- 📋 [Ma_nguon/KiemThu.md](Ma_nguon/KiemThu.md): Bảng ma trận phân quyền 24 ca kiểm thử chi tiết và kết quả mong đợi.
 - 📖 [Ma_nguon/docs/HUONG_DAN.md](Ma_nguon/docs/HUONG_DAN.md): Hướng dẫn vận hành chi tiết từng bước & Ngân hàng 10 câu hỏi vấn đáp bảo vệ đồ án.
 - 🏛️ [Ma_nguon/docs/KIEN_TRUC.md](Ma_nguon/docs/KIEN_TRUC.md): Tài liệu thiết kế kiến trúc hệ thống C4, sơ đồ luồng dữ liệu & chính sách an toàn.
 - 📜 [Ma_nguon/docs/NGUON.md](Ma_nguon/docs/NGUON.md): Nguồn gốc mã nguồn, thành phần thư viện bên thứ ba và giấy phép ghi công.
