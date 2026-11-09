@@ -1935,21 +1935,32 @@ if ($view === 'error') {
       cursor: pointer;
       user-select: none;
       -webkit-user-select: none;
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .robot-head-container span[role="img"] {
+    .robot-head-container canvas {
       display: block !important;
-      margin: 0 auto;
+      max-width: none !important;
+      touch-action: none;
     }
-    .robot-head-fallback {
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.2));
-      transition: transform 0.2s ease;
+    .ai-mascot-card {
+      text-align: center;
+      padding: 18px 14px;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+      border: 1px solid #3730a3;
+      border-radius: 14px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+      user-select: none;
     }
-    .rh-antenna-light {
-      animation: pulseGreenLight 2s infinite;
+    .ai-mascot-card canvas {
+      cursor: grab;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.4));
     }
-    @keyframes pulseGreenLight {
-      0%, 100% { fill: #4ade80; filter: drop-shadow(0 0 4px #4ade80); }
-      50% { fill: #22c55e; filter: drop-shadow(0 0 1px #22c55e); }
+    .ai-mascot-card canvas:active {
+      cursor: grabbing;
     }
     .ai-typing-cursor {
       display: inline-block;
@@ -1979,7 +1990,9 @@ if ($view === 'error') {
     }
 
 </style>
-    </head>
+      <!-- 3D ROBOT HEADS CANVAS ENGINE (FAYAZARA/ROBOT-HEADS STANDALONE BUNDLE) -->
+  <script src="/assets/robot-heads.bundle.js"></script>
+</head>
     <body>
       <div class="box">
         <span class="tag">MÃ LỖI BẢO MẬT: HTTP <?= $errCode ?></span>
@@ -1998,51 +2011,6 @@ if ($view === 'error') {
           
         </div>
       </div>
-      <!-- TÍCH HỢP ANIMATED ROBOT-HEADS TỪ FAYAZARA/ROBOT-HEADS -->
-  <script type="module">
-    try {
-      import React from 'https://esm.sh/react@18.3.1';
-      import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
-      import { RobotHead } from 'https://esm.sh/robot-heads@0.3.0?deps=react@18.3.1,react-dom@18.3.1';
-
-      let currentHeadState = 'idle';
-      const roots = new Map();
-
-      function updateAvatar(containerId, size, state) {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        try {
-          if (!roots.has(containerId)) {
-            el.innerHTML = '';
-            roots.set(containerId, ReactDOM.createRoot(el));
-          }
-          roots.get(containerId).render(
-            React.createElement(RobotHead, {
-              state: state,
-              shape: 'rectangle',
-              size: size,
-              antenna: true,
-              floorShadow: false
-            })
-          );
-        } catch (e) {
-          console.warn('RobotHead render error on ' + containerId, e);
-        }
-      }
-
-      window.__updateReactRobotHeads = function(state) {
-        currentHeadState = state || 'idle';
-        updateAvatar('aiHeaderAvatar', 44, currentHeadState);
-        updateAvatar('aiFabAvatar', 38, currentHeadState);
-      };
-
-      // Khởi tạo ban đầu
-      window.__updateReactRobotHeads('idle');
-    } catch (e) {
-      console.warn('Robot-heads ESM loader: fallback SVG active', e);
-    }
-  </script>
-
 </body>
     </html>
     <?php
@@ -6716,6 +6684,7 @@ if ($view === 'tester') {
 
       // 2. Initialize GSAP ScrollTrigger Animations
       document.addEventListener('DOMContentLoaded', function() {
+      init3DRobotHeads();
         if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') {
           console.warn('GSAP or ScrollTrigger not loaded');
           return;
@@ -8333,39 +8302,18 @@ if ($view === 'tester') {
        ======================================================================= -->
   <!-- NÚT TRÒN NỔI (FAB) TRỢ LÝ AI CHATBOT VỚI ROBOT HEAD -->
   <button id="aiFab" onclick="toggleAiChat()" class="ai-fab" title="Trợ lý AI MediRecord (Hỗ trợ tra cứu & sử dụng web)">
-    <span class="ai-fab-badge-top">ROBOT AI</span>
-    <div id="aiFabAvatar" class="robot-head-container fab-robot" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-      <!-- Fallback SVG Robot Head (fayazara/robot-heads styled) -->
-      <svg class="robot-head-fallback" width="38" height="38" viewBox="0 0 100 100">
-        <circle cx="50" cy="18" r="6" fill="#4ade80" class="rh-antenna-light" />
-        <line x1="50" y1="24" x2="50" y2="38" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
-        <rect x="18" y="38" width="64" height="50" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="3" />
-        <rect x="26" y="46" width="48" height="34" rx="8" fill="#090d16" />
-        <rect class="rh-eye rh-eye-l" x="34" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
-        <rect class="rh-eye rh-eye-r" x="56" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
-        <rect class="rh-mouth" x="42" y="70" width="16" height="3" rx="1.5" fill="#4ade80" />
-      </svg>
-    </div>
+    <span class="ai-fab-badge-top">3D BOT</span>
+    <div id="aiFabAvatar" class="robot-head-container fab-robot" style="width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; overflow: visible; pointer-events: none;"></div>
   </button>
 
   <!-- CỬA SỔ CHATBOT AI TRỢ LÝ MEDIRECORD -->
   <div id="aiChatDrawer" class="ai-chat-drawer" style="display: none;">
     <div class="ai-drawer-head">
       <div style="display: flex; align-items: center; gap: 12px;">
-        <div id="aiHeaderAvatar" class="robot-head-container header-robot" style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
-          <svg class="robot-head-fallback" width="44" height="44" viewBox="0 0 100 100">
-            <circle cx="50" cy="18" r="6" fill="#4ade80" class="rh-antenna-light" />
-            <line x1="50" y1="24" x2="50" y2="38" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
-            <rect x="18" y="38" width="64" height="50" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="3" />
-            <rect x="26" y="46" width="48" height="34" rx="8" fill="#090d16" />
-            <rect class="rh-eye rh-eye-l" x="34" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
-            <rect class="rh-eye rh-eye-r" x="56" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
-            <rect class="rh-mouth" x="42" y="70" width="16" height="3" rx="1.5" fill="#4ade80" />
-          </svg>
-        </div>
+        <div id="aiHeaderAvatar" class="robot-head-container header-robot" style="width: 56px; height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: visible;"></div>
         <div>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">ROBOT HEADS</span>
+            <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">3D ROBOT HEAD</span>
             <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">MEDIBOT AI ASSISTANT</span>
           </div>
           <div style="font-size: 11px; color: #c7d2fe; margin-top: 3px;" id="aiStatusStateText">
@@ -8746,7 +8694,36 @@ if ($view === 'tester') {
     let aiChatInitialized = false;
     let isAiGenerating = false;
 
-    // Quản lý trạng thái Robot Head (idle, thinking, speaking, happy, error)
+    // Khởi tạo các model 3D Robot Head (fayazara/robot-heads 3D Canvas)
+    function init3DRobotHeads() {
+      if (typeof window.mountRobotHead !== 'function') return;
+
+      // 1. FAB 3D Robot Head
+      window.mountRobotHead('aiFabAvatar', {
+        shape: 'rectangle',
+        size: 50,
+        state: 'idle',
+        antenna: false,
+        interactive: false,
+        color: '#0f172a',
+        trimColor: '#38bdf8',
+        screenColor: '#38bdf8'
+      });
+
+      // 2. Header Drawer 3D Robot Head (Interactive 3D head-tracking)
+      window.mountRobotHead('aiHeaderAvatar', {
+        shape: 'rectangle',
+        size: 54,
+        state: 'idle',
+        antenna: true,
+        interactive: true,
+        color: '#1e293b',
+        trimColor: '#94a3b8',
+        screenColor: '#38bdf8'
+      });
+    }
+
+    // Quản lý trạng thái Model 3D Robot Head (idle, thinking, speaking, happy, error)
     window.setAiBotState = function(state) {
       const stateTextMap = {
         'idle': 'Trạng thái: <strong style="color: #4ade80;">Sẵn sàng (Idle)</strong>',
@@ -8760,30 +8737,9 @@ if ($view === 'tester') {
         statusTextEl.innerHTML = stateTextMap[state];
       }
 
-      // Cập nhật SVG fallback nếu React robot-head chưa tải xong
-      const antennaLights = document.querySelectorAll('.rh-antenna-light');
-      antennaLights.forEach(el => {
-        if (state === 'thinking') {
-          el.setAttribute('fill', '#f59e0b');
-          el.style.filter = 'drop-shadow(0 0 6px #f59e0b)';
-        } else if (state === 'speaking') {
-          el.setAttribute('fill', '#38bdf8');
-          el.style.filter = 'drop-shadow(0 0 6px #38bdf8)';
-        } else if (state === 'error') {
-          el.setAttribute('fill', '#ef4444');
-          el.style.filter = 'drop-shadow(0 0 6px #ef4444)';
-        } else if (state === 'happy') {
-          el.setAttribute('fill', '#ec4899');
-          el.style.filter = 'drop-shadow(0 0 6px #ec4899)';
-        } else {
-          el.setAttribute('fill', '#4ade80');
-          el.style.filter = 'drop-shadow(0 0 4px #4ade80)';
-        }
-      });
-
-      // Nếu module React robot-heads từ https://github.com/fayazara/robot-heads đã sẵn sàng:
-      if (window.__updateReactRobotHeads) {
-        window.__updateReactRobotHeads(state);
+      // Cập nhật tất cả model 3D Canvas Robot Head
+      if (typeof window.setAllRobotHeadsState === 'function') {
+        window.setAllRobotHeadsState(state);
       }
     };
 
@@ -8823,6 +8779,30 @@ if ($view === 'tester') {
       aiChatInitialized = true;
       const box = document.getElementById('aiChatMessages');
       if (!box) return;
+
+      // Thêm Mascot Card 3D vào đầu cuộc trò chuyện
+      const mascotCard = document.createElement('div');
+      mascotCard.className = 'ai-mascot-card';
+      mascotCard.innerHTML = `
+        <div id="aiMascot3D" style="display: inline-flex; align-items: center; justify-content: center; width: 100px; height: 100px; margin: 0 auto;"></div>
+        <div style="font-size: 13.5px; font-weight: 800; color: #e0e7ff; margin-top: 6px; letter-spacing: 0.3px;">MediBot AI - 3D Interactive Mascot</div>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Rê chuột để đầu robot quay 3D tương tác, bấm chuột để robot nhảy xoay 360°!</div>
+      `;
+      box.appendChild(mascotCard);
+
+      if (typeof window.mountRobotHead === 'function') {
+        window.mountRobotHead('aiMascot3D', {
+          shape: 'rectangle',
+          size: 96,
+          state: 'idle',
+          antenna: true,
+          interactive: true,
+          floorShadow: true,
+          color: '#1e293b',
+          trimColor: '#38bdf8',
+          screenColor: '#4ade80'
+        });
+      }
 
       <?php
         $role = $currentUser['role'] ?? 'guest';
