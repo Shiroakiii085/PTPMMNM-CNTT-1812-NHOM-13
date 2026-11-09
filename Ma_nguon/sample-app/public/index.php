@@ -694,32 +694,46 @@ if ($action === 'ai_chat') {
     $source = 'openrouter';
 
     if (!empty($apiKey)) {
-        $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-            'model' => $chosenModel,
-            'messages' => [
-                ['role' => 'system', 'content' => $sysPrompt],
-                ['role' => 'user', 'content' => $userMsg]
-            ],
-            'temperature' => 0.5,
-            'max_tokens' => 1000
-        ]));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $apiKey,
-            'HTTP-Referer: https://medirecord-emr.abrdns.com',
-            'X-Title: MediRecord EMR Assistant'
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 25);
-        $res = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($res && $code >= 200 && $code < 300) {
-            $parsed = json_decode($res, true);
-            $aiResponse = $parsed['choices'][0]['message']['content'] ?? '';
+        $fallbackModels = [
+            'qwen/qwen-2.5-7b-instruct:free',
+            'meta-llama/llama-3.2-3b-instruct:free',
+            'google/gemini-2.0-flash-exp:free',
+            'deepseek/deepseek-r1:free',
+            'mistralai/mistral-7b-instruct:free',
+        ];
+
+        foreach ($fallbackModels as $currentModel) {
+            $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                'model' => $currentModel,
+                'messages' => [
+                    ['role' => 'system', 'content' => $sysPrompt],
+                    ['role' => 'user', 'content' => $userMsg]
+                ],
+                'temperature' => 0.5,
+                'max_tokens' => 1000
+            ]));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey,
+                'HTTP-Referer: https://medirecord-emr.abrdns.com',
+                'X-Title: MediRecord EMR Assistant'
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 18);
+            $res = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($res && $code >= 200 && $code < 300) {
+                $parsed = json_decode($res, true);
+                $reply = $parsed['choices'][0]['message']['content'] ?? '';
+                if (!empty(trim($reply))) {
+                    $aiResponse = trim($reply);
+                    break; // Tự động chọn model khả dụng đầu tiên thành công!
+                }
+            }
         }
     }
 
@@ -4307,49 +4321,35 @@ if ($view === 'tester') {
       background: #fff;
     }
 
-    /* Floating Action Buttons (FABs) at Bottom Right (Nút tròn nổi) */
-    .ai-fab {
+    /* Floating 3D Robot Trigger at bottom-most right corner */
+    .ai-fab-3d-trigger {
       position: fixed;
-      bottom: 152px;
-      right: 24px;
-      width: 54px;
-      height: 54px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
-      border: 2px solid #818cf8;
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+      bottom: 12px;
+      right: 12px;
+      width: 76px;
+      height: 76px;
       cursor: pointer;
+      z-index: 99999;
+      user-select: none;
+      -webkit-user-select: none;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
-      color: #fff;
-      transition: all 0.2s ease;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.38));
+      border: none;
+      background: transparent;
+      padding: 0;
+      outline: none;
     }
-    .ai-fab:hover {
-      transform: scale(1.08);
-      border-color: #c7d2fe;
-      box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+    .ai-fab-3d-trigger:hover {
+      transform: scale(1.12) translateY(-2px);
     }
-    .ai-fab-badge-top {
-      font-size: 8px;
-      font-weight: 800;
-      color: #a5f3fc;
-      text-transform: uppercase;
-      line-height: 1;
-      margin-bottom: 2px;
-      letter-spacing: 0.5px;
-    }
-    .ai-fab-text {
-      color: #ffffff;
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      font-weight: 800;
-      font-size: 15px;
-      line-height: 1;
+    .ai-fab-3d-trigger:active {
+      transform: scale(0.95);
     }
 
-    /* AI CHATBOT DRAWER */
+        /* AI CHATBOT DRAWER */
     .ai-chat-drawer {
       position: fixed;
       bottom: 24px;
@@ -4393,26 +4393,51 @@ if ($view === 'tester') {
       gap: 12px;
       font-size: 13px;
     }
+    /* Messenger Style Chat Messages */
+    .ai-msg-row {
+      display: flex;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+    .ai-msg-row.user-row {
+      justify-content: flex-end;
+    }
+    .ai-msg-row.bot-row {
+      justify-content: flex-start;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .ai-msg-avatar {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
+      margin-bottom: 2px;
+      user-select: none;
+    }
     .ai-msg {
-      max-width: 88%;
+      max-width: 82%;
       padding: 10px 14px;
-      border-radius: 12px;
+      border-radius: 16px;
       line-height: 1.5;
       word-break: break-word;
+      font-size: 13.5px;
     }
     .ai-msg-user {
-      align-self: flex-end;
       background: #4f46e5;
       color: #ffffff;
-      border-bottom-right-radius: 2px;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
     }
     .ai-msg-bot {
-      align-self: flex-start;
       background: #ffffff;
       color: #0f172a;
       border: 1px solid #e2e8f0;
-      border-bottom-left-radius: 2px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     }
     .ai-msg-bot strong {
       color: #1e1b4b;
@@ -4465,8 +4490,8 @@ if ($view === 'tester') {
 
     .account-fab {
       position: fixed;
-      bottom: 88px;
-      right: 24px;
+      bottom: 96px;
+      right: 22px;
       width: 54px;
       height: 54px;
       border-radius: 50%;
@@ -8302,45 +8327,23 @@ if ($view === 'tester') {
   <!-- =======================================================================
        CÁC NÚT TRÒN NỔI (FAB) & CỬA SỔ ĐIỀU KHIỂN (HIỂN THỊ TOÀN HỆ THỐNG)
        ======================================================================= -->
-  <!-- NÚT TRÒN NỔI (FAB) TRỢ LÝ AI CHATBOT VỚI ROBOT HEAD -->
-  <button id="aiFab" onclick="toggleAiChat()" class="ai-fab" title="Trợ lý AI MediRecord (Hỗ trợ tra cứu & sử dụng web)">
-    <span class="ai-fab-badge-top">3D BOT</span>
-    <div id="aiFabAvatar" class="robot-head-container fab-robot" style="width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; overflow: visible; pointer-events: none;"></div>
-  </button>
+  <!-- MODEL 3D FLOATING ROBOT Ở GÓC DƯỚI CÙNG BÊN PHẢI -->
+  <div id="aiFab" onclick="toggleAiChat()" class="ai-fab-3d-trigger" title="Nhấn để mở Trợ lý AI MediBot">
+    <div id="aiFabAvatar" class="robot-head-container fab-robot" style="width: 74px; height: 74px; display: flex; align-items: center; justify-content: center; overflow: visible;"></div>
+  </div>
 
   <!-- CỬA SỔ CHATBOT AI TRỢ LÝ MEDIRECORD -->
   <div id="aiChatDrawer" class="ai-chat-drawer" style="display: none;">
     <div class="ai-drawer-head">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <div id="aiHeaderAvatar" class="robot-head-container header-robot" style="width: 56px; height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: visible;"></div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div id="aiHeaderAvatar" class="robot-head-container header-robot" style="width: 46px; height: 46px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: visible;"></div>
         <div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">3D ROBOT HEAD</span>
-            <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">MEDIBOT AI ASSISTANT</span>
-          </div>
-          <div style="font-size: 11px; color: #c7d2fe; margin-top: 3px;" id="aiStatusStateText">
-            Trạng thái: <strong style="color: #4ade80;">Sẵn sàng (Idle)</strong>
-          </div>
+          <span style="font-size: 15px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">MEDIBOT</span>
         </div>
       </div>
       <div>
         <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 3px 10px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
       </div>
-    </div>
-
-    <!-- THANH CHỌN MÔ HÌNH OPENROUTER (MIỄN PHÍ) -->
-    <div style="background: #1e1b4b; padding: 7px 14px; border-bottom: 1px solid #312e81; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
-      <span style="color: #a5b4fc; font-weight: 700; display: flex; align-items: center; gap: 5px;">
-        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80;"></span>
-        MÔ HÌNH AI:
-      </span>
-      <select id="openRouterModelSelect" onchange="changeAiModel(this.value)" style="background: #0f172a; color: #38bdf8; border: 1px solid #4338ca; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; outline: none; cursor: pointer;">
-        <option value="qwen/qwen-2.5-7b-instruct:free">Qwen 2.5 7B (Free - Khuyên dùng)</option>
-        <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free - Nhanh)</option>
-        <option value="google/gemini-2.0-flash-exp:free">Google Gemini 2.0 Flash (Free)</option>
-        <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free - Suy luận)</option>
-        <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
-      </select>
     </div>
 
     <!-- Danh sách tin nhắn trò chuyện -->
@@ -8700,22 +8703,22 @@ if ($view === 'tester') {
     function init3DRobotHeads() {
       if (typeof window.mountRobotHead !== 'function') return;
 
-      // 1. FAB 3D Robot Head
+      // 1. Model 3D Robot Head ở góc dưới cùng bên phải
       window.mountRobotHead('aiFabAvatar', {
         shape: 'rectangle',
-        size: 50,
+        size: 72,
         state: 'idle',
-        antenna: false,
-        interactive: false,
-        color: '#0f172a',
+        antenna: true,
+        interactive: true,
+        color: '#1e293b',
         trimColor: '#38bdf8',
         screenColor: '#38bdf8'
       });
 
-      // 2. Header Drawer 3D Robot Head (Interactive 3D head-tracking)
+      // 2. Header Drawer 3D Robot Head trước tên MEDIBOT
       window.mountRobotHead('aiHeaderAvatar', {
         shape: 'rectangle',
-        size: 54,
+        size: 46,
         state: 'idle',
         antenna: true,
         interactive: true,
@@ -8725,21 +8728,8 @@ if ($view === 'tester') {
       });
     }
 
-    // Quản lý trạng thái Model 3D Robot Head (idle, thinking, speaking, happy, error)
+    // Quản lý trạng thái Model 3D Robot Head
     window.setAiBotState = function(state) {
-      const stateTextMap = {
-        'idle': 'Trạng thái: <strong style="color: #4ade80;">Sẵn sàng (Idle)</strong>',
-        'thinking': 'Trạng thái: <strong style="color: #f59e0b;">Đang suy nghĩ (Thinking)...</strong>',
-        'speaking': 'Trạng thái: <strong style="color: #38bdf8;">Đang trả lời (Speaking)...</strong>',
-        'happy': 'Trạng thái: <strong style="color: #ec4899;">Hoàn tất (Happy) ✨</strong>',
-        'error': 'Trạng thái: <strong style="color: #ef4444;">Sự cố kết nối (Error)</strong>'
-      };
-      const statusTextEl = document.getElementById('aiStatusStateText');
-      if (statusTextEl && stateTextMap[state]) {
-        statusTextEl.innerHTML = stateTextMap[state];
-      }
-
-      // Cập nhật tất cả model 3D Canvas Robot Head
       if (typeof window.setAllRobotHeadsState === 'function') {
         window.setAllRobotHeadsState(state);
       }
@@ -8753,93 +8743,56 @@ if ($view === 'tester') {
       if (aiDrawer.style.display === 'none' || aiDrawer.style.display === '') {
         aiDrawer.style.display = 'flex';
         if (accDrawer) accDrawer.style.display = 'none';
-        const savedModel = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
-        const sel = document.getElementById('openRouterModelSelect');
-        if (sel) sel.value = savedModel;
         const input = document.getElementById('aiChatInput');
         if (input) input.focus();
         initAiChatGreeting();
+        init3DRobotHeads();
         window.setAiBotState('idle');
       } else {
         aiDrawer.style.display = 'none';
       }
     }
 
-    // Đổi Mô hình AI Free (OpenRouter)
-    function changeAiModel(model) {
-      localStorage.setItem('openrouter_model', model);
-      const sel = document.getElementById('openRouterModelSelect');
-      if (sel) sel.value = model;
-      appendAiMessage('bot', 'Đã chuyển sang mô hình: <strong>' + model + '</strong>. Bạn có thể tiếp tục hỏi!');
-      window.setAiBotState('happy');
-      setTimeout(() => window.setAiBotState('idle'), 1600);
-    }
-
-    // Lời chào mở đầu cá nhân hóa theo vai trò người dùng (cho phép hỏi cả câu hỏi ngoài lề)
+    // Lời chào mở đầu cá nhân hóa gọn gàng (không chữ rườm rà)
     function initAiChatGreeting() {
       if (aiChatInitialized) return;
       aiChatInitialized = true;
       const box = document.getElementById('aiChatMessages');
       if (!box) return;
 
-      // Thêm Mascot Card 3D vào đầu cuộc trò chuyện
-      const mascotCard = document.createElement('div');
-      mascotCard.className = 'ai-mascot-card';
-      mascotCard.innerHTML = `
-        <div id="aiMascot3D" style="display: inline-flex; align-items: center; justify-content: center; width: 100px; height: 100px; margin: 0 auto;"></div>
-        <div style="font-size: 13.5px; font-weight: 800; color: #e0e7ff; margin-top: 6px; letter-spacing: 0.3px;">MediBot AI - 3D Interactive Mascot</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Rê chuột để đầu robot quay 3D tương tác, bấm chuột để robot nhảy xoay 360°!</div>
-      `;
-      box.appendChild(mascotCard);
-
-      if (typeof window.mountRobotHead === 'function') {
-        window.mountRobotHead('aiMascot3D', {
-          shape: 'rectangle',
-          size: 96,
-          state: 'idle',
-          antenna: true,
-          interactive: true,
-          floorShadow: true,
-          color: '#1e293b',
-          trimColor: '#38bdf8',
-          screenColor: '#4ade80'
-        });
-      }
-
       <?php
         $role = $currentUser['role'] ?? 'guest';
         $name = $currentUser['full_name'] ?? 'Quý khách';
-        $uname = $currentUser['username'] ?? '';
       ?>
       const role = "<?= addslashes($role) ?>";
       const name = "<?= addslashes($name) ?>";
-      const uname = "<?= addslashes($uname) ?>";
 
       let greetText = "";
       if (role === 'member') {
-        greetText = `Xin chào <strong>${name} (${uname})</strong>!\n\nTôi là Trợ lý AI Thông Minh của MediRecord EMR. Tôi có thể hỗ trợ bạn tra cứu các hồ sơ bệnh án cá nhân (chống rò rỉ IDOR), hướng dẫn sử dụng web, hoặc giải đáp bất kỳ câu hỏi nào về khoa học, sức khỏe và đời sống thường ngày!\n\nBạn có thể đổi các mô hình AI miễn phí ở thanh phía trên. Bạn cần hỗ trợ gì hôm nay?`;
+        greetText = `Xin chào <strong>${name}</strong>! Tôi là MediBot. Tôi có thể hỗ trợ bạn tra cứu hồ sơ bệnh án cá nhân hoặc giải đáp bất kỳ thắc mắc nào.`;
       } else if (role === 'doctor') {
-        greetText = `Kính chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi có thể hỗ trợ Bác sĩ xem bệnh án, hướng dẫn tạo hồ sơ mới (/?view=create_record), tra cứu phác đồ điều trị hoặc giải đáp mọi câu hỏi chuyên môn và đời sống!`;
+        greetText = `Kính chào <strong>${name}</strong>! Tôi sẵn sàng hỗ trợ Bác sĩ tra cứu danh sách và tạo bệnh án mới.`;
       } else if (role === 'admin') {
-        greetText = `Xin chào <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi sẵn sàng hỗ trợ Quản trị viên quản lý nhân sự y tế (/?view=users), phân quyền hệ thống và trả lời mọi thắc mắc công nghệ, đời sống!`;
-      } else if (role === 'auditor') {
-        greetText = `Xin chào Kỹ sư An ninh <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi sẵn sàng giải thích cơ chế lỗ hổng IDOR/BOLA (CWE-639), hướng dẫn kích hoạt kiểm thử an toàn thông tin hoặc giải đáp mọi chủ đề an ninh mạng và đời sống!`;
+        greetText = `Xin chào <strong>${name}</strong>! Tôi sẵn sàng hỗ trợ Quản trị viên điều hành hệ thống.`;
       } else {
-        greetText = `Xin chào <strong>Quý khách</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Bạn có thể hỏi tôi bất kỳ điều gì về hệ thống y tế, cách sử dụng các trang, hoặc các câu hỏi kiến thức đời sống tự do.`;
+        greetText = `Xin chào! Tôi là Trợ lý AI MediBot. Bạn cần hỗ trợ gì hôm nay?`;
       }
 
       appendAiMessage('bot', greetText, 'system');
       window.setAiBotState('idle');
     }
 
+    let botMsgIdx = 0;
+
+    // Tin nhắn trò chuyện phong cách Messenger: Mỗi tin nhắn của bot đều có avatar 3D phía trước
     function appendAiMessage(sender, text, source) {
       const box = document.getElementById('aiChatMessages');
       if (!box) return null;
 
-      const msgDiv = document.createElement('div');
-      msgDiv.className = 'ai-msg ' + (sender === 'user' ? 'ai-msg-user' : 'ai-msg-bot');
+      botMsgIdx++;
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'ai-msg-row ' + (sender === 'user' ? 'user-row' : 'bot-row');
 
-      // Chuyển đổi định dạng văn bản sang HTML an toàn
       let formatted = text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -8848,25 +8801,46 @@ if ($view === 'tester') {
         .replace(/\n\n/g, '<br><br>')
         .replace(/\n/g, '<br>');
 
+      let tag = '';
       if (sender === 'bot' && source) {
-        let tag = '';
         if (source === 'openrouter') {
           tag = `<div style="font-size: 10px; color: #6366f1; margin-bottom: 4px; font-weight: 700;">[OPENROUTER AI]</div>`;
         } else if (source === 'local_fallback') {
           tag = `<div style="font-size: 10px; color: #0284c7; margin-bottom: 4px; font-weight: 700;">[TRỢ LÝ MEDIRECORD]</div>`;
         }
-        msgDiv.innerHTML = tag + formatted;
-      } else {
-        msgDiv.innerHTML = formatted;
       }
 
-      box.appendChild(msgDiv);
+      if (sender === 'bot') {
+        const avatarId = 'botMsgAvatar_' + botMsgIdx;
+        rowDiv.innerHTML = `
+          <div class="ai-msg-avatar" id="${avatarId}"></div>
+          <div class="ai-msg ai-msg-bot">${tag}${formatted}</div>
+        `;
+        box.appendChild(rowDiv);
+
+        if (typeof window.mountRobotHead === 'function') {
+          window.mountRobotHead(avatarId, {
+            shape: 'rectangle',
+            size: 34,
+            state: 'idle',
+            antenna: false,
+            interactive: false,
+            color: '#1e293b',
+            trimColor: '#38bdf8',
+            screenColor: '#38bdf8'
+          });
+        }
+      } else {
+        rowDiv.innerHTML = `<div class="ai-msg ai-msg-user">${formatted}</div>`;
+        box.appendChild(rowDiv);
+      }
+
       box.scrollTop = box.scrollHeight;
-      return msgDiv;
+      return rowDiv.querySelector('.ai-msg');
     }
 
     // HIỆU ỨNG CHẠY TỪNG CHỮ NHƯ CHATGPT (TYPEWRITER STREAMING)
-    function typewriterStream(element, fullText, source, onComplete) {
+    function typewriterStream(element, fullText, source, avatarCtrl, onComplete) {
       element.innerHTML = '';
       if (source === 'openrouter') {
         const tag = document.createElement('div');
@@ -8890,13 +8864,14 @@ if ($view === 'tester') {
       element.appendChild(cursorSpan);
 
       const box = document.getElementById('aiChatMessages');
-
-      // Tách văn bản thành các token (từ ngữ và khoảng trắng) để streaming mượt như ChatGPT
       const tokens = fullText.split(/(\s+)/);
       let tokenIdx = 0;
       let currentText = '';
 
       window.setAiBotState('speaking');
+      if (avatarCtrl && avatarCtrl.setState) {
+        avatarCtrl.setState('speaking');
+      }
 
       function streamStep() {
         if (tokenIdx < tokens.length) {
@@ -8912,11 +8887,9 @@ if ($view === 'tester') {
           contentSpan.innerHTML = formatted;
           if (box) box.scrollTop = box.scrollHeight;
 
-          // Tốc độ đánh máy tự nhiên (14ms - 26ms mỗi từ)
           const delay = Math.random() * 12 + 14;
           setTimeout(streamStep, delay);
         } else {
-          // Hoàn thành streaming
           let formatted = currentText
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -8931,8 +8904,14 @@ if ($view === 'tester') {
           if (box) box.scrollTop = box.scrollHeight;
 
           window.setAiBotState('happy');
+          if (avatarCtrl && avatarCtrl.setState) {
+            avatarCtrl.setState('happy');
+          }
           setTimeout(() => {
             window.setAiBotState('idle');
+            if (avatarCtrl && avatarCtrl.setState) {
+              avatarCtrl.setState('idle');
+            }
           }, 1800);
 
           if (typeof onComplete === 'function') onComplete();
@@ -8969,27 +8948,46 @@ if ($view === 'tester') {
 
       window.setAiBotState('thinking');
 
-      // Tạo bong bóng bot đang suy nghĩ kèm con trỏ nhấp nháy
-      const botMsgDiv = document.createElement('div');
-      botMsgDiv.className = 'ai-msg ai-msg-bot';
-      botMsgDiv.innerHTML = `<span style="color: #94a3b8; font-style: italic;">Đang phân tích dữ liệu và sinh câu trả lời...</span> <span class="ai-typing-cursor">▌</span>`;
+      // Tạo bot row phong cách Messenger với avatar 3D và bong bóng đang phân tích
+      botMsgIdx++;
+      const botAvatarId = 'botMsgAvatar_' + botMsgIdx;
+      const botRowDiv = document.createElement('div');
+      botRowDiv.className = 'ai-msg-row bot-row';
+      botRowDiv.innerHTML = `
+        <div class="ai-msg-avatar" id="${botAvatarId}"></div>
+        <div class="ai-msg ai-msg-bot"><span style="color: #94a3b8; font-style: italic;">Đang phân tích dữ liệu...</span> <span class="ai-typing-cursor">▌</span></div>
+      `;
       const box = document.getElementById('aiChatMessages');
       if (box) {
-        box.appendChild(botMsgDiv);
+        box.appendChild(botRowDiv);
         box.scrollTop = box.scrollHeight;
       }
 
-      const model = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
+      let avatarCtrl = null;
+      if (typeof window.mountRobotHead === 'function') {
+        avatarCtrl = window.mountRobotHead(botAvatarId, {
+          shape: 'rectangle',
+          size: 34,
+          state: 'thinking',
+          antenna: false,
+          interactive: false,
+          color: '#1e293b',
+          trimColor: '#38bdf8',
+          screenColor: '#38bdf8'
+        });
+      }
+
+      const botMsgDiv = botRowDiv.querySelector('.ai-msg');
 
       fetch('/?action=ai_chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, model: model })
+        body: JSON.stringify({ message: text })
       })
       .then(res => res.json())
       .then(data => {
         if (data.reply) {
-          typewriterStream(botMsgDiv, data.reply, data.source, () => {
+          typewriterStream(botMsgDiv, data.reply, data.source, avatarCtrl, () => {
             isAiGenerating = false;
             if (sendBtn) {
               sendBtn.disabled = false;
@@ -8999,6 +8997,7 @@ if ($view === 'tester') {
         } else if (data.error) {
           botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI]</span> ' + data.error;
           window.setAiBotState('error');
+          if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
           isAiGenerating = false;
           if (sendBtn) {
             sendBtn.disabled = false;
@@ -9007,8 +9006,9 @@ if ($view === 'tester') {
         }
       })
       .catch(err => {
-        botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI MẠNG]</span> Không thể kết nối tới máy chủ: ' + err;
+        botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI MẠNG]</span> Không thể kết nối máy chủ: ' + err;
         window.setAiBotState('error');
+        if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
         isAiGenerating = false;
         if (sendBtn) {
           sendBtn.disabled = false;
@@ -9017,8 +9017,8 @@ if ($view === 'tester') {
       });
     }
 
-    // Lắng nghe sự kiện phím Enter trên ô nhập Chatbot AI
     document.addEventListener('DOMContentLoaded', function() {
+      init3DRobotHeads();
       const aiIn = document.getElementById('aiChatInput');
       if (aiIn) {
         aiIn.addEventListener('keydown', function(e) {
@@ -9027,11 +9027,6 @@ if ($view === 'tester') {
             submitAiChat();
           }
         });
-      }
-      const savedModel = localStorage.getItem('openrouter_model');
-      const select = document.getElementById('openRouterModelSelect');
-      if (savedModel && select) {
-        select.value = savedModel;
       }
     });
 
