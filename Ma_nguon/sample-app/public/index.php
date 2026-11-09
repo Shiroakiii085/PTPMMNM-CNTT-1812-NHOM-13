@@ -2188,6 +2188,8 @@ if ($view === 'tester') {
   <!-- GSAP & ScrollTrigger Core for Parallax & Scrollytelling -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <!-- 3D ROBOT HEADS CANVAS ENGINE (FAYAZARA/ROBOT-HEADS STANDALONE BUNDLE) -->
+  <script src="/assets/robot-heads.bundle.js"></script>
 
   <style>
     :root {
