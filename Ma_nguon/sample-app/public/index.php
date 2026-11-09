@@ -5201,28 +5201,106 @@ if ($view === 'tester') {
       color: #059669;
     }
 
-    .nav-user-avatar-btn {
+    /* =========================================================================
+       18. BALANCED NAVBAR (CENTERED LINKS) & USER DROPDOWN
+       ========================================================================= */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 900;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+      transition: all 0.2s ease;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 0 0 auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 auto;
+      margin: 0 20px;
+    }
+
+    .nav-links a {
+      color: #475569;
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 8px;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+      background: #f1f5f9;
+    }
+
+    .nav-links a.active {
+      color: var(--primary);
+      background: #e0f2fe;
+      font-weight: 700;
+    }
+
+    .nav-user-dropdown-wrap {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .nav-user-btn {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      text-decoration: none;
+      gap: 9px;
       padding: 4px 12px 4px 5px;
-      border-radius: 30px;
-      transition: all 0.2s ease;
+      border-radius: 28px;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       cursor: pointer;
+      transition: all 0.18s ease;
+      outline: none;
+      font-family: inherit;
     }
-    .nav-user-avatar-btn:hover {
+
+    .nav-user-btn:hover {
       background: #f1f5f9;
-      border-color: #0284c7;
-      transform: translateY(-1px);
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+      border-color: #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
     }
-    .nav-user-avatar-btn.active {
+
+    .nav-user-btn.active,
+    .nav-user-btn.menu-open {
       background: #e0f2fe;
-      border-color: #38bdf8;
+      border-color: #7dd3fc;
     }
+
+    .dropdown-chevron-icon {
+      color: #94a3b8;
+      transition: transform 0.2s ease;
+      margin-left: 2px;
+      flex-shrink: 0;
+    }
+
+    .nav-user-btn.menu-open .dropdown-chevron-icon {
+      transform: rotate(180deg);
+      color: var(--primary);
+    }
+
     .nav-avatar-circle {
       width: 34px;
       height: 34px;
@@ -5237,12 +5315,14 @@ if ($view === 'tester') {
       text-transform: uppercase;
       flex-shrink: 0;
     }
+
     .nav-user-info {
       display: flex;
       flex-direction: column;
       text-align: left;
       line-height: 1.25;
     }
+
     .nav-user-name {
       font-size: 13px;
       font-weight: 700;
@@ -5252,13 +5332,138 @@ if ($view === 'tester') {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
     .nav-user-role-tag {
       font-size: 11px;
       color: #64748b;
     }
-    @media (max-width: 768px) {
-      .nav-user-name {
-        max-width: 100px;
+
+    .user-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 270px;
+      background: #ffffff;
+      border-radius: 14px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.05);
+      z-index: 1000;
+      overflow: hidden;
+      animation: dropdownFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes dropdownFadeIn {
+      from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .user-dropdown-header {
+      padding: 14px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .user-dropdown-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      letter-spacing: 0.2px;
+      display: inline-block;
+    }
+
+    .user-dropdown-body {
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .user-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      background: transparent;
+      border: none;
+      width: 100%;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      font-family: inherit;
+      color: #334155;
+      text-align: left;
+    }
+
+    .user-dropdown-item:hover {
+      background: #f1f5f9;
+    }
+
+    .user-dropdown-item.active {
+      background: #e0f2fe;
+    }
+
+    .user-dropdown-item svg {
+      flex-shrink: 0;
+      color: #64748b;
+    }
+
+    .user-dropdown-item:hover svg {
+      color: var(--primary);
+    }
+
+    .user-dropdown-item.item-logout {
+      color: #dc2626;
+    }
+
+    .user-dropdown-item.item-logout svg {
+      color: #dc2626;
+    }
+
+    .user-dropdown-item.item-logout:hover {
+      background: #fef2f2;
+    }
+
+    .user-dropdown-divider {
+      height: 1px;
+      background: #f1f5f9;
+      margin: 4px 6px;
+    }
+
+    .mobile-nav-user-panel {
+      display: none;
+    }
+
+    @media (max-width: 992px) {
+      header {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 16px;
+      }
+      .nav-user-dropdown-wrap {
+        display: none;
+      }
+      .mobile-nav-user-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+      .mobile-nav-profile-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        color: #0f172a;
+        font-weight: 600;
+        text-decoration: none;
+        font-size: 13px;
       }
     }
 
@@ -5382,6 +5587,7 @@ if ($view === 'tester') {
   <?php else: ?>
     <!-- NAVBAR NỘI BỘ CHO CÁC PHÂN HỆ EMR -->
     <header>
+      <!-- CỘT TRÁI: LOGO BỆNH VIỆN -->
       <div class="brand">
         <a href="/?view=landing" style="text-decoration: none;">
           <span class="brand-title">MEDIRECORD <span>EMR</span></span>
@@ -5398,6 +5604,7 @@ if ($view === 'tester') {
         </button>
       </div>
 
+      <!-- CỘT GIỮA: CÁC NÚT ĐIỀU HƯỚNG CÂN ĐỐI RA TRUNG TÂM -->
       <nav class="nav-links" id="mainNavLinks">
         <a href="/?view=landing" class="<?= $view === 'landing' ? 'active' : '' ?>">Trang Chủ BV</a>
         <a href="/?view=records" class="<?= $view === 'records' ? 'active' : '' ?>"><?= ($currentUser && $currentUser['role'] === 'member') ? 'Bệnh Án Của Tôi' : 'Danh Sách Bệnh Án' ?></a>
@@ -5418,37 +5625,138 @@ if ($view === 'tester') {
           </a>
         <?php endif; ?>
 
-        <div class="nav-user-section">
+        <!-- Bảng điều khiển Mobile (chỉ hiển thị khi menu mobile mở) -->
+        <div class="mobile-nav-user-panel">
           <?php if ($currentUser): ?>
-            <?php
-              $userInitials = function_exists('mb_substr') ? mb_substr($currentUser['full_name'] ?? $currentUser['username'], 0, 2, 'UTF-8') : substr($currentUser['full_name'] ?? $currentUser['username'], 0, 2);
-              $roleColor = match($currentUser['role'] ?? '') {
-                'admin' => '#7c3aed',
-                'doctor' => '#0284c7',
-                'auditor' => '#d97706',
-                default => '#059669',
-              };
-            ?>
-            <a href="/?view=profile" class="nav-user-avatar-btn <?= $view === 'profile' ? 'active' : '' ?>" title="Hồ sơ cá nhân & Đổi mật khẩu (<?= htmlspecialchars($currentUser['full_name']) ?>)">
-              <div class="nav-avatar-circle" style="background: <?= $roleColor ?>;">
-                <?= htmlspecialchars($userInitials) ?>
-              </div>
-              <div class="nav-user-info">
-                <span class="nav-user-name">
-                  <?= htmlspecialchars($currentUser['full_name']) ?>
-                </span>
-                <span class="nav-user-role-tag">
-                  <code><?= htmlspecialchars($currentUser['role']) ?></code>
-                </span>
-              </div>
+            <a href="/?view=profile" class="mobile-nav-profile-link">
+              <span>Hồ Sơ Cá Nhân & Đổi Mật Khẩu</span>
+              <code><?= htmlspecialchars($currentUser['username']) ?></code>
             </a>
-            <a href="/?action=logout" class="btn btn-outline nav-logout-btn">Đăng xuất</a>
+            <a href="/?action=logout" class="btn btn-outline" style="width: 100%; text-align: center; color: #dc2626; border-color: #fca5a5;">Đăng Xuất</a>
           <?php else: ?>
-            <a href="/?view=login" class="btn btn-outline" style="padding: 9px 14px; font-size: 13px; text-align: center;">Đăng nhập</a>
-            <a href="/?view=register" class="btn btn-primary" style="padding: 9px 14px; font-size: 13px; text-align: center;">Đăng ký</a>
+            <div style="display: flex; gap: 8px;">
+              <a href="/?view=login" class="btn btn-outline" style="flex: 1; text-align: center;">Đăng nhập</a>
+              <a href="/?view=register" class="btn btn-primary" style="flex: 1; text-align: center;">Đăng ký</a>
+            </div>
           <?php endif; ?>
         </div>
       </nav>
+
+      <!-- CỘT PHẢI: KHU VỰC TÀI KHOẢN VỚI DROPDOWN MENU -->
+      <div class="nav-user-dropdown-wrap">
+        <?php if ($currentUser): ?>
+          <?php
+            $userInitials = function_exists('mb_substr') ? mb_substr($currentUser['full_name'] ?? $currentUser['username'], 0, 2, 'UTF-8') : substr($currentUser['full_name'] ?? $currentUser['username'], 0, 2);
+            $roleColor = match($currentUser['role'] ?? '') {
+              'admin' => '#7c3aed',
+              'doctor' => '#0284c7',
+              'auditor' => '#d97706',
+              default => '#059669',
+            };
+            $roleLabels = [
+              'admin' => 'Quản Trị Viên',
+              'doctor' => 'Bác Sĩ Điều Trị',
+              'auditor' => 'Kỹ Sư An Ninh',
+              'member' => 'Bệnh Nhân',
+            ];
+            $roleLabel = $roleLabels[$currentUser['role']] ?? strtoupper($currentUser['role']);
+          ?>
+          <button type="button" class="nav-user-btn <?= $view === 'profile' ? 'active' : '' ?>" id="userDropdownBtn" onclick="toggleUserDropdown(event)" aria-expanded="false" title="Menu tài khoản (<?= htmlspecialchars($currentUser['full_name']) ?>)">
+            <div class="nav-avatar-circle" style="background: <?= $roleColor ?>;">
+              <?= htmlspecialchars($userInitials) ?>
+            </div>
+            <div class="nav-user-info">
+              <span class="nav-user-name">
+                <?= htmlspecialchars($currentUser['full_name']) ?>
+              </span>
+              <span class="nav-user-role-tag">
+                <code><?= htmlspecialchars($currentUser['role']) ?></code>
+              </span>
+            </div>
+            <svg class="dropdown-chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          <!-- DROPDOWN MENU NỔI -->
+          <div class="user-dropdown-menu" id="userDropdownMenu" style="display: none;">
+            <div class="user-dropdown-header">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="nav-avatar-circle" style="background: <?= $roleColor ?>; width: 38px; height: 38px; font-size: 13px;">
+                  <?= htmlspecialchars($userInitials) ?>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-weight: 700; font-size: 13.5px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    <?= htmlspecialchars($currentUser['full_name']) ?>
+                  </div>
+                  <div style="font-size: 11.5px; color: #64748b; font-family: monospace;">
+                    @<?= htmlspecialchars($currentUser['username']) ?>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                <span class="user-dropdown-badge" style="background: <?= $roleColor ?>18; color: <?= $roleColor ?>; border: 1px solid <?= $roleColor ?>30;">
+                  <?= htmlspecialchars($roleLabel) ?>
+                </span>
+                <span style="font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;">
+                  <?= htmlspecialchars($currentUser['department'] ?? 'Khoa Khám Bệnh') ?>
+                </span>
+              </div>
+            </div>
+
+            <div class="user-dropdown-body">
+              <a href="/?view=profile" class="user-dropdown-item <?= $view === 'profile' ? 'active' : '' ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <div style="display: flex; flex-direction: column;">
+                  <span style="font-weight: 600; font-size: 13px; color: #0f172a;">Trang Cá Nhân</span>
+                  <span style="font-size: 11px; color: #64748b;">Xem thông tin & đổi mật khẩu</span>
+                </div>
+              </a>
+
+              <button type="button" class="user-dropdown-item" onclick="closeUserDropdown(); toggleAccountDrawer();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="8.5" cy="7" r="4"></circle>
+                  <polyline points="17 11 19 13 23 9"></polyline>
+                </svg>
+                <div style="display: flex; flex-direction: column; text-align: left;">
+                  <span style="font-weight: 600; font-size: 13px; color: #0f172a;">Chuyển Tài Khoản</span>
+                  <span style="font-size: 11px; color: #64748b;">Chuyển nhanh vai trò 1-click</span>
+                </div>
+              </button>
+
+              <button type="button" class="user-dropdown-item" onclick="closeUserDropdown(); toggleAiChat();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <div style="display: flex; flex-direction: column; text-align: left;">
+                  <span style="font-weight: 600; font-size: 13px; color: #0f172a;">Trợ Lý AI MediBot</span>
+                  <span style="font-size: 11px; color: #64748b;">Hỏi đáp & tra cứu dữ liệu BV</span>
+                </div>
+              </button>
+
+              <div class="user-dropdown-divider"></div>
+
+              <a href="/?action=logout" class="user-dropdown-item item-logout">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span style="font-weight: 600; font-size: 13px;">Đăng Xuất</span>
+              </a>
+            </div>
+          </div>
+        <?php else: ?>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <a href="/?view=login" class="btn btn-outline" style="padding: 8px 14px; font-size: 13px;">Đăng nhập</a>
+            <a href="/?view=register" class="btn btn-primary" style="padding: 8px 14px; font-size: 13px;">Đăng ký</a>
+          </div>
+        <?php endif; ?>
+      </div>
     </header>
   <?php endif; ?>
 
@@ -8191,6 +8499,55 @@ if ($view === 'tester') {
   </nav>
 
   <script>
+
+    // =========================================================================
+    // NAVBAR USER DROPDOWN CONTROLLER
+    // =========================================================================
+    function toggleUserDropdown(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const menu = document.getElementById('userDropdownMenu');
+      const btn = document.getElementById('userDropdownBtn');
+      if (!menu) return;
+
+      const isDisplayed = menu.style.display === 'block';
+      if (isDisplayed) {
+        closeUserDropdown();
+      } else {
+        menu.style.display = 'block';
+        if (btn) {
+          btn.classList.add('menu-open');
+          btn.setAttribute('aria-expanded', 'true');
+        }
+      }
+    }
+
+    function closeUserDropdown() {
+      const menu = document.getElementById('userDropdownMenu');
+      const btn = document.getElementById('userDropdownBtn');
+      if (menu) menu.style.display = 'none';
+      if (btn) {
+        btn.classList.remove('menu-open');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    // Đóng Dropdown khi click ra ngoài hoặc bấm Escape
+    document.addEventListener('click', function(e) {
+      const wrap = document.querySelector('.nav-user-dropdown-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        closeUserDropdown();
+      }
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeUserDropdown();
+      }
+    });
+
     // Bật/tắt Menu điều hướng trên Mobile
     function toggleMobileNav() {
       const nav = document.getElementById('mainNavLinks');
