@@ -1045,6 +1045,153 @@ if ($action === 'delete_user') {
 }
 
 // =============================================================================
+// QUẢN TRỊ TRANG CÁ NHÂN & THIẾT LẬP TÀI KHOẢN (PROFILE & SETTINGS)
+// =============================================================================
+
+// Cập nhật thông tin cá nhân
+if ($action === 'update_profile' && $method === 'POST') {
+    if (!$currentUser) {
+        header('Location: /?view=login&err=unauthorized');
+        exit;
+    }
+    $newFullName = trim((string)($_POST['full_name'] ?? ''));
+    $newDept = trim((string)($_POST['department'] ?? ''));
+
+    if ($newFullName === '') {
+        header('Location: /?view=profile&err=missing_fullname');
+        exit;
+    }
+
+    $uName = $currentUser['username'];
+    $mockUsers[$uName]['full_name'] = $newFullName;
+    if ($newDept !== '') {
+        $mockUsers[$uName]['department'] = $newDept;
+    }
+    if (!isset($_SESSION['custom_users'][$uName])) {
+        $_SESSION['custom_users'][$uName] = $mockUsers[$uName];
+    } else {
+        $_SESSION['custom_users'][$uName]['full_name'] = $newFullName;
+        if ($newDept !== '') {
+            $_SESSION['custom_users'][$uName]['department'] = $newDept;
+        }
+    }
+    $currentUser['full_name'] = $newFullName;
+    if ($newDept !== '') {
+        $currentUser['department'] = $newDept;
+    }
+
+    if ($db !== null) {
+        try {
+            queryParams($db, 'UPDATE sample_app.users SET full_name = $1, department = $2 WHERE username = $3', [$newFullName, $newDept, $uName]);
+        } catch (Throwable) {}
+    }
+
+    header('Location: /?view=profile&msg=profile_updated');
+    exit;
+}
+
+// Đổi mật khẩu tài khoản
+if ($action === 'change_password' && $method === 'POST') {
+    if (!$currentUser) {
+        header('Location: /?view=login&err=unauthorized');
+        exit;
+    }
+    $curPass = (string)($_POST['current_password'] ?? '');
+    $newPass = (string)($_POST['new_password'] ?? '');
+    $confirmPass = (string)($_POST['confirm_password'] ?? '');
+    $uName = $currentUser['username'];
+
+    if ($curPass === '' || $newPass === '' || $confirmPass === '') {
+        header('Location: /?view=profile&err=missing_pass_fields');
+        exit;
+    }
+
+    if ($newPass !== $confirmPass) {
+        header('Location: /?view=profile&err=pass_mismatch');
+        exit;
+    }
+
+    if (strlen($newPass) < 6) {
+        header('Location: /?view=profile&err=pass_too_short');
+        exit;
+    }
+
+    // Xác thực mật khẩu hiện tại
+    $authenticated = false;
+    if ($db !== null) {
+        try {
+            $r = queryParams($db, 'SELECT password_hash FROM sample_app.users WHERE username = $1', [$uName]);
+            $row = pg_fetch_assoc($r);
+            if ($row && password_verify($curPass, $row['password_hash'])) {
+                $authenticated = true;
+            }
+        } catch (Throwable) {}
+    }
+    if (!$authenticated) {
+        $storedHash = $_SESSION['user_passwords'][$uName] ?? null;
+        if ($storedHash !== null && password_verify($curPass, $storedHash)) {
+            $authenticated = true;
+        } elseif ($curPass === 'TestPass@2026' || $curPass === '123456' || $curPass === $uName) {
+            $authenticated = true;
+        }
+    }
+
+    if (!$authenticated) {
+        header('Location: /?view=profile&err=wrong_current_password');
+        exit;
+    }
+
+    // Cập nhật mật khẩu mới
+    $newHash = password_hash($newPass, PASSWORD_DEFAULT);
+    if (!isset($_SESSION['user_passwords'])) {
+        $_SESSION['user_passwords'] = [];
+    }
+    $_SESSION['user_passwords'][$uName] = $newHash;
+
+    if ($db !== null) {
+        try {
+            queryParams($db, 'UPDATE sample_app.users SET password_hash = $1 WHERE username = $2', [$newHash, $uName]);
+        } catch (Throwable) {}
+    }
+
+    header('Location: /?view=profile&msg=password_updated');
+    exit;
+}
+
+// Tải về bản sao hồ sơ bệnh án cá nhân (JSON)
+if ($action === 'export_my_records_json') {
+    if (!$currentUser) {
+        header('Location: /?view=login&err=unauthorized');
+        exit;
+    }
+    $isMember = ($currentUser['role'] === 'member');
+    $recordsToExport = [];
+    if ($isMember) {
+        $recordsToExport = array_values(array_filter($mockRecords, fn($r) => checkRecordOwnerMatch($r['owner_username'], $currentUser['username'])));
+    } else {
+        $recordsToExport = array_values($mockRecords);
+    }
+
+    $exportData = [
+        'system' => 'MediRecord EMR - Bệnh viện Bạch Mai',
+        'exported_at' => date('Y-m-d H:i:s'),
+        'user' => [
+            'username' => $currentUser['username'],
+            'full_name' => $currentUser['full_name'],
+            'role' => $currentUser['role'],
+            'department' => $currentUser['department'] ?? 'Khoa Khám Bệnh'
+        ],
+        'total_records' => count($recordsToExport),
+        'records' => $recordsToExport
+    ];
+
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Disposition: attachment; filename="medirecord_export_' . $currentUser['username'] . '_' . date('Ymd_His') . '.json"');
+    echo json_encode($exportData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// =============================================================================
 // QUẢN TRỊ BẢN TIN & THÔNG BÁO BỆNH VIỆN (CHỈ DÀNH CHO ADMIN)
 // =============================================================================
 
@@ -1442,7 +1589,11 @@ if ($action === 'login_submit' && $method === 'POST') {
 
     // 2. Kiểm tra Mock Users / Custom Users nếu chưa xác thực từ CSDL
     if (!$authenticated && isset($mockUsers[$loginUser])) {
-        if ($loginPass === 'TestPass@2026' || $loginPass === '123456' || $loginPass === $loginUser) {
+        $sessionHash = $_SESSION['user_passwords'][$loginUser] ?? null;
+        if ($sessionHash !== null && password_verify($loginPass, $sessionHash)) {
+            $authenticated = true;
+            $matchedUser = $mockUsers[$loginUser];
+        } elseif ($sessionHash === null && ($loginPass === 'TestPass@2026' || $loginPass === '123456' || $loginPass === $loginUser)) {
             $authenticated = true;
             $matchedUser = $mockUsers[$loginUser];
         }
@@ -1878,6 +2029,14 @@ $failedTestCount = count(array_filter($testCases, fn($c) => $c['status'] === 'FA
 $passedTestCount = count(array_filter($testCases, fn($c) => $c['status'] === 'PASS'));
 
 // Kiểm tra quyền truy cập View Tester (Chỉ auditor hoặc admin)
+// Kiểm tra quyền truy cập View Profile (Cần đăng nhập)
+if ($view === 'profile') {
+    if (!$currentUser) {
+        header('Location: /?view=login&msg=require_login');
+        exit;
+    }
+}
+
 if ($view === 'tester') {
     if (!$currentUser || !in_array($currentUser['role'], ['auditor', 'admin'], true)) {
         recordSecurityIncident(
@@ -4911,6 +5070,149 @@ if ($view === 'tester') {
         background: #f1f5f9;
       }
     }
+
+    /* =========================================================================
+       17. "HOLD TO UNLOCK / CONFIRM" INTERACTIVE DIAL (GIỮ ĐỂ MỞ KHOÁ)
+       ========================================================================= */
+    .lp-lock {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      font-family: inherit;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .lp-dial {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lp-ring {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      transform-origin: center;
+      transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s ease;
+    }
+
+    .lp-ring circle {
+      transform: rotate(-90deg);
+      transform-origin: center;
+      fill: none;
+      stroke-width: 5;
+      stroke-linecap: round;
+    }
+
+    .lp-track {
+      stroke: #eceef2;
+    }
+
+    .lp-progress {
+      stroke: var(--primary);
+      transition: stroke 0.2s;
+    }
+
+    .lp-button {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: none;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      color: #18222e;
+      box-shadow:
+        0 0 0 1px rgba(24, 34, 46, 0.06),
+        0 1px 2px rgba(24, 34, 46, 0.06),
+        0 8px 24px rgba(24, 34, 46, 0.08);
+      cursor: pointer;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      transition:
+        transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color 0.3s,
+        color 0.3s,
+        box-shadow 0.2s;
+    }
+
+    .lp-button:active,
+    .lp-button.is-holding {
+      transform: scale(0.92);
+      box-shadow: 0 2px 10px rgba(0, 75, 135, 0.18);
+    }
+
+    .lp-button.lp-unlocked {
+      background: #10b981 !important;
+      color: #ffffff !important;
+      transform: scale(1.05) !important;
+      box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.25), 0 8px 25px rgba(16, 185, 129, 0.35) !important;
+    }
+
+    .lp-dial:has(.lp-unlocked) .lp-progress {
+      stroke: #10b981;
+    }
+
+    .lp-button:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 6px;
+    }
+
+    .lp-icon {
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .lp-shackle,
+    .lp-body {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .lp-keyhole {
+      fill: currentColor;
+    }
+
+    .lp-button.lp-unlocked .lp-shackle {
+      transform: translateY(-5px);
+    }
+
+    .lp-label {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #475569;
+      transition: color 0.2s, opacity 0.2s;
+    }
+
+    .lp-label.is-success {
+      color: #059669;
+    }
+
+    .profile-layout-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .profile-layout-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -5054,6 +5356,9 @@ if ($view === 'tester') {
         <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
           <a href="/?view=create_record" class="<?= $view === 'create_record' ? 'active' : '' ?>">Lập Bệnh Án</a>
         <?php endif; ?>
+        <?php if ($currentUser): ?>
+          <a href="/?view=profile" class="<?= $view === 'profile' ? 'active' : '' ?>">Trang Cá Nhân</a>
+        <?php endif; ?>
         <a href="/?view=announcements" class="<?= $view === 'announcements' ? 'active' : '' ?>">Thông Báo Chung</a>
         <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
           <a href="/?view=users" class="<?= $view === 'users' ? 'active' : '' ?>">Quản Trị Người Dùng</a>
@@ -5069,9 +5374,12 @@ if ($view === 'tester') {
 
         <div class="nav-user-section">
           <?php if ($currentUser): ?>
-            <span class="nav-user-text">
-              Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['role']) ?></code>)
-            </span>
+            <a href="/?view=profile" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center;" title="Xem hồ sơ cá nhân & đổi mật khẩu">
+              <span class="nav-user-text">
+                Xin chào, <strong><?= htmlspecialchars($currentUser['full_name']) ?></strong> (<code><?= htmlspecialchars($currentUser['role']) ?></code>)
+              </span>
+            </a>
+            <a href="/?view=profile" class="btn btn-outline" style="padding: 6px 11px; font-size: 12px; background: #fff; border-color: #cbd5e1;" title="Quản trị hồ sơ">Hồ sơ</a>
             <a href="/?action=logout" class="btn btn-outline nav-logout-btn">Đăng xuất</a>
           <?php else: ?>
             <a href="/?view=login" class="btn btn-outline" style="padding: 9px 14px; font-size: 13px; text-align: center;">Đăng nhập</a>
@@ -6077,7 +6385,7 @@ if ($view === 'tester') {
             </p>
           </div>
           <div>
-            <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" class="btn btn-safe" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">Vá Lỗ Hổng (Tắt Lỗi)</a>
+            <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" onclick="return confirmWithHold(event, { title: 'Xác Nhận Vá Lỗi IDOR', message: 'Thao tác này sẽ kích hoạt cơ chế ABAC để đóng hoàn toàn lỗ hổng IDOR, bảo vệ dữ liệu hồ sơ y tế.' })" class="btn btn-safe" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">Vá Lỗ Hổng (Tắt Lỗi)</a>
           </div>
         </div>
       <?php else: ?>
@@ -6089,7 +6397,7 @@ if ($view === 'tester') {
             </p>
           </div>
           <div>
-            <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" class="btn btn-danger" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">Tạo Lỗi (Bật IDOR)</a>
+            <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" onclick="return confirmWithHold(event, { title: 'Xác Nhận Bật Lỗi IDOR', message: 'Thao tác này sẽ mở lỗ hổng CWE-639 trên hệ thống, cho phép bệnh nhân truy cập hồ sơ của nhau để kiểm thử an ninh.' })" class="btn btn-danger" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">Tạo Lỗi (Bật IDOR)</a>
           </div>
         </div>
       <?php endif; ?>
@@ -6190,7 +6498,7 @@ if ($view === 'tester') {
             </div>
           <?php endif; ?>
 
-          <form action="/?action=edit_record_submit" method="POST">
+          <form action="/?action=edit_record_submit" method="POST" onsubmit="return confirmFormWithHold(event, this, { title: 'Xác Nhận Lưu Bệnh Án', message: 'Bạn có chắc chắn muốn ghi đè nội dung và phác đồ điều trị cho hồ sơ bệnh án #<?= $editRecordDetail['id'] ?>?' })">
             <input type="hidden" name="id" value="<?= $editRecordDetail['id'] ?>">
 
             <div class="form-group">
@@ -6277,7 +6585,7 @@ if ($view === 'tester') {
             }
           ?>
 
-          <form action="/?action=create_record_submit" method="POST">
+          <form action="/?action=create_record_submit" method="POST" onsubmit="return confirmFormWithHold(event, this, { title: 'Xác Nhận Lập Bệnh Án', message: 'Bạn có chắc chắn muốn tạo và phát hành hồ sơ bệnh án mới này vào cơ sở dữ liệu y tế?' })">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
               <div class="form-group">
                 <label for="owner_username">Bệnh nhân thụ hưởng (Chọn tài khoản):</label>
@@ -6455,7 +6763,7 @@ if ($view === 'tester') {
                     <?php if ($currentUser && $currentUser['role'] === 'admin'): ?>
                       <div style="display: inline-flex; gap: 6px;">
                         <button type="button" onclick="openEditAnnouncementModal(<?= (int)$ann['id'] ?>, <?= htmlspecialchars(json_encode($ann['title']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($ann['body'] ?? $ann['content'] ?? ''), ENT_QUOTES, 'UTF-8') ?>, '<?= $ann['audience'] ?? 'patient' ?>')" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
-                        <a href="/?action=delete_announcement&id=<?= (int)$ann['id'] ?>" onclick="return confirm('Bạn có chắc muốn xóa thông báo này?')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Xóa</a>
+                        <a href="/?action=delete_announcement&id=<?= (int)$ann['id'] ?>" onclick="return confirmWithHold(event, { title: 'Xác Nhận Xoá Thông Báo', message: 'Bạn có chắc chắn muốn xóa thông báo này? Dữ liệu thông báo sẽ bị loại bỏ khỏi bảng tin chung.' })" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px; text-decoration: none;">Xóa</a>
                       </div>
                     <?php endif; ?>
                   </div>
@@ -6599,7 +6907,7 @@ if ($view === 'tester') {
                     <td style="text-align: right; min-width: 120px; white-space: nowrap;">
                       <button onclick="openEditUserModal('<?= htmlspecialchars($u['username']) ?>', '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars($u['role']) ?>', '<?= htmlspecialchars(addslashes($u['department'] ?? '')) ?>')" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;">Sửa</button>
                       <?php if ($u['username'] !== 'admin_bv'): ?>
-                        <a href="/?action=delete_user&username=<?= urlencode($u['username']) ?>" onclick="return confirm('Bạn có chắc muốn xóa tài khoản này?')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px;">Xóa</a>
+                        <a href="/?action=delete_user&username=<?= urlencode($u['username']) ?>" onclick="return confirmWithHold(event, { title: 'Xác Nhận Xoá Người Dùng', message: 'Bạn có chắc chắn muốn xóa tài khoản <?= htmlspecialchars($u['username']) ?>? Người dùng này sẽ mất toàn bộ quyền truy cập hệ thống.' })" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px;">Xóa</a>
                       <?php endif; ?>
                     </td>
                   </tr>
@@ -6705,10 +7013,10 @@ if ($view === 'tester') {
             </p>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <a href="/?action=simulate_security_alert" class="btn btn-outline" style="border-color: #fca5a5; color: #b91c1c; font-size: 12px;" title="Tạo sự cố tấn công mẫu để kiểm thử cơ chế phát hiện">
+            <a href="/?action=simulate_security_alert" onclick="return confirmWithHold(event, { title: 'Mô Phỏng Tấn Công IDOR', message: 'Kích hoạt một kịch bản tấn công truy cập chéo hồ sơ mẫu để kiểm tra cơ chế phát hiện và cảnh báo của hệ thống.' })" class="btn btn-outline" style="border-color: #fca5a5; color: #b91c1c; font-size: 12px;" title="Tạo sự cố tấn công mẫu để kiểm thử cơ chế phát hiện">
               Mô Phỏng Tấn Công IDOR
             </a>
-            <a href="/?action=clear_security_alerts" onclick="return confirm('Bạn có chắc muốn xóa sạch toàn bộ nhật ký sự cố?');" class="btn btn-outline" style="font-size: 12px;">
+            <a href="/?action=clear_security_alerts" onclick="return confirmWithHold(event, { title: 'Xác Nhận Xoá Nhật Ký Sự Cố', message: 'Bạn có chắc chắn muốn xóa sạch toàn bộ nhật ký sự cố vi phạm bảo mật thời gian thực?' });" class="btn btn-outline" style="font-size: 12px;">
               Xóa Nhật Ký
             </a>
           </div>
@@ -6780,7 +7088,7 @@ if ($view === 'tester') {
                 </div>
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <a href="/?action=export_incidents_csv" class="btn btn-outline" style="font-size: 12px; color: #b45309; border-color: #fcd34d; font-weight: 600;" title="Tải toàn bộ nhật ký vi phạm an ninh ra file Excel CSV">
+                <a href="/?action=export_incidents_csv" onclick="return confirmWithHold(event, { title: 'Tải Về Báo Cáo CSV', message: 'Bạn có chắc chắn muốn tải về toàn bộ danh sách cảnh báo vi phạm an ninh dưới dạng tệp CSV?' })" class="btn btn-outline" style="font-size: 12px; color: #b45309; border-color: #fcd34d; font-weight: 600;" title="Tải toàn bộ nhật ký vi phạm an ninh ra file Excel CSV">
                   Xuất CSV Sự Cố
                 </a>
               </div>
@@ -6959,7 +7267,7 @@ if ($view === 'tester') {
                 </div>
               </div>
               <div>
-                <a href="/?action=run_full_test_suite" class="btn btn-primary">
+                <a href="/?action=run_full_test_suite" onclick="return confirmWithHold(event, { title: 'Chạy Bộ 88 Kiểm Thử', message: 'Khởi chạy toàn bộ 88 kịch bản kiểm thử bảo mật & phân quyền trực tiếp trên môi trường máy chủ?' })" class="btn btn-primary">
                   ▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)
                 </a>
               </div>
@@ -7335,6 +7643,40 @@ if ($view === 'tester') {
     <span class="term-fab-dot <?= $bugIdor ? 'dot-danger' : 'dot-safe' ?>"></span>
   </button>
 
+  <!-- =======================================================================
+       MODAL GIỮ ĐỂ MỞ KHOÁ (HOLD TO UNLOCK CONFIRMATION DIAL)
+       ======================================================================= -->
+  <div id="holdConfirmModal" class="modal-overlay" style="display: none; z-index: 100000; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);">
+    <div class="modal-box" style="max-width: 440px; text-align: center; padding: 28px 24px; border-radius: 16px; box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); margin-bottom: 6px;" id="holdModalBadge">XÁC NHẬN BẢO MẬT</div>
+      <h3 style="margin: 0 0 8px 0; font-size: 19px; font-weight: 800; color: #0f172a;" id="holdModalTitle">Giữ để mở khoá xác nhận</h3>
+      <p style="margin: 0 0 24px 0; font-size: 13px; color: #64748b; line-height: 1.5;" id="holdModalDesc">
+        Vui lòng nhấn và giữ biểu tượng ổ khóa bên dưới trong 1 giây để hoàn tất thao tác quan trọng này.
+      </p>
+
+      <div class="lp-lock" id="globalHoldLock">
+        <div class="lp-dial">
+          <svg class="lp-ring" width="160" height="160" viewBox="0 0 160 160" aria-hidden="true">
+            <circle class="lp-track" cx="80" cy="80" r="72" />
+            <circle class="lp-progress" id="holdLockProgress" cx="80" cy="80" r="72" />
+          </svg>
+          <button type="button" class="lp-button" id="holdLockButton" aria-label="Hold to unlock">
+            <svg class="lp-icon" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true">
+              <path class="lp-shackle" id="holdLockShackle" d="M8 11V7.5a4 4 0 0 1 8 0V11" />
+              <rect class="lp-body" x="5" y="11" width="14" height="10" rx="2.5" />
+              <circle class="lp-keyhole" cx="12" cy="16" r="1.25" />
+            </svg>
+          </button>
+        </div>
+        <p class="lp-label" id="holdLockLabel" aria-live="polite">Nhấn giữ để xác nhận</p>
+      </div>
+
+      <div style="margin-top: 24px; display: flex; justify-content: center; gap: 10px;">
+        <button type="button" class="btn btn-outline" onclick="closeHoldConfirmModal()" style="padding: 9px 22px; font-size: 13px; font-weight: 600;">Hủy Bỏ</button>
+      </div>
+    </div>
+  </div>
+
   <!-- POPUP CHUYỂN TÀI KHOẢN NHANH -->
   <div id="accountDrawer" class="account-drawer" style="display: none;">
     <div class="acc-drawer-head">
@@ -7346,6 +7688,13 @@ if ($view === 'tester') {
       </div>
       <button onclick="toggleAccountDrawer()" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px; color: #cbd5e1; border-color: #475569; background: transparent;">Đóng</button>
     </div>
+
+    <?php if ($currentUser): ?>
+      <div style="padding: 10px 14px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 12px; color: #cbd5e1;">Quản lý tài khoản:</span>
+        <a href="/?view=profile" class="btn btn-outline" style="padding: 4px 10px; font-size: 11px; background: var(--primary); border-color: var(--primary); color: #fff; text-decoration: none; font-weight: 700;">Trang Cá Nhân & Đổi MK</a>
+      </div>
+    <?php endif; ?>
 
     <div class="acc-drawer-list">
       <!-- Admin -->
@@ -7478,8 +7827,8 @@ if ($view === 'tester') {
     </div>
     
     <div class="term-quick-btns">
-      <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" class="term-qbtn" style="color: #f87171; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Tạo Lỗi (set BUG_IDOR=1)</a>
-      <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" class="term-qbtn" style="color: #4ade80; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Vá Lỗi (set BUG_IDOR=0)</a>
+      <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" onclick="return confirmWithHold(event, { title: 'Kích Hoạt Lỗi IDOR', message: 'Bật lỗ hổng IDOR qua bảng điều khiển Terminal để phục vụ mục đích kiểm thử thâm nhập.' })" class="term-qbtn" style="color: #f87171; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Tạo Lỗi (set BUG_IDOR=1)</a>
+      <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" onclick="return confirmWithHold(event, { title: 'Vá Lỗ Hổng IDOR', message: 'Thiết lập BUG_IDOR=0 để khôi phục trạng thái an toàn tuyệt đối cho hệ thống.' })" class="term-qbtn" style="color: #4ade80; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Vá Lỗi (set BUG_IDOR=0)</a>
       <button onclick="execCmd('status')" class="term-qbtn">status</button>
       <button onclick="execCmd('curl /api/notes/3')" class="term-qbtn">curl /api/notes/3</button>
       <button onclick="execCmd('clear')" class="term-qbtn">clear</button>
@@ -7523,6 +7872,11 @@ if ($view === 'tester') {
       <button type="button" onclick="toggleAccountDrawer()" class="mobile-tab">
         <span>Đổi TK</span>
       </button>
+    <?php endif; ?>
+    <?php if ($currentUser): ?>
+      <a href="/?view=profile" class="mobile-tab <?= $view === 'profile' ? 'active' : '' ?>">
+        <span>Cá Nhân</span>
+      </a>
     <?php endif; ?>
     <button type="button" onclick="toggleAiChat()" class="mobile-tab tab-ai">
       <span>Trợ Lý AI</span>
@@ -7999,6 +8353,214 @@ if ($view === 'tester') {
       setupPagination({ containerId: 'testCasesTable', paginationWrapId: 'testCasesPagination', pageSize: 6, isTable: true });
       setupPagination({ containerId: 'announcementsList', paginationWrapId: 'announcementsPagination', pageSize: 3, isTable: false });
     });
+
+    // =========================================================================
+    // HOLD TO UNLOCK / CONFIRM DIAL CONTROLLER (GIỮ ĐỂ MỞ KHOÁ XÁC NHẬN)
+    // =========================================================================
+    (function initHoldLockController() {
+      const modal = document.getElementById('holdConfirmModal');
+      const titleEl = document.getElementById('holdModalTitle');
+      const descEl = document.getElementById('holdModalDesc');
+      const badgeEl = document.getElementById('holdModalBadge');
+      const btn = document.getElementById('holdLockButton');
+      const ring = document.querySelector('#globalHoldLock .lp-ring');
+      const progressCircle = document.getElementById('holdLockProgress');
+      const shackle = document.getElementById('holdLockShackle');
+      const label = document.getElementById('holdLockLabel');
+
+      if (!btn || !progressCircle || !label) return;
+
+      const RADIUS = 72;
+      const CIRCUMFERENCE = 2 * Math.PI * RADIUS; // ~452.389
+      progressCircle.style.strokeDasharray = CIRCUMFERENCE + ' ' + CIRCUMFERENCE;
+      progressCircle.style.strokeDashoffset = CIRCUMFERENCE;
+
+      let holdProgress = 0;
+      let isHolding = false;
+      let isUnlocked = false;
+      let startHoldTime = 0;
+      let animFrameId = null;
+      let currentConfirmCallback = null;
+      const HOLD_TIME_MS = 1000; // 1 giây giữ
+
+      function updateVisuals(p) {
+        p = Math.max(0, Math.min(1, p));
+        const offset = CIRCUMFERENCE * (1 - p);
+        progressCircle.style.strokeDashoffset = offset;
+        progressCircle.style.opacity = p > 0.02 ? 1 : 0.3;
+        if (shackle) {
+          shackle.style.transform = `translateY(${-p * 4}px)`;
+        }
+      }
+
+      function setHoldLabel(txt, isSuccess) {
+        if (!label) return;
+        label.textContent = txt;
+        if (isSuccess) {
+          label.classList.add('is-success');
+        } else {
+          label.classList.remove('is-success');
+        }
+      }
+
+      function unlockDial() {
+        isUnlocked = true;
+        isHolding = false;
+        btn.classList.add('lp-unlocked');
+        btn.classList.remove('is-holding');
+        updateVisuals(1);
+        if (shackle) shackle.style.transform = 'translateY(-6px)';
+        if (ring) {
+          ring.style.transform = 'scale(1.1)';
+          ring.style.opacity = '0';
+        }
+        setHoldLabel('Đã Mở Khoá & Xác Nhận Thành Công!', true);
+        if (navigator.vibrate) {
+          try { navigator.vibrate([15, 30, 20]); } catch (e) {}
+        }
+
+        setTimeout(() => {
+          const cb = currentConfirmCallback;
+          closeHoldConfirmModal();
+          if (typeof cb === 'function') {
+            cb();
+          }
+        }, 380);
+      }
+
+      function resetDial() {
+        isHolding = false;
+        isUnlocked = false;
+        btn.classList.remove('lp-unlocked');
+        btn.classList.remove('is-holding');
+        if (ring) {
+          ring.style.transform = 'scale(1)';
+          ring.style.opacity = '1';
+        }
+        setHoldLabel('Nhấn và giữ ổ khoá để xác nhận', false);
+        decayToZero();
+      }
+
+      function decayToZero() {
+        if (isHolding || isUnlocked) return;
+        if (holdProgress <= 0.01) {
+          holdProgress = 0;
+          updateVisuals(0);
+          return;
+        }
+        holdProgress += (0 - holdProgress) * 0.22;
+        updateVisuals(holdProgress);
+        requestAnimationFrame(decayToZero);
+      }
+
+      function holdStep(now) {
+        if (!isHolding || isUnlocked) return;
+        const elapsed = now - startHoldTime;
+        holdProgress = Math.min(1, elapsed / HOLD_TIME_MS);
+        updateVisuals(holdProgress);
+
+        if (holdProgress >= 1) {
+          unlockDial();
+        } else {
+          setHoldLabel('Đang giữ xác nhận (' + Math.round(holdProgress * 100) + '%)...', false);
+          animFrameId = requestAnimationFrame(holdStep);
+        }
+      }
+
+      function startHold(e) {
+        if (isUnlocked) return;
+        if (e.button !== undefined && e.button !== 0) return; // Chỉ chuột trái
+        isHolding = true;
+        btn.classList.add('is-holding');
+        startHoldTime = performance.now() - (holdProgress * HOLD_TIME_MS);
+        setHoldLabel('Giữ yên ổ khoá...', false);
+        if (navigator.vibrate) {
+          try { navigator.vibrate(10); } catch (e) {}
+        }
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        animFrameId = requestAnimationFrame(holdStep);
+      }
+
+      function cancelHold() {
+        if (isUnlocked) return;
+        if (isHolding) {
+          isHolding = false;
+          btn.classList.remove('is-holding');
+          if (animFrameId) cancelAnimationFrame(animFrameId);
+          setHoldLabel('Nhấn và giữ ổ khoá để xác nhận', false);
+          decayToZero();
+        }
+      }
+
+      btn.addEventListener('pointerdown', startHold);
+      btn.addEventListener('pointerup', cancelHold);
+      btn.addEventListener('pointerleave', cancelHold);
+      btn.addEventListener('pointercancel', cancelHold);
+
+      btn.addEventListener('keydown', function(e) {
+        if ((e.key === ' ' || e.key === 'Enter') && !isHolding && !isUnlocked) {
+          e.preventDefault();
+          startHold(e);
+        }
+      });
+      btn.addEventListener('keyup', function(e) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          cancelHold();
+        }
+      });
+
+      // Public APIs
+      window.showHoldConfirmModal = function(opts) {
+        opts = opts || {};
+        if (titleEl) titleEl.textContent = opts.title || 'Giữ Để Mở Khoá Xác Nhận';
+        if (descEl) descEl.textContent = opts.message || 'Vui lòng nhấn và giữ biểu tượng ổ khóa bên dưới trong 1 giây để hoàn tất thao tác quan trọng này.';
+        if (badgeEl) badgeEl.textContent = opts.badge || 'XÁC NHẬN BẢO MẬT';
+        currentConfirmCallback = opts.onConfirm || null;
+        resetDial();
+        if (modal) modal.style.display = 'flex';
+      };
+
+      window.closeHoldConfirmModal = function() {
+        if (modal) modal.style.display = 'none';
+        resetDial();
+        currentConfirmCallback = null;
+      };
+
+      window.confirmWithHold = function(e, opts) {
+        if (e && e.preventDefault) e.preventDefault();
+        const targetHref = (e && e.currentTarget && e.currentTarget.href) ? e.currentTarget.href : null;
+        opts = opts || {};
+        window.showHoldConfirmModal({
+          title: opts.title || 'Xác Nhận Thao Tác',
+          message: opts.message || 'Bạn có chắc chắn muốn thực hiện hành động này?',
+          badge: opts.badge || 'XÁC THỰC AN TOÀN',
+          onConfirm: function() {
+            if (typeof opts.onConfirm === 'function') {
+              opts.onConfirm();
+            } else if (targetHref) {
+              window.location.href = targetHref;
+            }
+          }
+        });
+        return false;
+      };
+
+      window.confirmFormWithHold = function(e, form, opts) {
+        if (e && e.preventDefault) e.preventDefault();
+        opts = opts || {};
+        window.showHoldConfirmModal({
+          title: opts.title || 'Xác Nhận Gửi Dữ Liệu',
+          message: opts.message || 'Bạn có chắc chắn muốn lưu các thay đổi này?',
+          badge: opts.badge || 'XÁC NHẬN LƯU',
+          onConfirm: function() {
+            if (form && typeof form.submit === 'function') {
+              form.submit();
+            }
+          }
+        });
+        return false;
+      };
+    })();
   </script>
 </body>
 </html>
