@@ -8350,28 +8350,38 @@ if ($view === 'tester') {
     <div id="aiChatMessages" class="ai-chat-body">
     </div>
 
-    <!-- Gợi ý câu hỏi nhanh (Quick Chips) -->
+    <!-- Gợi ý câu hỏi nhanh chuẩn hoá (Quick Chips) -->
     <div class="ai-quick-prompts" id="aiQuickPrompts">
       <?php if ($currentUser && $currentUser['role'] === 'member'): ?>
-        <button onclick="sendQuickPrompt('Tra cứu bệnh án của tôi')" class="ai-chip">Tra cứu bệnh án của tôi</button>
-        <button onclick="sendQuickPrompt('Tóm tắt tình trạng sức khỏe của tôi')" class="ai-chip">Tóm tắt sức khỏe</button>
+        <button onclick="sendQuickPrompt('Tôi có những hồ sơ bệnh án nào trên hệ thống?')" class="ai-chip">Bệnh án của tôi</button>
+        <button onclick="sendQuickPrompt('Tóm tắt tình trạng sức khỏe và đơn thuốc điều trị của tôi')" class="ai-chip">Tóm tắt đơn thuốc</button>
+        <button onclick="sendQuickPrompt('Tôi có thể xem hồ sơ bệnh án của bệnh nhân khác không?')" class="ai-chip">Xem bệnh án người khác</button>
+        <button onclick="sendQuickPrompt('Tư vấn chế độ dinh dưỡng và lối sống phục hồi sức khỏe')" class="ai-chip">Tư vấn sức khỏe</button>
+        <button onclick="sendQuickPrompt('Lỗ hổng IDOR trong bệnh án điện tử là gì và ảnh hưởng ra sao?')" class="ai-chip">Lỗ hổng IDOR là gì?</button>
       <?php elseif ($currentUser && $currentUser['role'] === 'doctor'): ?>
-        <button onclick="sendQuickPrompt('Hướng dẫn quy trình tạo bệnh án mới')" class="ai-chip">Cách tạo bệnh án mới</button>
-        <button onclick="sendQuickPrompt('Mẫu chẩn đoán lâm sàng')" class="ai-chip">Mẫu chẩn đoán</button>
+        <button onclick="sendQuickPrompt('Quy trình tạo và gửi hồ sơ bệnh án mới cho bệnh nhân thế nào?')" class="ai-chip">Cách tạo bệnh án mới</button>
+        <button onclick="sendQuickPrompt('Quy định phân quyền bệnh án theo chuyên khoa và khoa phòng điều trị?')" class="ai-chip">Phân quyền theo khoa</button>
+        <button onclick="sendQuickPrompt('Hướng dẫn cách chỉnh sửa hoặc xóa hồ sơ bệnh án trên hệ thống?')" class="ai-chip">Sửa & xóa bệnh án</button>
+        <button onclick="sendQuickPrompt('Gợi ý phác đồ chẩn đoán lâm sàng và nguyên tắc kê đơn thuốc an toàn')" class="ai-chip">Phác đồ chẩn đoán</button>
+        <button onclick="sendQuickPrompt('Giải thích cơ chế phân quyền bảo mật ABAC trong hệ thống EMR')" class="ai-chip">Cơ chế bảo mật ABAC</button>
       <?php elseif ($currentUser && $currentUser['role'] === 'admin'): ?>
-        <button onclick="sendQuickPrompt('Hướng dẫn quản lý nhân sự y tế')" class="ai-chip">Quản lý người dùng</button>
-        <button onclick="sendQuickPrompt('Quy tắc phân quyền RBAC toàn viện')" class="ai-chip">Phân quyền RBAC</button>
+        <button onclick="sendQuickPrompt('Hướng dẫn quản lý tài khoản, thêm mới và phân quyền nhân viên y tế?')" class="ai-chip">Quản trị người dùng</button>
+        <button onclick="sendQuickPrompt('Quyền hạn của Quản trị viên đối với hồ sơ bệnh án và phân quyền toàn viện?')" class="ai-chip">Quyền hạn của Admin</button>
+        <button onclick="sendQuickPrompt('Hướng dẫn đăng thông báo bệnh viện cho nội bộ và bệnh nhân?')" class="ai-chip">Đăng thông báo BV</button>
+        <button onclick="sendQuickPrompt('Cách kích hoạt kiểm thử an ninh IDOR để đánh giá an toàn hệ thống?')" class="ai-chip">Kiểm thử an ninh IDOR</button>
+        <button onclick="sendQuickPrompt('Các nguyên tắc bảo vệ dữ liệu y tế và chống rò rỉ thông tin cá nhân?')" class="ai-chip">Bảo vệ dữ liệu y tế</button>
       <?php elseif ($currentUser && $currentUser['role'] === 'auditor'): ?>
-        <button onclick="sendQuickPrompt('Giải thích cơ chế lỗ hổng IDOR')" class="ai-chip">Cơ chế IDOR</button>
-        <button onclick="sendQuickPrompt('Cách chạy bộ 88 kiểm thử tự động')" class="ai-chip">Chạy 88 ca test</button>
+        <button onclick="sendQuickPrompt('Cơ chế hoạt động của lỗ hổng IDOR/BOLA (CWE-639) trên hệ thống EMR?')" class="ai-chip">Cơ chế lỗ hổng IDOR</button>
+        <button onclick="sendQuickPrompt('Hướng dẫn quy trình kích hoạt kiểm thử và chạy bộ 88 ca test tự động?')" class="ai-chip">Chạy 88 ca kiểm thử</button>
+        <button onclick="sendQuickPrompt('So sánh sự khác biệt giữa mô hình phân quyền RBAC và ABAC trong y tế?')" class="ai-chip">So sánh RBAC & ABAC</button>
+        <button onclick="sendQuickPrompt('Các giải pháp kỹ thuật khắc phục triệt để lỗ hổng kiểm soát truy cập đối tượng?')" class="ai-chip">Giải pháp khắc phục IDOR</button>
       <?php else: ?>
-        <button onclick="sendQuickPrompt('Hướng dẫn đăng nhập và các tài khoản mẫu')" class="ai-chip">Tài khoản thực nghiệm</button>
-        <button onclick="sendQuickPrompt('Giới thiệu hệ sinh thái MediRecord EMR')" class="ai-chip">Giới thiệu MediRecord</button>
+        <button onclick="sendQuickPrompt('Hệ thống MediRecord EMR có những chức năng chính nào?')" class="ai-chip">Chức năng MediRecord</button>
+        <button onclick="sendQuickPrompt('Danh sách các tài khoản thực nghiệm và mật khẩu dùng thử là gì?')" class="ai-chip">Tài khoản thực nghiệm</button>
+        <button onclick="sendQuickPrompt('Lỗ hổng bảo mật IDOR trong y tế là gì và tại sao nguy hiểm?')" class="ai-chip">Lỗ hổng IDOR là gì?</button>
+        <button onclick="sendQuickPrompt('Tư vấn chế độ ăn uống lành mạnh và phòng ngừa bệnh tim mạch')" class="ai-chip">Lối sống lành mạnh</button>
+        <button onclick="sendQuickPrompt('Hướng dẫn cách đăng nhập và sử dụng các tính năng trên website?')" class="ai-chip">Hướng dẫn sử dụng web</button>
       <?php endif; ?>
-      <button onclick="sendQuickPrompt('Hướng dẫn sử dụng toàn bộ chức năng web')" class="ai-chip">Hướng dẫn web</button>
-      <button onclick="sendQuickPrompt('Lỗ hổng IDOR là gì?')" class="ai-chip">Lỗ hổng IDOR là gì?</button>
-      <button onclick="sendQuickPrompt('Tư vấn chế độ ăn uống và sinh hoạt tốt cho tim mạch')" class="ai-chip">Sức khỏe tổng quát</button>
-      <button onclick="sendQuickPrompt('Lập trình Web bảo mật là gì và có những nguyên tắc nào?')" class="ai-chip">Hỏi kiến thức tự do</button>
     </div>
 
     <!-- Input Form -->
