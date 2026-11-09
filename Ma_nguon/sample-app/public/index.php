@@ -476,6 +476,16 @@ function run24AccessTests(bool $bugIdor): array {
 // =============================================================================
 // TRỢ LÝ AI (HỖ TRỢ SỬ DỤNG WEB & TRA CỨU BỆNH ÁN CÁ NHÂN THEO PHÂN QUYỀN)
 // =============================================================================
+function cleanAiResponseText(string $text): string {
+    $cleaned = strip_tags($text);
+    $cleaned = (string)preg_replace('#/(strong|b|i|em|span|div|p|h[1-6]|br)\\b#i', '', $cleaned);
+    $cleaned = (string)preg_replace('/(\\*\\*|__)(.*?)\\1/', '$2', $cleaned);
+    $cleaned = (string)preg_replace('/(\\*|_)(.*?)\\1/', '$2', $cleaned);
+    $cleaned = (string)preg_replace('/^#{1,6}\\s+/m', '', $cleaned);
+    $cleaned = str_replace(['`', '<strong>', '</strong>', '<b>', '</b>', '/strong', '/b'], '', $cleaned);
+    return trim($cleaned);
+}
+
 function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mockRecords, bool $isKeyMissing): string {
     $msgTrim = trim($userMsg);
     $msgLower = function_exists('mb_strtolower') ? mb_strtolower($msgTrim, 'UTF-8') : strtolower($msgTrim);
@@ -483,7 +493,7 @@ function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mo
     $uName = $currentUser['username'] ?? '';
     $fullName = $currentUser['full_name'] ?? 'Khách vãng lai';
 
-    // 1. Kiểm tra nếu hỏi về bệnh án người khác hoặc cố tình tìm bệnh án không phải của mình
+    // 1. Kiểm tra an ninh: Bệnh nhân cố tình hỏi xem hoặc tra cứu bệnh án của người khác (Chống lỗ hổng IDOR)
     $isAskingBob = (str_contains($msgLower, 'bình') || str_contains($msgLower, 'bob') || str_contains($msgLower, 'bn_binh') || str_contains($msgLower, 'bệnh án 3') || str_contains($msgLower, 'bệnh án số 3') || str_contains($msgLower, 'bệnh án #3') || str_contains($msgLower, 'bệnh án 4') || str_contains($msgLower, 'bệnh án số 4') || str_contains($msgLower, 'bệnh án #4'));
     $isAskingAlice = (str_contains($msgLower, 'an') || str_contains($msgLower, 'alice') || str_contains($msgLower, 'bn_an') || str_contains($msgLower, 'bệnh án 1') || str_contains($msgLower, 'bệnh án số 1') || str_contains($msgLower, 'bệnh án #1') || str_contains($msgLower, 'bệnh án 2') || str_contains($msgLower, 'bệnh án số 2') || str_contains($msgLower, 'bệnh án #2'));
 
@@ -491,21 +501,62 @@ function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mo
         if (($uName === 'bn_an' || $uName === 'alice') && $isAskingBob) {
             return "CẢNH BÁO BẢO MẬT (CHỐNG RÒ RỈ DỮ LIỆU IDOR):\n\n"
                  . "- Bạn đang đăng nhập với tư cách Bệnh nhân Nguyễn Văn An (bn_an).\n"
-                 . "- Bệnh án #03 và #04 thuộc quyền sở hữu của Bệnh nhân Trần Thị Bình (bn_binh).\n"
+                 . "- Bệnh án số 03 và số 04 thuộc quyền sở hữu của Bệnh nhân Trần Thị Bình (bn_binh).\n"
                  . "- Theo chính sách kiểm soát truy cập dựa trên thuộc tính (ABAC), bạn KHÔNG CÓ QUYỀN xem dữ liệu này.\n"
                  . "- Hệ thống MediRecord EMR bảo vệ nghiêm ngặt quyền riêng tư y tế của bệnh nhân.";
         }
         if (($uName === 'bn_binh' || $uName === 'bob') && $isAskingAlice) {
             return "CẢNH BÁO BẢO MẬT (CHỐNG RÒ RỈ DỮ LIỆU IDOR):\n\n"
                  . "- Bạn đang đăng nhập với tư cách Bệnh nhân Trần Thị Bình (bn_binh).\n"
-                 . "- Bệnh án #01 và #02 thuộc quyền sở hữu của Bệnh nhân Nguyễn Văn An (bn_an).\n"
+                 . "- Bệnh án số 01 và số 02 thuộc quyền sở hữu của Bệnh nhân Nguyễn Văn An (bn_an).\n"
                  . "- Theo chính sách kiểm soát truy cập dựa trên thuộc tính (ABAC), bạn KHÔNG CÓ QUYỀN xem dữ liệu này.\n"
                  . "- Hệ thống MediRecord EMR bảo vệ nghiêm ngặt quyền riêng tư y tế của bệnh nhân.";
         }
     }
 
-    // 2. Tra cứu bệnh án của chính mình
-    if (str_contains($msgLower, 'bệnh án') || str_contains($msgLower, 'hồ sơ') || str_contains($msgLower, 'xét nghiệm') || str_contains($msgLower, 'chẩn đoán') || str_contains($msgLower, 'sức khỏe') || str_contains($msgLower, 'thuốc') || str_contains($msgLower, 'tra cứu') || str_contains($msgLower, 'tim mạch') || str_contains($msgLower, 'ung bướu')) {
+    // Câu hỏi: Tôi có thể xem hồ sơ bệnh án của bệnh nhân khác không?
+    if (str_contains($msgLower, 'bệnh nhân khác') || str_contains($msgLower, 'người khác') || str_contains($msgLower, 'xem bệnh án người khác')) {
+        return "QUY ĐỊNH BẢO MẬT HỒ SƠ Y TẾ:\n\n"
+             . "- Câu trả lời là: Tuyệt đối KHÔNG.\n"
+             . "- Hệ thống MediRecord EMR áp dụng cơ chế phân quyền kép RBAC và ABAC (Attribute-Based Access Control).\n"
+             . "- Mỗi bệnh nhân chỉ có quyền truy cập duy nhất vào hồ sơ bệnh án thuộc quyền sở hữu của chính mình.\n"
+             . "- Mọi nỗ lực truy cập bệnh án của người khác thông qua việc thay đổi mã hồ sơ trên URL (tấn công IDOR/BOLA) đều bị máy chủ chặn ngay lập tức với mã lỗi HTTP 403 Forbidden và ghi vết vào nhật ký an ninh hệ thống.";
+    }
+
+    // 2. Tra cứu bệnh án của chính mình hoặc tóm tắt đơn thuốc / tình trạng sức khỏe
+    if (str_contains($msgLower, 'tóm tắt') && (str_contains($msgLower, 'đơn thuốc') || str_contains($msgLower, 'sức khỏe') || str_contains($msgLower, 'tình trạng') || str_contains($msgLower, 'thuốc'))) {
+        if ($role === 'member') {
+            if ($uName === 'bn_an' || $uName === 'alice') {
+                return "TÓM TẮT SỨC KHỎE VÀ ĐƠN THUỐC CỦA BỆNH NHÂN NGUYỄN VĂN AN:\n\n"
+                     . "1. Tình trạng chẩn đoán:\n"
+                     . "- Bệnh án số 1: Tăng huyết áp nguyên phát (vô căn) giai đoạn 2 - Khoa Tim Mạch.\n"
+                     . "- Bệnh án số 2: Rối loạn lipid máu hỗn hợp, xơ vữa động mạch cảnh nhẹ.\n\n"
+                     . "2. Đơn thuốc và liều dùng:\n"
+                     . "- Amlodipine 5mg: Uống 1 viên vào mỗi buổi sáng sau khi ăn.\n"
+                     . "- Atorvastatin 20mg: Uống 1 viên vào buổi tối trước khi đi ngủ.\n\n"
+                     . "3. Lời dặn của Bác sĩ Lê Hoàng Minh:\n"
+                     . "- Đo huyết áp định kỳ 2 lần mỗi ngày (sáng và tối), ghi chép lại nhật ký.\n"
+                     . "- Hạn chế ăn mặn (dưới 5g muối/ngày), giảm mỡ động vật và thực phẩm chế biến sẵn.\n"
+                     . "- Duy trì đi bộ nhẹ nhàng 30 phút mỗi ngày, tránh căng thẳng thức khuya.\n"
+                     . "- Tái khám đúng hẹn tại Khoa Tim Mạch để kiểm tra lại chức năng gan và chỉ số mỡ máu.";
+            } elseif ($uName === 'bn_binh' || $uName === 'bob') {
+                return "TÓM TẮT SỨC KHỎE VÀ ĐƠN THUỐC CỦA BỆNH NHÂN TRẦN THỊ BÌNH:\n\n"
+                     . "1. Tình trạng chẩn đoán:\n"
+                     . "- Bệnh án số 3: Viêm loét dạ dày tá tràng có vi khuẩn HP dương tính - Khoa Nội Tiêu Hóa.\n"
+                     . "- Bệnh án số 4: Hội chứng trào ngược dạ dày thực quản (GERD) độ A.\n\n"
+                     . "2. Đơn thuốc và phác đồ điều trị:\n"
+                     . "- Esomeprazole 40mg: Uống 1 viên trước bữa ăn sáng 30 phút.\n"
+                     . "- Amoxicillin 1000mg kết hợp Clarithromycin 500mg: Uống sau bữa ăn sáng và tối theo phác đồ diệt HP.\n\n"
+                     . "3. Lời dặn của Bác sĩ điều trị:\n"
+                     . "- Uống thuốc đúng giờ, không tự ý ngưng kháng sinh khi chưa đủ liệu trình.\n"
+                     . "- Tránh ăn đồ cay nóng, đồ chua, rượu bia, cà phê và nước có gas.\n"
+                     . "- Ăn đúng bữa, không ăn quá no vào buổi tối, không nằm ngay sau khi ăn.\n"
+                     . "- Tái khám nội soi dạ dày sau 4 tuần để đánh giá mức độ lành vết loét.";
+            }
+        }
+    }
+
+    if (str_contains($msgLower, 'bệnh án của tôi') || str_contains($msgLower, 'hồ sơ của tôi') || str_contains($msgLower, 'hồ sơ bệnh án nào') || (str_contains($msgLower, 'bệnh án') && (str_contains($msgLower, 'tôi có') || str_contains($msgLower, 'xem bệnh án') || str_contains($msgLower, 'tra cứu') || str_contains($msgLower, 'danh sách')))) {
         if ($role === 'member') {
             $myRecords = [];
             foreach ($mockRecords as $rec) {
@@ -514,99 +565,266 @@ function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mo
                 }
             }
             if (empty($myRecords)) {
-                return "Chào {$fullName}, hiện tại hệ thống chưa ghi nhận hồ sơ bệnh án nào thuộc quyền sở hữu của bạn.";
+                return "Chào " . $fullName . ", hiện tại hệ thống chưa ghi nhận hồ sơ bệnh án nào thuộc quyền sở hữu của bạn.";
             }
-            $out = "HỒ SƠ BỆNH ÁN CỦA BẠN ({$fullName} - {$uName}):\n\n";
+            $out = "HỒ SƠ BỆNH ÁN CỦA BẠN (" . $fullName . " - " . $uName . "):\n\n";
             foreach ($myRecords as $r) {
-                $out .= "Mã hồ sơ: Bệnh án #{$r['id']}\n";
-                $out .= "- Tiêu đề: {$r['title']}\n";
-                $out .= "- Khoa điều trị: {$r['department']}\n";
-                $out .= "- Bác sĩ điều trị: {$r['doctor_name']}\n";
-                $out .= "- Chẩn đoán lâm sàng: {$r['diagnosis']}\n";
-                $out .= "- Phác đồ / Ghi chú thuốc: {$r['content']}\n";
-                $out .= "- Ngày lập: {$r['created_at']}\n\n";
+                $out .= "Mã hồ sơ: Bệnh án số " . $r['id'] . "\n";
+                $out .= "- Tiêu đề: " . $r['title'] . "\n";
+                $out .= "- Khoa điều trị: " . $r['department'] . "\n";
+                $out .= "- Bác sĩ phụ trách: " . $r['doctor_name'] . "\n";
+                $out .= "- Chẩn đoán lâm sàng: " . $r['diagnosis'] . "\n";
+                $out .= "- Phác đồ điều trị và thuốc: " . $r['content'] . "\n";
+                $out .= "- Ngày lập hồ sơ: " . $r['created_at'] . "\n\n";
             }
-            $out .= "Lưu ý: Bệnh nhân có quyền xem chi tiết từng hồ sơ tại mục 'Hồ Sơ Bệnh Án' trên menu (chế độ chỉ xem).";
+            $out .= "Ghi chú: Bạn có thể vào mục 'Danh Sách Bệnh Án' trên thanh menu để xem chi tiết từng hồ sơ.";
             return $out;
         } elseif ($role === 'doctor') {
-            return "Kính chào BS. Lê Hoàng Minh! Với vai trò Bác sĩ lâm sàng, bác sĩ có toàn quyền xem các bệnh án và tạo bệnh án mới:\n\n"
-                 . "- Xem danh sách: Menu 'Hồ Sơ Bệnh Án' (/?view=records)\n"
-                 . "- Lập hồ sơ mới: Nút 'Lập Bệnh Án Mới' (/?view=create_record)\n"
-                 . "- Hệ thống hiện có " . count($mockRecords) . " bệnh án lâm sàng đang được quản lý.";
+            return "Kính chào BS. Lê Hoàng Minh!\n\n"
+                 . "- Với quyền Bác sĩ lâm sàng, bác sĩ có thể xem toàn bộ danh sách bệnh án toàn viện tại trang 'Danh Sách Bệnh Án'.\n"
+                 . "- Hiện tại hệ thống đang quản lý " . count($mockRecords) . " hồ sơ bệnh án lâm sàng.\n"
+                 . "- Bác sĩ có thể bấm nút 'Lập Bệnh Án Mới' trên thanh menu để tạo hồ sơ chẩn đoán mới cho bệnh nhân.";
         } elseif ($role === 'admin' || $role === 'auditor') {
-            return "Xin chào {$fullName}! Bạn đang đăng nhập với quyền Quản trị / Kiểm toán. Toàn viện hiện có " . count($mockRecords) . " bệnh án. Bạn có thể mở menu 'Hồ Sơ Bệnh Án' để duyệt đầy đủ danh sách.";
+            return "Xin chào " . $fullName . "!\n\n"
+                 . "- Bạn đang đăng nhập với vai trò Quản trị / Kiểm toán an ninh hệ thống.\n"
+                 . "- Toàn viện hiện có " . count($mockRecords) . " hồ sơ bệnh án đang lưu trữ.\n"
+                 . "- Bạn có thể truy cập trang 'Danh Sách Bệnh Án' để duyệt, tìm kiếm hoặc giám sát toàn diện.";
         } else {
             return "Bạn hiện chưa đăng nhập vào hệ thống MediRecord EMR.\n\n"
-                 . "Để tra cứu bệnh án cá nhân, vui lòng:\n"
-                 . "1. Bấm nút tròn nổi [USER] ở góc phải màn hình.\n"
-                 . "2. Chọn đăng nhập nhanh bằng tài khoản Bệnh nhân: bn_an (An) hoặc bn_binh (Bình).\n"
-                 . "3. Hoặc vào trang Đăng nhập (mật khẩu chung: TestPass@2026).";
+                 . "Để xem hồ sơ bệnh án cá nhân, vui lòng:\n"
+                 . "1. Bấm nút tròn [USER] ở góc dưới bên phải màn hình.\n"
+                 . "2. Chọn đăng nhập nhanh bằng tài khoản Bệnh nhân: bn_an (Nguyễn Văn An) hoặc bn_binh (Trần Thị Bình).\n"
+                 . "3. Hoặc nhấn Đăng nhập trên thanh điều hướng với mật khẩu chung: TestPass@2026.";
         }
     }
 
-    // 3. Hướng dẫn sử dụng toàn bộ chức năng web
-    if (str_contains($msgLower, 'hướng dẫn') || str_contains($msgLower, 'sử dụng web') || str_contains($msgLower, 'chức năng') || str_contains($msgLower, 'cách dùng') || str_contains($msgLower, 'các trang') || str_contains($msgLower, 'menu')) {
-        return "CẨM NANG HƯỚNG DẪN SỬ DỤNG HỆ THỐNG MEDIRECORD EMR:\n\n"
-             . "1. TỔNG QUAN (/?view=landing / ?view=home):\n"
-             . "   - Trang giới thiệu năng lực SaaS y tế và bảng đối chiếu cơ chế bảo mật IDOR.\n\n"
-             . "2. DANH SÁCH BỆNH ÁN (/?view=records):\n"
-             . "   - Tìm kiếm bệnh án theo ID không giới hạn số lượng.\n"
-             . "   - Xem chi tiết hồ sơ bệnh án, chẩn đoán, thuốc và lịch tái khám.\n"
-             . "   - Bác sĩ có nút 'Lập Bệnh Án Mới' để bổ sung hồ sơ điều trị.\n\n"
-             . "3. BẢNG THÔNG BÁO BỆNH VIỆN (/?view=announcements):\n"
-             . "   - Phân loại rõ ràng: 'Thông Báo Cho Bệnh Nhân' (công khai) và 'Thông Báo Nội Bộ' (dành riêng cho cán bộ y tế).\n\n"
-             . "4. QUẢN LÝ NGƯỜI DÙNG (/?view=users):\n"
-             . "   - Dành cho Admin: Quản lý danh sách nhân sự y tế (thêm, sửa, tìm kiếm thời gian thực).\n\n"
-             . "5. TRUNG TÂM GIÁM SÁT AN NINH (/?view=tester):\n"
-             . "   - Dành cho Tester/Admin: Theo dõi cảnh báo rò rỉ dữ liệu y tế và kích hoạt chạy kiểm thử 88 ca test.\n\n"
-             . "6. BỘ BA NÚT ĐIỀU KHIỂN NỔI (GÓC DƯỚI BÊN PHẢI):\n"
-             . "   - Nút [AI]: Mở Trợ lý AI thông minh hỗ trợ tra cứu và hướng dẫn.\n"
-             . "   - Nút [USER]: Chuyển đổi nhanh 5 tài khoản thực nghiệm (1-Click Switch).";
+    // 3. Tư vấn sức khỏe, dinh dưỡng và lối sống lành mạnh
+    if (str_contains($msgLower, 'dinh dưỡng') || str_contains($msgLower, 'lối sống') || str_contains($msgLower, 'ăn uống') || str_contains($msgLower, 'phục hồi sức khỏe') || str_contains($msgLower, 'lành mạnh') || str_contains($msgLower, 'phòng ngừa')) {
+        return "TƯ VẤN CHẾ ĐỘ DINH DƯỠNG VÀ LỐI SỐNG LÀNH MẠNH:\n\n"
+             . "1. Chế độ ăn uống khoa học:\n"
+             . "- Giảm muối: Hạn chế lượng muối dưới 5g mỗi ngày để bảo vệ tim mạch và ngăn ngừa tăng huyết áp.\n"
+             . "- Giảm chất béo bão hòa: Hạn chế mỡ động vật, nội tạng, đồ chiên rán nhiều dầu mỡ; ưu tiên cá hồi, dầu ô liu và các loại hạt dinh dưỡng.\n"
+             . "- Tăng cường chất xơ: Bổ sung nhiều rau xanh, củ quả tươi và ngũ cốc nguyên hạt giúp hỗ trợ tiêu hóa và ổn định đường huyết.\n"
+             . "- Uống đủ nước: Uống 1.5 đến 2 lít nước ấm mỗi ngày, chia thành nhiều lần uống nhỏ, tránh uống nước quá lạnh.\n\n"
+             . "2. Vận động và thói quen sinh hoạt:\n"
+             . "- Tập thể dục đều đặn: Duy trì ít nhất 30 phút vận động nhẹ mỗi ngày như đi bộ nhanh, đạp xe nhẹ hoặc bơi lội.\n"
+             . "- Giấc ngủ chất lượng: Đảm bảo ngủ đủ 7 đến 8 tiếng mỗi đêm, hạn chế sử dụng thiết bị điện tử trước khi ngủ 1 giờ.\n"
+             . "- Quản lý căng thẳng: Thực hành hít thở sâu, thiền định hoặc nghe nhạc thư giãn để giảm áp lực thần kinh.\n\n"
+             . "3. Tuân thủ y lệnh bác sĩ:\n"
+             . "- Luôn uống thuốc đúng giờ, đủ liều và không tự ý ngưng thuốc khi chưa có chỉ định của bác sĩ điều trị.\n"
+             . "- Theo dõi các chỉ số sinh hiệu (huyết áp, nhịp tim, đường huyết) và tái khám định kỳ theo lịch hẹn.";
     }
 
-    // 4. Giải thích lỗ hổng IDOR / An toàn thông tin
-    if (str_contains($msgLower, 'idor') || str_contains($msgLower, 'bola') || str_contains($msgLower, 'lỗ hổng') || str_contains($msgLower, 'bảo mật') || str_contains($msgLower, 'an ninh') || str_contains($msgLower, 'kiểm thử') || str_contains($msgLower, 'test') || str_contains($msgLower, 'cwe')) {
+    // 4. Giải thích lỗ hổng IDOR/BOLA và an toàn thông tin
+    if (str_contains($msgLower, 'idor') || str_contains($msgLower, 'cwe-639') || str_contains($msgLower, 'bola') || str_contains($msgLower, 'rò rỉ dữ liệu') || str_contains($msgLower, 'bảo vệ dữ liệu y tế')) {
         return "TỔNG QUAN VỀ LỖ HỔNG IDOR (INSECURE DIRECT OBJECT REFERENCE):\n\n"
-             . "- Khái niệm: Lỗ hổng kiểm soát truy cập trực tiếp đối tượng (IDOR / BOLA - Top 1 OWASP API Security) xuất hiện khi ứng dụng sử dụng ID do máy trạm gửi lên để truy vấn dữ liệu mà không kiểm tra quyền sở hữu.\n\n"
-             . "- Cơ chế trong MediRecord EMR:\n"
-             . "  + Khi BẬT lỗi (BUG_IDOR=1): Bệnh nhân An (bn_an) truy cập /api/notes/3 sẽ đọc được hồ sơ bệnh án nhạy cảm của Bệnh nhân Bình (bn_binh)!\n"
-             . "  + Khi VÁ lỗi (BUG_IDOR=0): Hệ thống áp dụng chính sách kép RBAC & ABAC, chặn ngay lập tức với mã HTTP 403 Forbidden và ghi nhật ký vi phạm an ninh.\n\n"
-             . "- Kiểm thử tự động: Động cơ AccessTester tự động gửi 24 ca HTTP cURL thật để kiểm tra toàn diện các kịch bản.";
+             . "1. Khái niệm và mức độ nguy hiểm:\n"
+             . "- IDOR (CWE-639) hay BOLA (Broken Object Level Authorization) là lỗ hổng an ninh xếp vị trí Top 1 trong OWASP API Security.\n"
+             . "- Xảy ra khi hệ thống sử dụng định danh đối tượng (như mã ID bệnh án) do phía máy trạm gửi lên mà không kiểm tra xem người dùng hiện tại có quyền hợp pháp đối với đối tượng đó hay không.\n"
+             . "- Trong ngành y tế, kẻ tấn công hoặc bệnh nhân xấu chỉ cần đổi id=1 thành id=3 trên đường dẫn là có thể đọc trộm bệnh án, thông tin chẩn đoán nhạy cảm và lịch sử điều trị của người khác.\n\n"
+             . "2. Cơ chế phòng thủ trong MediRecord EMR:\n"
+             . "- Hệ thống áp dụng chính sách phân quyền kép RBAC kết hợp ABAC (Attribute-Based Access Control).\n"
+             . "- Mọi yêu cầu truy vấn dữ liệu bệnh án đều được kiểm tra ràng buộc quyền sở hữu: mã hồ sơ phải thuộc về tài khoản đang đăng nhập.\n"
+             . "- Nếu phát hiện truy cập trái phép, máy chủ lập tức từ chối với mã HTTP 403 Forbidden và ghi nhật ký cảnh báo an ninh thời gian thực.\n\n"
+             . "3. Kiểm thử an ninh tự động:\n"
+             . "- Hệ thống tích hợp sẵn 88 ca kiểm thử bảo mật tự động tại trang 'Giám Sát An Ninh & Kiểm Thử', đảm bảo không còn lỗ hổng rò rỉ dữ liệu.";
     }
 
-    // 5. Danh sách tài khoản thực nghiệm
-    if (str_contains($msgLower, 'tài khoản') || str_contains($msgLower, 'mật khẩu') || str_contains($msgLower, 'đăng nhập') || str_contains($msgLower, 'login') || str_contains($msgLower, 'password')) {
+    // 5. So sánh RBAC và ABAC / Cơ chế bảo mật ABAC
+    if (str_contains($msgLower, 'rbac') || str_contains($msgLower, 'abac') || str_contains($msgLower, 'so sánh rbac') || str_contains($msgLower, 'cơ chế bảo mật abac') || str_contains($msgLower, 'phân quyền theo khoa')) {
+        return "SO SÁNH MÔ HÌNH PHÂN QUYỀN RBAC VÀ ABAC TRONG HỆ THỐNG Y TẾ:\n\n"
+             . "1. Mô hình RBAC (Role-Based Access Control):\n"
+             . "- Phân quyền dựa trên vai trò chức danh của người dùng (ví dụ: Admin, Bác sĩ, Bệnh nhân).\n"
+             . "- Ưu điểm: Đơn giản, dễ cấu hình và quản lý nhóm người dùng lớn.\n"
+             . "- Nhược điểm: Không giải quyết được bài toán phân quyền đối tượng chi tiết. Nếu chỉ dùng RBAC, mọi Bệnh nhân đều có quyền xem bệnh án, dẫn đến việc Bệnh nhân A có thể xem trộm bệnh án của Bệnh nhân B (lỗ hổng IDOR).\n\n"
+             . "2. Mô hình ABAC (Attribute-Based Access Control):\n"
+             . "- Phân quyền dựa trên các thuộc tính động của chủ thể (người dùng), đối tượng (hồ sơ bệnh án) và ngữ cảnh môi trường.\n"
+             . "- Cơ chế: Kiểm tra đồng thời vai trò của người dùng và thuộc tính chủ sở hữu (owner_username) của hồ sơ bệnh án.\n"
+             . "- Kết quả: Ngăn chặn triệt để lỗ hổng IDOR, đảm bảo mỗi bệnh nhân chỉ truy cập được đúng hồ sơ của chính mình.\n\n"
+             . "3. Áp dụng tại MediRecord EMR:\n"
+             . "- Hệ thống kết hợp cả RBAC và ABAC để xây dựng ma trận phân quyền bảo mật cấp y tế toàn diện.";
+    }
+
+    // 6. Giải pháp kỹ thuật khắc phục triệt để IDOR
+    if (str_contains($msgLower, 'khắc phục') || str_contains($msgLower, 'giải pháp') || str_contains($msgLower, 'phòng chống idor')) {
+        return "CÁC GIẢI PHÁP KỸ THUẬT KHẮC PHỤC TRIỆT ĐỂ LỖ HỔNG IDOR:\n\n"
+             . "1. Ràng buộc quyền sở hữu ở tầng truy vấn dữ liệu:\n"
+             . "- Không bao giờ truy vấn chỉ dựa trên ID do máy trạm gửi lên.\n"
+             . "- Luôn thêm điều kiện kiểm tra danh tính trong câu lệnh SQL: WHERE id = :id AND owner_username = :current_user.\n\n"
+             . "2. Áp dụng kiểm soát phân quyền ABAC tại Middleware:\n"
+             . "- Xây dựng bộ lọc chặn trước controller để đối chiếu quyền hạn của phiên đăng nhập với tài nguyên được yêu cầu.\n\n"
+             . "3. Sử dụng định danh ngẫu nhiên (UUID / GUID):\n"
+             . "- Thay thế các số ID tự tăng tuần tự (1, 2, 3...) bằng chuỗi UUIDv4 ngẫu nhiên khó đoán để ngăn chặn việc dò quét dữ liệu.\n\n"
+             . "4. Tự động hóa kiểm thử an ninh (Security CI/CD Pipeline):\n"
+             . "- Tích hợp các bộ kịch bản kiểm thử tự động (như bộ 88 ca test của MediRecord EMR) để phát hiện và ngăn chặn lỗ hổng trước khi triển khai.";
+    }
+
+    // 7. Quy trình tạo bệnh án mới (Dành cho Bác sĩ)
+    if (str_contains($msgLower, 'tạo') && (str_contains($msgLower, 'bệnh án mới') || str_contains($msgLower, 'lập bệnh án') || str_contains($msgLower, 'quy trình tạo') || str_contains($msgLower, 'gửi hồ sơ'))) {
+        return "QUY TRÌNH TẠO VÀ GỬI HỒ SƠ BỆNH ÁN MỚI CHO BỆNH NHÂN:\n\n"
+             . "1. Truy cập chức năng:\n"
+             . "- Bác sĩ hoặc Quản trị viên đăng nhập vào hệ thống.\n"
+             . "- Bấm vào mục 'Lập Bệnh Án Mới' trên thanh menu chính (đường dẫn: /?view=create_record).\n\n"
+             . "2. Nhập thông tin chuyên môn:\n"
+             . "- Chọn bệnh nhân cần lập hồ sơ (ví dụ: bn_an hoặc bn_binh).\n"
+             . "- Điền tiêu đề hồ sơ và khoa điều trị phụ trách.\n"
+             . "- Nhập tiền sử bệnh, kết quả thăm khám lâm sàng và các chỉ số sinh hiệu.\n"
+             . "- Nhập mã chẩn đoán bệnh theo chuẩn ICD-10.\n"
+             . "- Kê đơn thuốc chi tiết: tên thuốc, hàm lượng, liều dùng, cách uống và thời gian điều trị.\n\n"
+             . "3. Lưu và phát hành hồ sơ:\n"
+             . "- Kiểm tra kỹ thông tin chuyên môn và nhấn nút 'Lưu Hồ Sơ Bệnh Án'.\n"
+             . "- Dữ liệu được mã hóa và lưu trữ an toàn trong cơ sở dữ liệu. Bệnh nhân sẽ nhìn thấy ngay hồ sơ của mình khi đăng nhập.";
+    }
+
+    // 8. Chỉnh sửa và xóa hồ sơ bệnh án (Hold to Unlock)
+    if (str_contains($msgLower, 'sửa') || str_contains($msgLower, 'xóa') || str_contains($msgLower, 'chỉnh sửa') || str_contains($msgLower, 'xóa bệnh án')) {
+        return "HƯỚNG DẪN CHỈNH SỬA VÀ XÓA HỒ SƠ BỆNH ÁN:\n\n"
+             . "1. Quyền hạn thao tác:\n"
+             . "- Chỉ Bác sĩ (Doctor) và Quản trị viên (Admin) mới có quyền chỉnh sửa hoặc xóa bệnh án.\n"
+             . "- Bệnh nhân (Member) chỉ có quyền xem hồ sơ của mình ở chế độ đọc an toàn.\n\n"
+             . "2. Chỉnh sửa hồ sơ bệnh án:\n"
+             . "- Vào trang 'Danh Sách Bệnh Án' (/?view=records).\n"
+             . "- Tìm hồ sơ cần điều chỉnh và bấm vào nút 'Sửa' (/?view=edit_record&id=X).\n"
+             . "- Cập nhật lại chẩn đoán, thuốc hoặc tiến trình điều trị rồi bấm 'Lưu Thay Đổi'.\n\n"
+             . "3. Xóa hồ sơ bệnh án với cơ chế xác nhận 'Giữ để mở khóa':\n"
+             . "- Trên bảng danh sách bệnh án, bấm nút 'Xóa' tại hàng tương ứng.\n"
+             . "- Để bảo vệ dữ liệu y tế tối quan trọng và ngăn thao tác nhầm, hệ thống sẽ mở hộp thoại an toàn.\n"
+             . "- Người dùng cần NHẤN VÀ GIỮ biểu tượng ổ khóa tròn trong vòng 1 giây cho đến khi vòng tròn xanh hoàn tất để xác nhận xóa hồ sơ.";
+    }
+
+    // 9. Phác đồ chẩn đoán lâm sàng và nguyên tắc kê đơn thuốc
+    if (str_contains($msgLower, 'phác đồ') || str_contains($msgLower, 'kê đơn') || str_contains($msgLower, 'nguyên tắc kê đơn')) {
+        return "GỢI Ý PHÁC ĐỒ CHẨN ĐOÁN LÂM SÀNG VÀ NGUYÊN TẮC KÊ ĐƠN THUỐC AN TOÀN:\n\n"
+             . "1. Quy trình chẩn đoán lâm sàng chuẩn:\n"
+             . "- Khai thác bệnh sử và tiền sử dị ứng thuốc kỹ lưỡng trước khi chỉ định dùng thuốc.\n"
+             . "- Thăm khám toàn diện cơ quan tổn thương kết hợp các xét nghiệm cận lâm sàng cần thiết.\n"
+             . "- Chẩn đoán xác định dựa trên tiêu chuẩn chẩn đoán quốc tế và hướng dẫn của Bộ Y tế.\n\n"
+             . "2. Năm nguyên tắc vàng khi kê đơn thuốc:\n"
+             . "- Đúng người bệnh, đúng chỉ định, đúng liều lượng, đúng đường dùng và đúng thời điểm.\n"
+             . "- Đối chiếu tương tác thuốc (Drug Interactions) để tránh các phối hợp gây độc tính hoặc giảm hiệu quả điều trị.\n"
+             . "- Cân nhắc điều chỉnh liều cẩn trọng cho người cao tuổi, trẻ em hoặc bệnh nhân suy gan, suy thận.\n"
+             . "- Giải thích rõ ràng cho bệnh nhân về cách sử dụng, tác dụng phụ thường gặp và dấu hiệu cần tái khám khẩn cấp.";
+    }
+
+    // 10. Quản trị người dùng & phân quyền nhân viên y tế / Quyền hạn của Admin
+    if (str_contains($msgLower, 'quản trị người dùng') || str_contains($msgLower, 'thêm mới') || str_contains($msgLower, 'quản lý tài khoản') || (str_contains($msgLower, 'quản lý') && str_contains($msgLower, 'nhân sự')) || str_contains($msgLower, 'quyền hạn của admin') || str_contains($msgLower, 'quản trị viên')) {
+        return "HƯỚNG DẪN QUẢN TRỊ NGƯỜI DÙNG VÀ QUYỀN HẠN CỦA QUẢN TRỊ VIÊN:\n\n"
+             . "1. Truy cập trang Quản Trị:\n"
+             . "- Đăng nhập với tài khoản Admin (admin_bv) và bấm vào mục 'Quản Trị Người Dùng' trên thanh menu (/?view=users).\n\n"
+             . "2. Quản lý danh sách nhân sự:\n"
+             . "- Tìm kiếm tài khoản thời gian thực theo tên đăng nhập hoặc họ và tên.\n"
+             . "- Xem thông tin vai trò, khoa phòng công tác và trạng thái hoạt động.\n\n"
+             . "3. Thêm mới tài khoản và phân quyền:\n"
+             . "- Điền tên đăng nhập, họ tên đầy đủ, địa chỉ email, mật khẩu khởi tạo và chọn khoa phòng.\n"
+             . "- Chọn vai trò tương ứng:\n"
+             . "  + Admin: Toàn quyền quản trị hệ thống, giám sát danh sách bệnh án toàn viện.\n"
+             . "  + Doctor: Bác sĩ khám chữa bệnh, lập và cập nhật bệnh án.\n"
+             . "  + Member: Bệnh nhân, chỉ xem hồ sơ bệnh án của chính mình.\n"
+             . "  + Auditor: Kiểm toán viên, giám sát an ninh và kiểm thử.\n"
+             . "- Nhấn 'Thêm Người Dùng Mới' để hoàn tất.";
+    }
+
+    // 11. Đăng thông báo bệnh viện
+    if (str_contains($msgLower, 'thông báo') && (str_contains($msgLower, 'đăng') || str_contains($msgLower, 'nội bộ') || str_contains($msgLower, 'bảng tin') || str_contains($msgLower, 'thông báo chung'))) {
+        return "HƯỚNG DẪN ĐĂNG THÔNG BÁO BỆNH VIỆN CHO NỘI BỘ VÀ BỆNH NHÂN:\n\n"
+             . "1. Truy cập trang Thông Báo:\n"
+             . "- Bấm vào mục 'Thông Báo Chung' trên thanh menu (/?view=announcements).\n\n"
+             . "2. Hai phân loại thông báo:\n"
+             . "- Thông Báo Cho Bệnh Nhân: Công khai cho toàn bộ bệnh nhân và người nhà theo dõi về lịch khám bệnh, hướng dẫn thủ tục, quy chế bảo hiểm.\n"
+             . "- Thông Báo Nội Bộ: Dành riêng cho cán bộ y tế về lịch trực lâm sàng, điều động nhân sự, chỉ đạo chuyên môn từ Ban Giám đốc.\n\n"
+             . "3. Soạn và gửi thông báo (Dành cho Admin/Bác sĩ):\n"
+             . "- Nhập tiêu đề rõ ràng, chọn loại thông báo phù hợp và soạn nội dung chi tiết.\n"
+             . "- Nhấn nút gửi để phát hành tức thì trên bảng tin hệ thống.";
+    }
+
+    // 12. Kiểm thử an ninh và chạy bộ 88 ca test tự động
+    if (str_contains($msgLower, '88') || str_contains($msgLower, 'kiểm thử') || str_contains($msgLower, 'chạy test') || str_contains($msgLower, 'chạy bộ kiểm thử') || str_contains($msgLower, 'tester')) {
+        return "QUY TRÌNH KÍCH HOẠT VÀ CHẠY BỘ 88 CA KIỂM THỬ AN NINH TỰ ĐỘNG:\n\n"
+             . "1. Truy cập Trung tâm Kiểm Thử:\n"
+             . "- Đăng nhập với quyền Admin hoặc Auditor (tester_sec).\n"
+             . "- Chọn mục 'Giám Sát An Ninh & Kiểm Thử' trên thanh menu chính (/?view=tester).\n\n"
+             . "2. Cấu trúc bộ 88 ca kiểm thử:\n"
+             . "- 39 Kiểm thử đơn vị (Unit Tests): Kiểm tra chính sách ma trận quyền, quy tắc allowlist, bộ giải mã và che giấu dữ liệu nhạy cảm.\n"
+             . "- 29 Kiểm thử tích hợp CSDL (Integration Tests): Kiểm tra tính nhất quán dữ liệu, quyền sở hữu dự án, lưu trữ kết quả và so sánh chênh lệch.\n"
+             . "- 20 Kiểm thử đầu-cuối an ninh (E2E Security Tests): Mô phỏng các cuộc tấn công HTTP cURL thực tế, kiểm tra chống rò rỉ IDOR và chống lộ mã phiên.\n\n"
+             . "3. Thực thi kiểm thử:\n"
+             . "- Bấm nút 'Chạy Toàn Bộ Kiểm Thử' để kích hoạt bộ đo tự động.\n"
+             . "- Hệ thống hiển thị kết quả kiểm thử trực tiếp với tỷ lệ thành công 100% (88/88 ca đạt).";
+    }
+
+    // 13. Danh sách các tài khoản thực nghiệm
+    if (str_contains($msgLower, 'tài khoản') || str_contains($msgLower, 'mật khẩu') || str_contains($msgLower, 'dùng thử') || str_contains($msgLower, 'demo') || str_contains($msgLower, 'đăng nhập') || str_contains($msgLower, 'login')) {
         return "DANH SÁCH 5 TÀI KHOẢN THỰC NGHIỆM TRÊN HỆ THỐNG:\n"
-             . "Mật khẩu chung: TestPass@2026\n\n"
+             . "Mật khẩu dùng thử chung cho tất cả tài khoản: TestPass@2026\n\n"
              . "1. Bác sĩ Lê Hoàng Minh: bs_minh (Khoa Tim Mạch - Quyền Doctor)\n"
-             . "2. Bệnh nhân Nguyễn Văn An: bn_an (Ngoại trú - Quyền Member, sở hữu bệnh án #1, #2)\n"
-             . "3. Bệnh nhân Trần Thị Bình: bn_binh (Nội trú - Quyền Member, sở hữu bệnh án #3, #4)\n"
-             . "4. Quản trị viên Bệnh viện: admin_bv (Phòng CNTT - Quyền Admin)\n"
-             . "5. Kỹ sư Bảo mật Nguyễn Kiểm Thử: tester_sec (Ban An Toàn Thông Tin - Quyền Auditor)\n\n"
-             . "Mẹo: Bạn có thể nhấn vào nút tròn [USER] ở góc phải để đổi tài khoản chỉ bằng 1 cú nhấp chuột!";
+             . "2. Bệnh nhân Nguyễn Văn An: bn_an (Ngoại trú - Quyền Member, sở hữu bệnh án số 1 và số 2)\n"
+             . "3. Bệnh nhân Trần Thị Bình: bn_binh (Nội trú - Quyền Member, sở hữu bệnh án số 3 và số 4)\n"
+             . "4. Quản trị viên Bệnh viện: admin_bv (Phòng CNTT - Quyền Admin toàn quyền)\n"
+             . "5. Kỹ sư An toàn thông tin: tester_sec (Ban An Toàn - Quyền Auditor)\n\n"
+             . "Mẹo nhanh: Bạn có thể nhấn vào nút tròn [USER] ở góc dưới bên phải màn hình để chuyển đổi nhanh giữa các tài khoản chỉ bằng 1 cú nhấp chuột.";
     }
 
-    // 6. Xử lý câu chào hỏi hoặc câu hỏi ngoài lề thông dụng
-    if (str_contains($msgLower, 'chào') || str_contains($msgLower, 'hello') || str_contains($msgLower, 'hi') || str_contains($msgLower, 'bạn là ai') || str_contains($msgLower, 'who are you')) {
-        return "Xin chào " . ($fullName ?: 'bạn') . "! Tôi là Trợ lý AI Thông Minh của Hệ thống MediRecord EMR.\n\n"
-             . "Tôi được tích hợp sẵn các mô hình AI mã nguồn mở miễn phí từ OpenRouter (Qwen 2.5, Llama 3.2, Gemini 2.0 Flash, DeepSeek R1). Bạn có thể hỏi tôi bất kỳ điều gì:\n"
-             . "- Tra cứu hồ sơ bệnh án cá nhân của bạn (bảo mật nghiêm ngặt).\n"
-             . "- Hướng dẫn sử dụng các chức năng trên website.\n"
-             . "- Giải thích kiến thức an toàn thông tin IDOR/BOLA.\n"
-             . "- Hoặc bất kỳ câu hỏi nào về khoa học, lập trình, sức khỏe, đời sống thường ngày!";
+    // 14. Tổng quan các chức năng trên website MediRecord EMR
+    if (str_contains($msgLower, 'chức năng') || str_contains($msgLower, 'tính năng') || str_contains($msgLower, 'hướng dẫn') || str_contains($msgLower, 'sử dụng web') || str_contains($msgLower, 'các trang')) {
+        return "CẨM NANG CÁC CHỨC NĂNG CHÍNH TRÊN HỆ THỐNG MEDIRECORD EMR:\n\n"
+             . "1. Trang Chủ BV (/?view=landing):\n"
+             . "- Cổng thông tin giới thiệu Bệnh viện Đa khoa Quốc tế MediRecord, các chuyên khoa mũi nhọn, quy trình khám bệnh 4 bước và đội ngũ y bác sĩ.\n\n"
+             . "2. Danh Sách Bệnh Án (/?view=records):\n"
+             . "- Tra cứu, lọc hồ sơ bệnh án theo mã, tên bệnh nhân hoặc BHYT.\n"
+             . "- Xem chi tiết hồ sơ bệnh án. Bác sĩ và Admin có quyền chỉnh sửa hoặc xóa hồ sơ với xác nhận an toàn 'Giữ để mở khóa'.\n\n"
+             . "3. Lập Bệnh Án Mới (/?view=create_record):\n"
+             . "- Dành cho Bác sĩ và Admin ghi nhận tiền sử, chẩn đoán ICD và kê đơn thuốc cho bệnh nhân.\n\n"
+             . "4. Thông Báo Chung (/?view=announcements):\n"
+             . "- Bảng tin phân loại gồm thông báo cho người bệnh và thông báo nghiệp vụ nội bộ.\n\n"
+             . "5. Quản Trị Người Dùng (/?view=users):\n"
+             . "- Dành riêng cho Admin quản lý nhân sự, cấp quyền tài khoản và kích hoạt tài khoản.\n\n"
+             . "6. Giám Sát An Ninh & Kiểm Thử (/?view=tester):\n"
+             . "- Theo dõi nhật ký an ninh hệ thống và chạy bộ 88 kịch bản kiểm thử bảo mật tự động.\n\n"
+             . "7. Trang Cá Nhân (/?view=profile):\n"
+             . "- Bấm vào avatar tài khoản ở góc phải thanh navbar để cập nhật thông tin và đổi mật khẩu với xác nhận 'Giữ để mở khóa'.\n\n"
+             . "8. Nút Nổi Tiện Ích:\n"
+             . "- Nút tròn [USER] góc dưới bên phải: Đổi tài khoản thử nghiệm 1 chạm.\n"
+             . "- Biểu tượng Robot 3D góc dưới cùng bên phải: Bật tắt Trợ lý AI MediBot tương tác trực quan.";
     }
 
-    if (str_contains($msgLower, 'lập trình') || str_contains($msgLower, 'code') || str_contains($msgLower, 'php') || str_contains($msgLower, 'python') || str_contains($msgLower, 'javascript') || str_contains($msgLower, 'docker') || str_contains($msgLower, 'render') || str_contains($msgLower, 'git')) {
-        return "VỀ CÂU HỎI KỸ THUẬT & LẬP TRÌNH:\n\n"
-             . "- Dự án MediRecord EMR hiện tại được phát triển bằng PHP 8.2+ và CSDL PostgreSQL, vận hành kiểm soát phân quyền kép RBAC & ABAC.\n"
-             . "- Hệ thống được đóng gói bằng Docker và triển khai trực tiếp trên Render Cloud.\n"
-             . "- Với các câu hỏi lập trình chuyên sâu, mô hình OpenRouter (như Qwen 2.5 hoặc DeepSeek R1) sẽ phân tích cú pháp và sinh code giải pháp chi tiết cho bạn!";
+    // 15. Trang cá nhân và đổi mật khẩu
+    if (str_contains($msgLower, 'trang cá nhân') || str_contains($msgLower, 'đổi mật khẩu') || str_contains($msgLower, 'đổi thông tin') || str_contains($msgLower, 'profile')) {
+        return "HƯỚNG DẪN SỬ DỤNG TRANG CÁ NHÂN VÀ ĐỔI MẬT KHẨU:\n\n"
+             . "1. Mở Trang Cá Nhân:\n"
+             . "- Nhấn vào ảnh đại diện (avatar) tài khoản ở góc trên cùng bên phải thanh menu.\n"
+             . "- Chọn mục 'Trang Cá Nhân' từ menu thả xuống (đường dẫn: /?view=profile).\n\n"
+             . "2. Cập nhật thông tin cá nhân:\n"
+             . "- Chỉnh sửa họ và tên, địa chỉ email, số điện thoại liên lạc.\n"
+             . "- Nhấn 'Cập Nhật Thông Tin' để lưu thay đổi vào hệ thống.\n\n"
+             . "3. Đổi mật khẩu an toàn với cơ chế 'Giữ để mở khóa':\n"
+             . "- Điền mật khẩu hiện tại, nhập mật khẩu mới và xác nhận lại mật khẩu mới.\n"
+             . "- Bấm nút 'Đổi Mật Khẩu'.\n"
+             . "- Nhấn và giữ biểu tượng ổ khóa tròn trong 1 giây để hoàn tất xác thực đổi mật khẩu.";
     }
 
-    // 7. Mặc định (cho phép AI trả lời câu hỏi tự do ngoài lề)
-    return "Tôi đã nhận được câu hỏi của bạn: \"{$msgTrim}\".\n\n"
-         . "Là một Trợ lý AI đa năng, tôi luôn sẵn sàng giải đáp mọi thắc mắc của bạn từ việc tra cứu bệnh án cá nhân, hướng dẫn sử dụng website cho đến các câu hỏi mở rộng về khoa học, công nghệ, y tế và đời sống.\n\n"
-         . "Mẹo: Bạn có thể chọn mô hình AI yêu thích (Qwen 2.5, Llama 3.2, Gemini 2.0 Flash, DeepSeek R1) ở thanh chọn mô hình phía trên để nhận câu trả lời chi tiết và tối ưu nhất!";
+    // 16. Chào hỏi
+    if (str_contains($msgLower, 'chào') || str_contains($msgLower, 'hello') || str_contains($msgLower, 'hi') || str_contains($msgLower, 'bạn là ai')) {
+        return "Xin chào " . ($fullName ?: 'bạn') . "! Tôi là MediBot, Trợ lý AI Thông Minh của Hệ thống Quản Lý Bệnh Án Điện Tử MediRecord EMR.\n\n"
+             . "Tôi luôn sẵn sàng hỗ trợ bạn:\n"
+             . "- Tra cứu hồ sơ bệnh án cá nhân và hướng dẫn phác đồ, đơn thuốc.\n"
+             . "- Hướng dẫn sử dụng chi tiết mọi chức năng trên website.\n"
+             . "- Giải thích kiến thức an toàn thông tin y tế, phân quyền ABAC và lỗ hổng IDOR.\n"
+             . "- Giải đáp các câu hỏi về khoa học, sức khỏe, lối sống và công nghệ thường thức.";
+    }
+
+    // 17. Lập trình và công nghệ
+    if (str_contains($msgLower, 'lập trình') || str_contains($msgLower, 'code') || str_contains($msgLower, 'php') || str_contains($msgLower, 'python') || str_contains($msgLower, 'docker') || str_contains($msgLower, 'render')) {
+        return "THÔNG TIN CÔNG NGHỆ VÀ LẬP TRÌNH HỆ THỐNG:\n\n"
+             . "- Ứng dụng MediRecord EMR được phát triển trên nền tảng PHP 8.2+ kết hợp cơ sở dữ liệu PostgreSQL.\n"
+             . "- Hệ thống áp dụng kiến trúc phân quyền kép RBAC và ABAC, ngăn chặn hoàn toàn lỗ hổng IDOR/BOLA.\n"
+             . "- Toàn bộ hệ thống được đóng gói container Docker chuẩn hoá và triển khai đám mây trên Render Cloud.\n"
+             . "- Tích hợp bộ kiểm thử an ninh 88 ca test tự động và mô hình 3D Robot Head tương tác trực quan.";
+    }
+
+    // 18. Mặc định phản hồi thân thiện, chuẩn xác
+    return "Tôi đã nhận được câu hỏi của bạn: \"" . $msgTrim . "\".\n\n"
+         . "Là Trợ lý AI MediBot của Hệ thống MediRecord EMR, tôi luôn sẵn sàng hỗ trợ bạn từ việc tra cứu bệnh án, bảo vệ dữ liệu y tế, hướng dẫn tính năng website cho đến các kiến thức tổng quát về sức khỏe và đời sống.\n\n"
+         . "Bạn có thể bấm vào các gợi ý câu hỏi nhanh ở trên hoặc gửi câu hỏi chi tiết để được giải đáp cụ thể nhất.";
 }
 
 // =============================================================================
@@ -661,7 +879,7 @@ if ($action === 'ai_chat') {
         $allowedRecordsInfo[] = "Quản trị / Kiểm toán: Toàn quyền giám sát hệ thống y tế. Tổng số bệnh án: " . count($mockRecords);
     }
     
-    $sysPrompt = "Bạn là Trợ lý AI Thông Minh đa năng của Hệ Thống MediRecord EMR kết hợp OpenRouter Free Models.\n\n"
+    $sysPrompt = "Bạn là Trợ lý AI Thông Minh MediBot của Hệ Thống Quản Lý Bệnh Án Điện Tử MediRecord EMR.\n\n"
         . "THÔNG TIN NGƯỜI DÙNG HIỆN TẠI:\n"
         . "- Tên đăng nhập: {$uName}\n"
         . "- Họ và tên: {$fullName}\n"
@@ -669,11 +887,23 @@ if ($action === 'ai_chat') {
         . "- Khoa/Phòng: {$dept}\n\n"
         . "DỮ LIỆU BỆNH ÁN ĐƯỢC PHÉP TRUY CẬP (STRICT ABAC):\n"
         . (empty($allowedRecordsInfo) ? "Người dùng chưa có bệnh án cá nhân hoặc chưa đăng nhập.\n" : implode("\n", $allowedRecordsInfo) . "\n")
-        . "\nQUY TẮC PHÂN QUYỀN VÀ TRẢ LỜI CỦA AI:\n"
-        . "1. BẢO VỆ DỮ LIỆU BỆNH NHÂN (NGĂN CHẶN RÒ RỈ IDOR): Bệnh nhân CHỈ ĐƯỢC PHÉP biết thông tin bệnh án của chính mình ở trên. Tuyệt đối KHÔNG ĐƯỢC tiết lộ thông tin bệnh án của người khác (ví dụ nếu bn_an hỏi về bệnh án của bn_binh hoặc bệnh án #3, #4, bạn PHẢI từ chối lịch sự và giải thích về quy định bảo mật chống lỗi IDOR).\n"
-        . "2. HỖ TRỢ HỆ THỐNG VÀ BỆNH ÁN: Khi người dùng hỏi về MediRecord EMR, bệnh án, hướng dẫn sử dụng web, tài khoản demo (TestPass@2026), hoặc kiến thức an ninh mạng IDOR/BOLA, hãy trả lời chính xác theo tài liệu hệ thống.\n"
-        . "3. TRẢ LỜI MỌI CÂU HỎI NGOÀI LỀ (GENERAL KNOWLEDGE & OFF-TOPIC): Khi người dùng hỏi các câu hỏi ngoài lề (khoa học, đời sống, lập trình, sức khỏe tổng quát, tin tức, trò chuyện thông thường, tư vấn...), bạn HOÀN TOÀN ĐƯỢC PHÉP và NÊN trả lời nhiệt tình, thông minh, chi tiết, hữu ích và thân thiện như một trợ lý AI toàn năng (không giới hạn trong khuôn khổ website)!\n"
-        . "4. PHONG CÁCH TRẢ LỜI: Trả lời bằng tiếng Việt, ngôn từ tự nhiên, văn minh, định dạng Markdown rõ ràng, dễ đọc.";
+        . "\nQUY TẮC BẢO MẬT VÀ PHÂN QUYỀN:\n"
+        . "1. BẢO VỆ DỮ LIỆU BỆNH NHÂN (CHỐNG LỖ HỔNG IDOR): Bệnh nhân CHỈ ĐƯỢC PHÉP biết thông tin bệnh án của chính mình ở trên. Tuyệt đối KHÔNG ĐƯỢC tiết lộ thông tin bệnh án của người khác (ví dụ nếu bn_an hỏi về bệnh án của bn_binh hoặc bệnh án #3, #4, bạn PHẢI từ chối lịch sự và giải thích về quy định bảo mật kiểm soát truy cập đối tượng ABAC/IDOR).\n"
+        . "2. CÁC TÍNH NĂNG TRÊN WEBSITE MEDIRECORD EMR HIỆN TẠI:\n"
+        . "   - Trang Chủ BV (/?view=landing): Giới thiệu chuyên khoa, quy trình khám bệnh 4 bước, đội ngũ bác sĩ, tin tức y tế.\n"
+        . "   - Danh Sách Bệnh Án (/?view=records): Tra cứu, lọc theo mã hồ sơ, tên bệnh nhân, BHYT. Xem chi tiết (/?view=view_record&id=X), sửa bệnh án (bác sĩ/admin: /?view=edit_record&id=X), xóa bệnh án có xác nhận an toàn Giữ để mở khóa (Hold-to-Unlock).\n"
+        . "   - Lập Bệnh Án Mới (/?view=create_record): Dành cho Bác sĩ và Quản trị viên nhập hồ sơ, chẩn đoán ICD và đơn thuốc.\n"
+        . "   - Thông Báo Chung (/?view=announcements): Bảng tin bệnh nhân công khai và bảng tin nội bộ y tế.\n"
+        . "   - Quản Trị Người Dùng (/?view=users): Dành cho Admin quản lý tài khoản nhân viên y tế và bệnh nhân, phân quyền (Admin, Doctor, Member, Auditor).\n"
+        . "   - Giám Sát An Ninh & Kiểm Thử (/?view=tester): Dành cho Admin và Auditor theo dõi Audit Logs, chạy 88 ca kiểm thử bảo mật tự động.\n"
+        . "   - Trang Cá Nhân (/?view=profile): Mở từ menu dropdown tài khoản ở góc phải navbar, xem thông tin cá nhân và đổi mật khẩu an toàn với xác nhận Giữ để mở khóa.\n"
+        . "   - Nút USER (góc dưới bên phải): Chuyển đổi nhanh 5 tài khoản mẫu (bs_minh, bn_an, bn_binh, admin_bv, tester_sec với mật khẩu TestPass@2026).\n"
+        . "   - Nút Robot 3D (góc dưới cùng bên phải): Bật tắt trợ lý AI MediBot.\n"
+        . "3. TRẢ LỜI CÂU HỎI MỞ RỘNG (GENERAL KNOWLEDGE): Ngoài các tính năng website, bạn hoàn toàn sẵn sàng trả lời các câu hỏi về y tế, lối sống, sức khỏe, khoa học, lập trình... một cách thông minh, hữu ích và thân thiện.\n"
+        . "4. QUY TẮC ĐỊNH DẠNG TUYỆT ĐỐI:\n"
+        . "   - TUYỆT ĐỐI KHÔNG dùng bất kỳ thẻ HTML nào (như <strong>, <b>, <span>, <br>, /strong, v.v.).\n"
+        . "   - TUYỆT ĐỐI KHÔNG dùng ký tự markdown phức tạp như **, ###, __, ```.\n"
+        . "   - Trả lời bằng văn bản thuần túy (plain text) tiếng Việt tự nhiên, ngắt dòng rõ ràng bằng dấu xuống dòng và dùng dấu gạch đầu dòng (-) khi liệt kê danh sách.";
 
     // API Key cố định do hệ thống quản lý, không cho phép client ghi đè API key khác
     $serverApiKey = getenv('OPENROUTER_API_KEY') ?: '';
@@ -741,6 +971,8 @@ if ($action === 'ai_chat') {
         $source = 'local_fallback';
         $aiResponse = generateLocalAiResponse($userMsg, $currentUser, $mockRecords, empty($apiKey));
     }
+
+    $aiResponse = cleanAiResponseText($aiResponse);
 
     echo json_encode([
         'reply' => $aiResponse,
@@ -8764,6 +8996,24 @@ if ($view === 'tester') {
     }
 
     // Lời chào mở đầu cá nhân hóa gọn gàng (không chữ rườm rà)
+    function sanitizeCleanAiText(raw) {
+      if (raw === null || raw === undefined) return '';
+      let str = String(raw);
+      // Xoá mọi thẻ HTML
+      str = str.replace(/<[^>]*>/g, '');
+      // Xoá các tàn dư thẻ dạng /strong, /b, /div, /span, /p, /br
+      str = str.replace(/\/(strong|b|i|em|span|div|p|h[1-6]|br)\b/gi, '');
+      // Xoá ký tự markdown in đậm, in nghiêng, tiêu đề, backtick
+      str = str.replace(/\*\*([^*]+)\*\*/g, '$1');
+      str = str.replace(/\*([^*]+)\*/g, '$1');
+      str = str.replace(/__([^_]+)__/g, '$1');
+      str = str.replace(/_([^_]+)_/g, '$1');
+      str = str.replace(/^#{1,6}\s+/gm, '');
+      str = str.replace(/`([^`]+)`/g, '$1');
+      return str.trim();
+    }
+
+    // Khởi tạo lời chào ban đầu cho chatbot (không thẻ HTML, không /strong)
     function initAiChatGreeting() {
       if (aiChatInitialized) return;
       aiChatInitialized = true;
@@ -8779,13 +9029,15 @@ if ($view === 'tester') {
 
       let greetText = "";
       if (role === 'member') {
-        greetText = `Xin chào <strong>${name}</strong>! Tôi là MediBot. Tôi có thể hỗ trợ bạn tra cứu hồ sơ bệnh án cá nhân hoặc giải đáp bất kỳ thắc mắc nào.`;
+        greetText = `Xin chào ${name}! Tôi là MediBot, trợ lý y tế của MediRecord EMR. Tôi sẵn sàng hỗ trợ bạn tra cứu hồ sơ bệnh án cá nhân hoặc giải đáp các thắc mắc về sức khỏe.`;
       } else if (role === 'doctor') {
-        greetText = `Kính chào <strong>${name}</strong>! Tôi sẵn sàng hỗ trợ Bác sĩ tra cứu danh sách và tạo bệnh án mới.`;
+        greetText = `Kính chào Bác sĩ ${name}! MediBot sẵn sàng hỗ trợ Bác sĩ tra cứu bệnh án, phác đồ điều trị và quy trình lập hồ sơ mới.`;
       } else if (role === 'admin') {
-        greetText = `Xin chào <strong>${name}</strong>! Tôi sẵn sàng hỗ trợ Quản trị viên điều hành hệ thống.`;
+        greetText = `Xin chào Quản trị viên ${name}! MediBot sẵn sàng hỗ trợ bạn quản trị người dùng, thông báo và giám sát an ninh hệ thống.`;
+      } else if (role === 'auditor') {
+        greetText = `Xin chào Chuyên viên ${name}! MediBot sẵn sàng hỗ trợ bạn kiểm toán an ninh và chạy bộ 88 ca kiểm thử bảo mật.`;
       } else {
-        greetText = `Xin chào! Tôi là Trợ lý AI MediBot. Bạn cần hỗ trợ gì hôm nay?`;
+        greetText = `Xin chào quý khách! Tôi là Trợ lý AI MediBot của Hệ thống MediRecord EMR. Bạn cần hỗ trợ gì hôm nay?`;
       }
 
       appendAiMessage('bot', greetText, 'system');
@@ -8803,20 +9055,14 @@ if ($view === 'tester') {
       const rowDiv = document.createElement('div');
       rowDiv.className = 'ai-msg-row ' + (sender === 'user' ? 'user-row' : 'bot-row');
 
-      let formatted = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n\n/g, '<br><br>')
-        .replace(/\n/g, '<br>');
+      const cleanText = sanitizeCleanAiText(text);
 
-      let tag = '';
+      let tagHtml = '';
       if (sender === 'bot' && source) {
         if (source === 'openrouter') {
-          tag = `<div style="font-size: 10px; color: #6366f1; margin-bottom: 4px; font-weight: 700;">[OPENROUTER AI]</div>`;
+          tagHtml = `<div style="font-size: 10px; color: #6366f1; margin-bottom: 4px; font-weight: 700;">[OPENROUTER AI]</div>`;
         } else if (source === 'local_fallback') {
-          tag = `<div style="font-size: 10px; color: #0284c7; margin-bottom: 4px; font-weight: 700;">[TRỢ LÝ MEDIRECORD]</div>`;
+          tagHtml = `<div style="font-size: 10px; color: #0284c7; margin-bottom: 4px; font-weight: 700;">[TRỢ LÝ MEDIRECORD]</div>`;
         }
       }
 
@@ -8824,8 +9070,12 @@ if ($view === 'tester') {
         const avatarId = 'botMsgAvatar_' + botMsgIdx;
         rowDiv.innerHTML = `
           <div class="ai-msg-avatar" id="${avatarId}"></div>
-          <div class="ai-msg ai-msg-bot">${tag}${formatted}</div>
+          <div class="ai-msg ai-msg-bot">
+            ${tagHtml}
+            <div class="ai-msg-content" style="white-space: pre-line; word-break: break-word; line-height: 1.6;"></div>
+          </div>
         `;
+        rowDiv.querySelector('.ai-msg-content').textContent = cleanText;
         box.appendChild(rowDiv);
 
         if (typeof window.mountRobotHead === 'function') {
@@ -8841,7 +9091,12 @@ if ($view === 'tester') {
           });
         }
       } else {
-        rowDiv.innerHTML = `<div class="ai-msg ai-msg-user">${formatted}</div>`;
+        rowDiv.innerHTML = `
+          <div class="ai-msg ai-msg-user">
+            <div class="ai-msg-content" style="white-space: pre-line; word-break: break-word; line-height: 1.6;"></div>
+          </div>
+        `;
+        rowDiv.querySelector('.ai-msg-content').textContent = cleanText;
         box.appendChild(rowDiv);
       }
 
@@ -8864,8 +9119,11 @@ if ($view === 'tester') {
         element.appendChild(tag);
       }
 
-      const contentSpan = document.createElement('span');
+      const contentSpan = document.createElement('div');
       contentSpan.className = 'ai-msg-content';
+      contentSpan.style.whiteSpace = 'pre-line';
+      contentSpan.style.wordBreak = 'break-word';
+      contentSpan.style.lineHeight = '1.6';
       element.appendChild(contentSpan);
 
       const cursorSpan = document.createElement('span');
@@ -8874,7 +9132,8 @@ if ($view === 'tester') {
       element.appendChild(cursorSpan);
 
       const box = document.getElementById('aiChatMessages');
-      const tokens = fullText.split(/(\s+)/);
+      const cleanFullText = sanitizeCleanAiText(fullText);
+      const tokens = cleanFullText.split(/(\s+)/);
       let tokenIdx = 0;
       let currentText = '';
 
@@ -8887,27 +9146,13 @@ if ($view === 'tester') {
         if (tokenIdx < tokens.length) {
           currentText += tokens[tokenIdx];
           tokenIdx++;
-          let formatted = currentText
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-          contentSpan.innerHTML = formatted;
+          contentSpan.textContent = currentText;
           if (box) box.scrollTop = box.scrollHeight;
 
-          const delay = Math.random() * 12 + 14;
+          const delay = Math.random() * 10 + 12;
           setTimeout(streamStep, delay);
         } else {
-          let formatted = currentText
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-          contentSpan.innerHTML = formatted;
+          contentSpan.textContent = currentText;
           if (cursorSpan && cursorSpan.parentNode) {
             cursorSpan.parentNode.removeChild(cursorSpan);
           }
@@ -8965,7 +9210,9 @@ if ($view === 'tester') {
       botRowDiv.className = 'ai-msg-row bot-row';
       botRowDiv.innerHTML = `
         <div class="ai-msg-avatar" id="${botAvatarId}"></div>
-        <div class="ai-msg ai-msg-bot"><span style="color: #94a3b8; font-style: italic;">Đang phân tích dữ liệu...</span> <span class="ai-typing-cursor">▌</span></div>
+        <div class="ai-msg ai-msg-bot">
+          <span style="color: #94a3b8; font-style: italic;">Đang phân tích dữ liệu...</span> <span class="ai-typing-cursor">▌</span>
+        </div>
       `;
       const box = document.getElementById('aiChatMessages');
       if (box) {
@@ -9005,7 +9252,7 @@ if ($view === 'tester') {
             }
           });
         } else if (data.error) {
-          botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI]</span> ' + data.error;
+          botMsgDiv.textContent = '[LỖI] ' + sanitizeCleanAiText(data.error);
           window.setAiBotState('error');
           if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
           isAiGenerating = false;
@@ -9016,7 +9263,7 @@ if ($view === 'tester') {
         }
       })
       .catch(err => {
-        botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI MẠNG]</span> Không thể kết nối máy chủ: ' + err;
+        botMsgDiv.textContent = '[LỖI MẠNG] Không thể kết nối máy chủ: ' + err;
         window.setAiBotState('error');
         if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
         isAiGenerating = false;
