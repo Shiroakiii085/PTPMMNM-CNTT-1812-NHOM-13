@@ -193,6 +193,15 @@ foreach ($_SESSION['custom_records'] as $cId => $cRec) {
     $mockRecords[$cId] = $cRec;
 }
 
+// Nạp danh sách bệnh án đã xóa từ Session
+if (!isset($_SESSION['deleted_records'])) {
+    $_SESSION['deleted_records'] = [];
+}
+foreach ($_SESSION['deleted_records'] as $delId) {
+    unset($mockRecords[$delId]);
+}
+
+
 // 5. Danh sách thông báo bệnh viện (Phân loại: Bệnh nhân vs Nội bộ cán bộ y tế)
 $mockAnnouncements = [
     1 => [
@@ -552,8 +561,7 @@ function generateLocalAiResponse(string $userMsg, ?array $currentUser, array $mo
              . "   - Dành cho Tester/Admin: Theo dõi cảnh báo rò rỉ dữ liệu y tế và kích hoạt chạy kiểm thử 88 ca test.\n\n"
              . "6. BỘ BA NÚT ĐIỀU KHIỂN NỔI (GÓC DƯỚI BÊN PHẢI):\n"
              . "   - Nút [AI]: Mở Trợ lý AI thông minh hỗ trợ tra cứu và hướng dẫn.\n"
-             . "   - Nút [USER]: Chuyển đổi nhanh 5 tài khoản thực nghiệm (1-Click Switch).\n"
-             . "   - Nút [>_]: Mở Terminal điều khiển bảo mật (bật/tắt lỗi IDOR).";
+             . "   - Nút [USER]: Chuyển đổi nhanh 5 tài khoản thực nghiệm (1-Click Switch).";
     }
 
     // 4. Giải thích lỗ hổng IDOR / An toàn thông tin
@@ -1437,6 +1445,54 @@ if ($action === 'edit_record_submit' && $method === 'POST') {
 }
 
 // Xử lý Bác sĩ gửi bệnh án mới
+// Xóa hồ sơ bệnh án (Dành cho Bác sĩ và Quản trị viên)
+if ($action === 'delete_record') {
+    if (!$currentUser || !in_array($currentUser['role'], ['doctor', 'admin'], true)) {
+        header('Location: /?view=error&code=403&msg=' . urlencode('Chỉ Bác sĩ điều trị hoặc Quản trị viên mới có thẩm quyền xóa hồ sơ bệnh án!'));
+        exit;
+    }
+
+    $rawId = $_GET['id'] ?? '';
+    $recId = (is_numeric($rawId) && (int)$rawId > 0) ? (int)$rawId : 0;
+
+    if ($recId <= 0 || !isset($mockRecords[$recId])) {
+        header('Location: /?view=records&err=record_not_found');
+        exit;
+    }
+
+    $targetRecord = $mockRecords[$recId];
+
+    // Bác sĩ chỉ xóa bệnh án do mình phụ trách hoặc khoa mình phụ trách (nếu không phải admin)
+    if ($currentUser['role'] === 'doctor' && $currentUser['role'] !== 'admin') {
+        $isMyDoctor = (($targetRecord['doctor_username'] ?? '') === $currentUser['username']);
+        $isMyDept = (($targetRecord['department'] ?? '') === ($currentUser['department'] ?? ''));
+        if (!$isMyDoctor && !$isMyDept) {
+            header('Location: /?view=error&code=403&msg=' . urlencode('Bác sĩ chỉ được phép xóa bệnh án thuộc chuyên khoa hoặc do chính mình phụ trách!'));
+            exit;
+        }
+    }
+
+    // Xóa khỏi danh sách bộ nhớ & session
+    unset($mockRecords[$recId]);
+    unset($_SESSION['custom_records'][$recId]);
+    if (!isset($_SESSION['deleted_records'])) {
+        $_SESSION['deleted_records'] = [];
+    }
+    if (!in_array($recId, $_SESSION['deleted_records'], true)) {
+        $_SESSION['deleted_records'][] = $recId;
+    }
+
+    // Xóa khỏi CSDL nếu có kết nối
+    if ($db !== null) {
+        try {
+            queryParams($db, 'DELETE FROM sample_app.notes WHERE id = $1', [$recId]);
+        } catch (Throwable) {}
+    }
+
+    header('Location: /?view=records&msg=record_deleted');
+    exit;
+}
+
 if ($action === 'create_record_submit' && $method === 'POST') {
     if (!$currentUser || !in_array($currentUser['role'], ['doctor', 'admin'], true)) {
         header('Location: /?view=error&code=403&msg=' . urlencode('Chỉ Bác sĩ hoặc Quản trị viên mới có quyền lập và gửi bệnh án!'));
@@ -1870,7 +1926,59 @@ if ($view === 'error') {
         .btn { padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-block; cursor: pointer; border: none; }
         .btn-pri { background: #2563eb; color: #fff; }
         .btn-sec { background: #e2e8f0; color: #334155; }
-      </style>
+      
+    /* =========================================================================
+       19. ROBOT-HEADS AVATAR & CHATGPT TYPEWRITER EFFECT STYLING
+       ========================================================================= */
+    .robot-head-container {
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .robot-head-container span[role="img"] {
+      display: block !important;
+      margin: 0 auto;
+    }
+    .robot-head-fallback {
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.2));
+      transition: transform 0.2s ease;
+    }
+    .rh-antenna-light {
+      animation: pulseGreenLight 2s infinite;
+    }
+    @keyframes pulseGreenLight {
+      0%, 100% { fill: #4ade80; filter: drop-shadow(0 0 4px #4ade80); }
+      50% { fill: #22c55e; filter: drop-shadow(0 0 1px #22c55e); }
+    }
+    .ai-typing-cursor {
+      display: inline-block;
+      color: #6366f1;
+      font-weight: 700;
+      margin-left: 2px;
+      animation: cursorBlink 0.65s infinite;
+      line-height: 1;
+      font-size: 14px;
+    }
+    @keyframes cursorBlink {
+      0%, 100% { opacity: 1; transform: scaleY(1); }
+      50% { opacity: 0; transform: scaleY(0.7); }
+    }
+    .ai-msg-content {
+      line-height: 1.6;
+    }
+    .ai-chat-msg.bot {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      animation: messageSlideIn 0.2s ease-out;
+    }
+    @keyframes messageSlideIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+</style>
     </head>
     <body>
       <div class="box">
@@ -1887,10 +1995,55 @@ if ($view === 'error') {
           <a href="/?view=landing" class="btn btn-pri">Về Trang Chủ Bệnh Viện</a>
           <a href="/?view=records" class="btn btn-sec">Danh Sách Bệnh Án</a>
           <a href="/?action=switch_user&user=bs_minh" class="btn btn-sec">Đổi sang Bác sĩ Minh để thao tác hợp lệ</a>
-          <button onclick="toggleTerminal();" class="btn btn-sec">Mở Terminal để bật lại lỗi IDOR</button>
+          
         </div>
       </div>
-    </body>
+      <!-- TÍCH HỢP ANIMATED ROBOT-HEADS TỪ FAYAZARA/ROBOT-HEADS -->
+  <script type="module">
+    try {
+      import React from 'https://esm.sh/react@18.3.1';
+      import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
+      import { RobotHead } from 'https://esm.sh/robot-heads@0.3.0?deps=react@18.3.1,react-dom@18.3.1';
+
+      let currentHeadState = 'idle';
+      const roots = new Map();
+
+      function updateAvatar(containerId, size, state) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        try {
+          if (!roots.has(containerId)) {
+            el.innerHTML = '';
+            roots.set(containerId, ReactDOM.createRoot(el));
+          }
+          roots.get(containerId).render(
+            React.createElement(RobotHead, {
+              state: state,
+              shape: 'rectangle',
+              size: size,
+              antenna: true,
+              floorShadow: false
+            })
+          );
+        } catch (e) {
+          console.warn('RobotHead render error on ' + containerId, e);
+        }
+      }
+
+      window.__updateReactRobotHeads = function(state) {
+        currentHeadState = state || 'idle';
+        updateAvatar('aiHeaderAvatar', 44, currentHeadState);
+        updateAvatar('aiFabAvatar', 38, currentHeadState);
+      };
+
+      // Khởi tạo ban đầu
+      window.__updateReactRobotHeads('idle');
+    } catch (e) {
+      console.warn('Robot-heads ESM loader: fallback SVG active', e);
+    }
+  </script>
+
+</body>
     </html>
     <?php
     exit;
@@ -5716,27 +5869,6 @@ if ($view === 'tester') {
                 </div>
               </a>
 
-              <button type="button" class="user-dropdown-item" onclick="closeUserDropdown(); toggleAccountDrawer();">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="8.5" cy="7" r="4"></circle>
-                  <polyline points="17 11 19 13 23 9"></polyline>
-                </svg>
-                <div style="display: flex; flex-direction: column; text-align: left;">
-                  <span style="font-weight: 600; font-size: 13px; color: #0f172a;">Chuyển Tài Khoản</span>
-                  <span style="font-size: 11px; color: #64748b;">Chuyển nhanh vai trò 1-click</span>
-                </div>
-              </button>
-
-              <button type="button" class="user-dropdown-item" onclick="closeUserDropdown(); toggleAiChat();">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                <div style="display: flex; flex-direction: column; text-align: left;">
-                  <span style="font-weight: 600; font-size: 13px; color: #0f172a;">Trợ Lý AI MediBot</span>
-                  <span style="font-size: 11px; color: #64748b;">Hỏi đáp & tra cứu dữ liệu BV</span>
-                </div>
-              </button>
 
               <div class="user-dropdown-divider"></div>
 
@@ -6812,7 +6944,18 @@ if ($view === 'tester') {
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
+                <?php
+                  $canDelCurRec = ($currentUser['role'] === 'admin')
+                    || (($recordDetail['doctor_username'] ?? '') === $currentUser['username'])
+                    || (($recordDetail['department'] ?? '') === ($currentUser['department'] ?? ''));
+                ?>
                 <a href="/?view=edit_record&id=<?= $recordDetail['id'] ?>" class="btn btn-primary" style="font-size: 12px;">+ Chỉnh Sửa Bệnh Án</a>
+                <?php if ($canDelCurRec): ?>
+                  <a href="/?action=delete_record&id=<?= $recordDetail['id'] ?>"
+                     onclick="return confirmWithHold(event, { title: 'Xác Nhận Xoá Bệnh Án', message: 'Bạn có chắc chắn muốn xoá vĩnh viễn hồ sơ bệnh án #<?= $recordDetail['id'] ?> (<?= htmlspecialchars($recordDetail['title']) ?>)? Hành động này không thể hoàn tác!' })"
+                     class="btn btn-danger"
+                     style="font-size: 12px; text-decoration: none;">Xóa Bệnh Án</a>
+                <?php endif; ?>
               <?php else: ?>
                 <span style="font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);">CHẾ ĐỘ CHỈ XEM (BỆNH NHÂN)</span>
               <?php endif; ?>
@@ -8057,7 +8200,11 @@ if ($view === 'tester') {
           }
         ?>
 
-        <?php if (isset($_GET['not_found'])): ?>
+        <?php if (isset($_GET['msg']) && $_GET['msg'] === 'record_deleted'): ?>
+          <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;">
+            <strong>✓ Đã xóa thành công:</strong> Hồ sơ bệnh án đã được xóa hoàn toàn khỏi cơ sở dữ liệu hệ thống.
+          </div>
+        <?php elseif (isset($_GET['not_found'])): ?>
           <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 14px 18px; border-radius: 8px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
             <div>
               <strong style="font-size: 14px;">THÔNG BÁO TRA CỨU:</strong> ID bệnh án <?= (isset($_GET['searched_id']) && $_GET['searched_id'] !== '') ? '<strong>#' . htmlspecialchars($_GET['searched_id']) . '</strong>' : '' ?> sai hoặc không tồn tại trên hệ thống. Vui lòng kiểm tra lại mã số hồ sơ!
@@ -8152,8 +8299,21 @@ if ($view === 'tester') {
                       <td><?= htmlspecialchars($rec['doctor_name'] ?? 'BS. CKI Lê Hoàng Minh') ?></td>
                       <td><span style="color: #0369a1;"><?= htmlspecialchars($rec['diagnosis'] ?? 'Đang cập nhật') ?></span></td>
                       <td style="white-space: nowrap;"><?= $rec['created_at'] ?></td>
-                      <td style="text-align: right; min-width: 120px; white-space: nowrap;">
-                        <a href="/?view=record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 5px 12px; font-size: 12px; white-space: nowrap;">Xem Chi Tiết</a>
+                      <td style="text-align: right; min-width: 150px; white-space: nowrap;">
+                        <a href="/?view=record&id=<?= $rec['id'] ?>" class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; white-space: nowrap;">Xem</a>
+                        <?php if ($currentUser && in_array($currentUser['role'], ['doctor', 'admin'], true)): ?>
+                          <?php
+                            $canDelRec = ($currentUser['role'] === 'admin')
+                              || (($rec['doctor_username'] ?? '') === $currentUser['username'])
+                              || (($rec['department'] ?? '') === ($currentUser['department'] ?? ''));
+                          ?>
+                          <?php if ($canDelRec): ?>
+                            <a href="/?action=delete_record&id=<?= $rec['id'] ?>"
+                               onclick="return confirmWithHold(event, { title: 'Xác Nhận Xoá Bệnh Án', message: 'Bạn có chắc chắn muốn xoá vĩnh viễn hồ sơ bệnh án #<?= $rec['id'] ?> (<?= htmlspecialchars($rec['title']) ?>)? Hành động này không thể hoàn tác!' })"
+                               class="btn btn-danger"
+                               style="padding: 5px 10px; font-size: 12px; margin-left: 4px; text-decoration: none;">Xóa</a>
+                          <?php endif; ?>
+                        <?php endif; ?>
                       </td>
                     </tr>
                   <?php endforeach; ?>
@@ -8171,26 +8331,50 @@ if ($view === 'tester') {
   <!-- =======================================================================
        CÁC NÚT TRÒN NỔI (FAB) & CỬA SỔ ĐIỀU KHIỂN (HIỂN THỊ TOÀN HỆ THỐNG)
        ======================================================================= -->
-  <!-- NÚT TRÒN NỔI (FAB) TRỢ LÝ AI CHATBOT (NẰM TRÊN NÚT USER) -->
+  <!-- NÚT TRÒN NỔI (FAB) TRỢ LÝ AI CHATBOT VỚI ROBOT HEAD -->
   <button id="aiFab" onclick="toggleAiChat()" class="ai-fab" title="Trợ lý AI MediRecord (Hỗ trợ tra cứu & sử dụng web)">
-    <span class="ai-fab-badge-top">FREE</span>
-    <span class="ai-fab-text">AI</span>
+    <span class="ai-fab-badge-top">ROBOT AI</span>
+    <div id="aiFabAvatar" class="robot-head-container fab-robot" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+      <!-- Fallback SVG Robot Head (fayazara/robot-heads styled) -->
+      <svg class="robot-head-fallback" width="38" height="38" viewBox="0 0 100 100">
+        <circle cx="50" cy="18" r="6" fill="#4ade80" class="rh-antenna-light" />
+        <line x1="50" y1="24" x2="50" y2="38" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
+        <rect x="18" y="38" width="64" height="50" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="3" />
+        <rect x="26" y="46" width="48" height="34" rx="8" fill="#090d16" />
+        <rect class="rh-eye rh-eye-l" x="34" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
+        <rect class="rh-eye rh-eye-r" x="56" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
+        <rect class="rh-mouth" x="42" y="70" width="16" height="3" rx="1.5" fill="#4ade80" />
+      </svg>
+    </div>
   </button>
 
   <!-- CỬA SỔ CHATBOT AI TRỢ LÝ MEDIRECORD -->
   <div id="aiChatDrawer" class="ai-chat-drawer" style="display: none;">
     <div class="ai-drawer-head">
-      <div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">AI FREE</span>
-          <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">TRỢ LÝ AI TOÀN NĂNG</span>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div id="aiHeaderAvatar" class="robot-head-container header-robot" style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+          <svg class="robot-head-fallback" width="44" height="44" viewBox="0 0 100 100">
+            <circle cx="50" cy="18" r="6" fill="#4ade80" class="rh-antenna-light" />
+            <line x1="50" y1="24" x2="50" y2="38" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
+            <rect x="18" y="38" width="64" height="50" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="3" />
+            <rect x="26" y="46" width="48" height="34" rx="8" fill="#090d16" />
+            <rect class="rh-eye rh-eye-l" x="34" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
+            <rect class="rh-eye rh-eye-r" x="56" y="54" width="10" height="10" rx="2" fill="#38bdf8" />
+            <rect class="rh-mouth" x="42" y="70" width="16" height="3" rx="1.5" fill="#4ade80" />
+          </svg>
         </div>
-        <div style="font-size: 11px; color: #c7d2fe; margin-top: 3px;">
-          <?= $currentUser ? 'Đang hỗ trợ: <strong>' . htmlspecialchars($currentUser['full_name']) . '</strong> (' . htmlspecialchars($currentUser['role']) . ')' : 'Chế độ: Khách vãng lai' ?>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="badge" style="background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; padding: 2px 6px; font-weight: 700;">ROBOT HEADS</span>
+            <span style="font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">MEDIBOT AI ASSISTANT</span>
+          </div>
+          <div style="font-size: 11px; color: #c7d2fe; margin-top: 3px;" id="aiStatusStateText">
+            Trạng thái: <strong style="color: #4ade80;">Sẵn sàng (Idle)</strong>
+          </div>
         </div>
       </div>
       <div>
-        <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 2px 8px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
+        <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 3px 10px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
       </div>
     </div>
 
@@ -8252,11 +8436,6 @@ if ($view === 'tester') {
     <?php endif; ?>
   </button>
 
-  <!-- NÚT TRÒN NỔI (FAB) TERMINAL GÓC DƯỚI BÊN PHẢI -->
-  <button id="termFab" onclick="toggleTerminal()" class="term-fab" title="Mở Terminal Điều Khiển Lỗi Bảo Mật">
-    <span class="term-fab-icon">&gt;_</span>
-    <span class="term-fab-dot <?= $bugIdor ? 'dot-danger' : 'dot-safe' ?>"></span>
-  </button>
 
   <!-- =======================================================================
        MODAL GIỮ ĐỂ MỞ KHOÁ (HOLD TO UNLOCK CONFIRMATION DIAL)
@@ -8434,33 +8613,7 @@ if ($view === 'tester') {
     </div>
   </div>
 
-  <!-- TERMINAL DRAWER -->
-  <div id="termDrawer" class="term-drawer" style="display: none;">
-    <div class="term-drawer-head">
-      <span>MEDIRECORD TERMINAL [<?= $bugIdor ? 'IDOR: ON' : 'SECURE' ?>]</span>
-      <button onclick="toggleTerminal()" class="btn btn-outline" style="padding: 2px 6px; font-size: 10px; color: #cbd5e1; border-color: #334155; background: transparent;">Đóng</button>
-    </div>
-    
-    <div class="term-quick-btns">
-      <a href="/?action=toggle_bug_idor&state=1&return_view=<?= urlencode($view) ?>" onclick="return confirmWithHold(event, { title: 'Kích Hoạt Lỗi IDOR', message: 'Bật lỗ hổng IDOR qua bảng điều khiển Terminal để phục vụ mục đích kiểm thử thâm nhập.' })" class="term-qbtn" style="color: #f87171; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Tạo Lỗi (set BUG_IDOR=1)</a>
-      <a href="/?action=toggle_bug_idor&state=0&return_view=<?= urlencode($view) ?>" onclick="return confirmWithHold(event, { title: 'Vá Lỗ Hổng IDOR', message: 'Thiết lập BUG_IDOR=0 để khôi phục trạng thái an toàn tuyệt đối cho hệ thống.' })" class="term-qbtn" style="color: #4ade80; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Vá Lỗi (set BUG_IDOR=0)</a>
-      <button onclick="execCmd('status')" class="term-qbtn">status</button>
-      <button onclick="execCmd('curl /api/notes/3')" class="term-qbtn">curl /api/notes/3</button>
-      <button onclick="execCmd('clear')" class="term-qbtn">clear</button>
-    </div>
 
-    <div class="term-drawer-body" id="termLogs">
-      <div>MEDIRECORD MEDICAL SECURITY CONSOLE [v2.0]</div>
-      <div>Trạng thái: BUG_IDOR = <?= $bugIdor ? '<span style="color:#ef4444;font-weight:700;">1 (LỖ HỔNG ĐANG BẬT)</span>' : '<span style="color:#22c55e;font-weight:700;">0 (AN TOÀN - ĐÃ VÁ)</span>' ?></div>
-      <div>Gõ 'help' hoặc bấm các nút phía trên để điều khiển.</div>
-      <br>
-    </div>
-
-    <div class="term-input-row">
-      <span class="term-prompt">medirecord:~$</span>
-      <input type="text" id="termInput" class="term-input" placeholder="Nhập lệnh (set BUG_IDOR=1, status)..." autocomplete="off">
-    </div>
-  </div>
 
   <!-- MOBILE BOTTOM APP BAR (Dành riêng cho màn hình di động) -->
   <nav class="mobile-bottom-bar">
@@ -8577,51 +8730,78 @@ if ($view === 'tester') {
     // Bật/tắt Cửa sổ Chuyển Tài Khoản Nhanh
     function toggleAccountDrawer() {
       const accDrawer = document.getElementById('accountDrawer');
-      const termDrawer = document.getElementById('termDrawer');
       const aiDrawer = document.getElementById('aiChatDrawer');
       if (!accDrawer) return;
       if (accDrawer.style.display === 'none' || accDrawer.style.display === '') {
         accDrawer.style.display = 'block';
-        if (termDrawer) termDrawer.style.display = 'none';
         if (aiDrawer) aiDrawer.style.display = 'none';
       } else {
         accDrawer.style.display = 'none';
       }
     }
 
-    // Bật/tắt Cửa sổ Terminal
-    function toggleTerminal() {
-      const termDrawer = document.getElementById('termDrawer');
-      const accDrawer = document.getElementById('accountDrawer');
-      const aiDrawer = document.getElementById('aiChatDrawer');
-      if (!termDrawer) return;
-      if (termDrawer.style.display === 'none' || termDrawer.style.display === '') {
-        termDrawer.style.display = 'block';
-        if (accDrawer) accDrawer.style.display = 'none';
-        if (aiDrawer) aiDrawer.style.display = 'none';
-        const tIn = document.getElementById('termInput');
-        if (tIn) tIn.focus();
-      } else {
-        termDrawer.style.display = 'none';
+    // =========================================================================
+    // CHATBOT AI VỚI TYPEWRITER STREAMING (CHATGPT STYLE) & ROBOT-HEADS SYNC
+    // =========================================================================
+    let aiChatInitialized = false;
+    let isAiGenerating = false;
+
+    // Quản lý trạng thái Robot Head (idle, thinking, speaking, happy, error)
+    window.setAiBotState = function(state) {
+      const stateTextMap = {
+        'idle': 'Trạng thái: <strong style="color: #4ade80;">Sẵn sàng (Idle)</strong>',
+        'thinking': 'Trạng thái: <strong style="color: #f59e0b;">Đang suy nghĩ (Thinking)...</strong>',
+        'speaking': 'Trạng thái: <strong style="color: #38bdf8;">Đang trả lời (Speaking)...</strong>',
+        'happy': 'Trạng thái: <strong style="color: #ec4899;">Hoàn tất (Happy) ✨</strong>',
+        'error': 'Trạng thái: <strong style="color: #ef4444;">Sự cố kết nối (Error)</strong>'
+      };
+      const statusTextEl = document.getElementById('aiStatusStateText');
+      if (statusTextEl && stateTextMap[state]) {
+        statusTextEl.innerHTML = stateTextMap[state];
       }
-    }
+
+      // Cập nhật SVG fallback nếu React robot-head chưa tải xong
+      const antennaLights = document.querySelectorAll('.rh-antenna-light');
+      antennaLights.forEach(el => {
+        if (state === 'thinking') {
+          el.setAttribute('fill', '#f59e0b');
+          el.style.filter = 'drop-shadow(0 0 6px #f59e0b)';
+        } else if (state === 'speaking') {
+          el.setAttribute('fill', '#38bdf8');
+          el.style.filter = 'drop-shadow(0 0 6px #38bdf8)';
+        } else if (state === 'error') {
+          el.setAttribute('fill', '#ef4444');
+          el.style.filter = 'drop-shadow(0 0 6px #ef4444)';
+        } else if (state === 'happy') {
+          el.setAttribute('fill', '#ec4899');
+          el.style.filter = 'drop-shadow(0 0 6px #ec4899)';
+        } else {
+          el.setAttribute('fill', '#4ade80');
+          el.style.filter = 'drop-shadow(0 0 4px #4ade80)';
+        }
+      });
+
+      // Nếu module React robot-heads từ https://github.com/fayazara/robot-heads đã sẵn sàng:
+      if (window.__updateReactRobotHeads) {
+        window.__updateReactRobotHeads(state);
+      }
+    };
 
     // Bật/tắt Cửa sổ Trợ lý AI
     function toggleAiChat() {
       const aiDrawer = document.getElementById('aiChatDrawer');
       const accDrawer = document.getElementById('accountDrawer');
-      const termDrawer = document.getElementById('termDrawer');
       if (!aiDrawer) return;
       if (aiDrawer.style.display === 'none' || aiDrawer.style.display === '') {
         aiDrawer.style.display = 'flex';
         if (accDrawer) accDrawer.style.display = 'none';
-        if (termDrawer) termDrawer.style.display = 'none';
         const savedModel = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
         const sel = document.getElementById('openRouterModelSelect');
         if (sel) sel.value = savedModel;
         const input = document.getElementById('aiChatInput');
         if (input) input.focus();
         initAiChatGreeting();
+        window.setAiBotState('idle');
       } else {
         aiDrawer.style.display = 'none';
       }
@@ -8632,10 +8812,12 @@ if ($view === 'tester') {
       localStorage.setItem('openrouter_model', model);
       const sel = document.getElementById('openRouterModelSelect');
       if (sel) sel.value = model;
+      appendAiMessage('bot', 'Đã chuyển sang mô hình: <strong>' + model + '</strong>. Bạn có thể tiếp tục hỏi!');
+      window.setAiBotState('happy');
+      setTimeout(() => window.setAiBotState('idle'), 1600);
     }
 
     // Lời chào mở đầu cá nhân hóa theo vai trò người dùng (cho phép hỏi cả câu hỏi ngoài lề)
-    let aiChatInitialized = false;
     function initAiChatGreeting() {
       if (aiChatInitialized) return;
       aiChatInitialized = true;
@@ -8661,15 +8843,16 @@ if ($view === 'tester') {
       } else if (role === 'auditor') {
         greetText = `Xin chào Kỹ sư An ninh <strong>${name}</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Tôi sẵn sàng giải thích cơ chế lỗ hổng IDOR/BOLA (CWE-639), hướng dẫn kích hoạt kiểm thử an toàn thông tin hoặc giải đáp mọi chủ đề an ninh mạng và đời sống!`;
       } else {
-        greetText = `Xin chào <strong>Quý khách</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Bạn có thể hỏi tôi bất kỳ điều gì về hệ thống y tế, cách sử dụng các trang, hoặc các câu hỏi kiến thức đời sống tự do. Bấm nút [USER] ở góc phải nếu bạn muốn đổi sang tài khoản Bác sĩ, Bệnh nhân hoặc Admin.`;
+        greetText = `Xin chào <strong>Quý khách</strong>!\n\nTôi là Trợ lý AI Thông Minh MediRecord EMR. Bạn có thể hỏi tôi bất kỳ điều gì về hệ thống y tế, cách sử dụng các trang, hoặc các câu hỏi kiến thức đời sống tự do.`;
       }
 
       appendAiMessage('bot', greetText, 'system');
+      window.setAiBotState('idle');
     }
 
     function appendAiMessage(sender, text, source) {
       const box = document.getElementById('aiChatMessages');
-      if (!box) return;
+      if (!box) return null;
 
       const msgDiv = document.createElement('div');
       msgDiv.className = 'ai-msg ' + (sender === 'user' ? 'ai-msg-user' : 'ai-msg-bot');
@@ -8700,6 +8883,83 @@ if ($view === 'tester') {
       return msgDiv;
     }
 
+    // HIỆU ỨNG CHẠY TỪNG CHỮ NHƯ CHATGPT (TYPEWRITER STREAMING)
+    function typewriterStream(element, fullText, source, onComplete) {
+      element.innerHTML = '';
+      if (source === 'openrouter') {
+        const tag = document.createElement('div');
+        tag.style.cssText = 'font-size: 10px; color: #6366f1; margin-bottom: 4px; font-weight: 700;';
+        tag.textContent = '[OPENROUTER AI]';
+        element.appendChild(tag);
+      } else if (source === 'local_fallback') {
+        const tag = document.createElement('div');
+        tag.style.cssText = 'font-size: 10px; color: #0284c7; margin-bottom: 4px; font-weight: 700;';
+        tag.textContent = '[TRỢ LÝ MEDIRECORD]';
+        element.appendChild(tag);
+      }
+
+      const contentSpan = document.createElement('span');
+      contentSpan.className = 'ai-msg-content';
+      element.appendChild(contentSpan);
+
+      const cursorSpan = document.createElement('span');
+      cursorSpan.className = 'ai-typing-cursor';
+      cursorSpan.textContent = '▌';
+      element.appendChild(cursorSpan);
+
+      const box = document.getElementById('aiChatMessages');
+
+      // Tách văn bản thành các token (từ ngữ và khoảng trắng) để streaming mượt như ChatGPT
+      const tokens = fullText.split(/(\s+)/);
+      let tokenIdx = 0;
+      let currentText = '';
+
+      window.setAiBotState('speaking');
+
+      function streamStep() {
+        if (tokenIdx < tokens.length) {
+          currentText += tokens[tokenIdx];
+          tokenIdx++;
+          let formatted = currentText
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+          contentSpan.innerHTML = formatted;
+          if (box) box.scrollTop = box.scrollHeight;
+
+          // Tốc độ đánh máy tự nhiên (14ms - 26ms mỗi từ)
+          const delay = Math.random() * 12 + 14;
+          setTimeout(streamStep, delay);
+        } else {
+          // Hoàn thành streaming
+          let formatted = currentText
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+          contentSpan.innerHTML = formatted;
+          if (cursorSpan && cursorSpan.parentNode) {
+            cursorSpan.parentNode.removeChild(cursorSpan);
+          }
+          if (box) box.scrollTop = box.scrollHeight;
+
+          window.setAiBotState('happy');
+          setTimeout(() => {
+            window.setAiBotState('idle');
+          }, 1800);
+
+          if (typeof onComplete === 'function') onComplete();
+        }
+      }
+
+      streamStep();
+    }
+
     function sendQuickPrompt(promptText) {
       const input = document.getElementById('aiChatInput');
       if (!input) return;
@@ -8708,6 +8968,8 @@ if ($view === 'tester') {
     }
 
     function submitAiChat() {
+      if (isAiGenerating) return;
+
       const input = document.getElementById('aiChatInput');
       const sendBtn = document.getElementById('aiSendBtn');
       if (!input) return;
@@ -8717,12 +8979,23 @@ if ($view === 'tester') {
       appendAiMessage('user', text);
       input.value = '';
 
+      isAiGenerating = true;
       if (sendBtn) {
         sendBtn.disabled = true;
         sendBtn.innerText = '...';
       }
 
-      const typingDiv = appendAiMessage('bot', 'Đang phân tích dữ liệu và sinh câu trả lời...');
+      window.setAiBotState('thinking');
+
+      // Tạo bong bóng bot đang suy nghĩ kèm con trỏ nhấp nháy
+      const botMsgDiv = document.createElement('div');
+      botMsgDiv.className = 'ai-msg ai-msg-bot';
+      botMsgDiv.innerHTML = `<span style="color: #94a3b8; font-style: italic;">Đang phân tích dữ liệu và sinh câu trả lời...</span> <span class="ai-typing-cursor">▌</span>`;
+      const box = document.getElementById('aiChatMessages');
+      if (box) {
+        box.appendChild(botMsgDiv);
+        box.scrollTop = box.scrollHeight;
+      }
 
       const model = localStorage.getItem('openrouter_model') || 'qwen/qwen-2.5-7b-instruct:free';
 
@@ -8733,22 +9006,28 @@ if ($view === 'tester') {
       })
       .then(res => res.json())
       .then(data => {
-        if (typingDiv && typingDiv.parentNode) {
-          typingDiv.parentNode.removeChild(typingDiv);
-        }
         if (data.reply) {
-          appendAiMessage('bot', data.reply, data.source);
+          typewriterStream(botMsgDiv, data.reply, data.source, () => {
+            isAiGenerating = false;
+            if (sendBtn) {
+              sendBtn.disabled = false;
+              sendBtn.innerText = 'Gửi';
+            }
+          });
         } else if (data.error) {
-          appendAiMessage('bot', '[LỖI] ' + data.error);
+          botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI]</span> ' + data.error;
+          window.setAiBotState('error');
+          isAiGenerating = false;
+          if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerText = 'Gửi';
+          }
         }
       })
       .catch(err => {
-        if (typingDiv && typingDiv.parentNode) {
-          typingDiv.parentNode.removeChild(typingDiv);
-        }
-        appendAiMessage('bot', '[LỖI KẾT NỐI] Không thể gửi yêu cầu tới máy chủ: ' + err);
-      })
-      .finally(() => {
+        botMsgDiv.innerHTML = '<span style="color: #ef4444; font-weight: 700;">[LỖI MẠNG]</span> Không thể kết nối tới máy chủ: ' + err;
+        window.setAiBotState('error');
+        isAiGenerating = false;
         if (sendBtn) {
           sendBtn.disabled = false;
           sendBtn.innerText = 'Gửi';
@@ -8762,9 +9041,15 @@ if ($view === 'tester') {
       if (aiIn) {
         aiIn.addEventListener('keydown', function(e) {
           if (e.key === 'Enter') {
+            e.preventDefault();
             submitAiChat();
           }
         });
+      }
+      const savedModel = localStorage.getItem('openrouter_model');
+      const select = document.getElementById('openRouterModelSelect');
+      if (savedModel && select) {
+        select.value = savedModel;
       }
     });
 
@@ -8775,65 +9060,6 @@ if ($view === 'tester') {
       if (uInput) uInput.value = username;
       if (pInput) pInput.value = password;
       if (uInput) uInput.focus();
-    }
-
-    // Xử lý Terminal tương tác
-    const termInput = document.getElementById('termInput');
-    const termLogs = document.getElementById('termLogs');
-
-    function appendLog(text, color = '#10b981') {
-      if (!termLogs) return;
-      const line = document.createElement('div');
-      line.style.color = color;
-      line.innerText = text;
-      termLogs.appendChild(line);
-      termLogs.scrollTop = termLogs.scrollHeight;
-    }
-
-    function execCmd(cmd) {
-      if (!cmd || !cmd.trim()) return;
-      appendLog('medirecord:~$ ' + cmd, '#38bdf8');
-      
-      fetch('/?action=terminal_exec', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmd: cmd.trim() })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.output) {
-          if (data.output.length === 1 && data.output[0] === '__CLEAR__') {
-            termLogs.innerHTML = '';
-          } else {
-            data.output.forEach(msg => {
-              let color = '#cbd5e1';
-              if (msg.includes('[OK]')) color = '#22c55e';
-              if (msg.includes('[LỖI]') || msg.includes('CẢNH BÁO') || msg.includes('403')) color = '#ef4444';
-              if (msg.includes('HTTP/1.1 200')) color = '#38bdf8';
-              appendLog(msg, color);
-            });
-          }
-        }
-        if (cmd.startsWith('set BUG_IDOR')) {
-          const isBug = cmd.includes('1') ? '1' : '0';
-          const url = new URL(window.location.href);
-          url.searchParams.set('bug', isBug);
-          setTimeout(() => { window.location.href = url.toString(); }, 400);
-        }
-      })
-      .catch(err => {
-        appendLog('[LỖI KẾT NỐI] ' + err, '#ef4444');
-      });
-    }
-
-    if (termInput) {
-      termInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          const val = this.value;
-          this.value = '';
-          execCmd(val);
-        }
-      });
     }
 
     // Modal quản lý người dùng
