@@ -8496,14 +8496,14 @@ if ($view === 'tester') {
           <?php
             $tMsg = (string)$_GET['msg'];
             $flashMap = [
-                'manual_run_saved' => ['bg' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#065f46', 'text' => '✓ Đã thực thi thủ công 24 ca kiểm thử và lưu kết quả thành công! Bạn có thể chuyển sang trang "So Sánh & Thống Kê Các Lần Kiểm Thử" để đối chiếu.'],
-                'single_case_ran'  => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'color' => '#1e40af', 'text' => '✓ Đã thực thi thủ công ca kiểm thử ' . htmlspecialchars($_GET['case'] ?? '') . '. Bạn có thể đặt tên và nhấn "Lưu Bảng Hiện Tại" để ghi vào lịch sử so sánh.'],
-                'matrix_reset'     => ['bg' => '#f8fafc', 'border' => '#cbd5e1', 'color' => '#334155', 'text' => '🔄 Đã đặt lại toàn bộ 24 ca kiểm thử về trạng thái Chờ chạy (PENDING).'],
-                'run_loaded'       => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'color' => '#1e40af', 'text' => '📂 Đã nạp kết quả lần kiểm thử từ lịch sử lên bảng Ma trận 24 ca.'],
-                'sample_seeded'    => ['bg' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#065f46', 'text' => '⚡ Đã khởi tạo 2 lần kiểm thử mẫu (Trước khi vá lỗi IDOR & Sau khi vá lỗi ABAC) và tự động nạp vào bảng đối chiếu bên dưới!'],
-                'run_renamed'      => ['bg' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#065f46', 'text' => '✏ Đã cập nhật tên và ghi chú của lần kiểm thử thành công!'],
-                'run_deleted'      => ['bg' => '#fef2f2', 'border' => '#fecaca', 'color' => '#991b1b', 'text' => '🗑 Đã xóa bản ghi lần kiểm thử khỏi lịch sử.'],
-                'runs_cleared'     => ['bg' => '#fef2f2', 'border' => '#fecaca', 'color' => '#991b1b', 'text' => '🗑 Đã xóa sạch toàn bộ lịch sử các lần kiểm thử.'],
+                'manual_run_saved' => ['bg' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#065f46', 'text' => 'Đã thực thi thủ công 24 ca kiểm thử và lưu kết quả thành công! Bạn có thể chuyển sang trang "So Sánh & Thống Kê Các Lần Kiểm Thử" để đối chiếu.'],
+                'single_case_ran'  => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'color' => '#1e40af', 'text' => 'Đã thực thi thủ công ca kiểm thử ' . htmlspecialchars($_GET['case'] ?? '') . '. Bạn có thể đặt tên và nhấn "Lưu Bảng Hiện Tại" để ghi vào lịch sử so sánh.'],
+                'matrix_reset'     => ['bg' => '#f8fafc', 'border' => '#cbd5e1', 'color' => '#334155', 'text' => 'Đã đặt lại toàn bộ 24 ca kiểm thử về trạng thái Chờ chạy (PENDING).'],
+                'run_loaded'       => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'color' => '#1e40af', 'text' => 'Đã nạp kết quả lần kiểm thử từ lịch sử lên bảng Ma trận 24 ca.'],
+                'sample_seeded'    => ['bg' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#065f46', 'text' => 'Đã khởi tạo 2 lần kiểm thử mẫu (Trước khi vá lỗi IDOR & Sau khi vá lỗi ABAC) và tự động nạp vào bảng đối chiếu bên dưới!'],
+                'run_renamed'      => ['bg' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#065f46', 'text' => 'Đã cập nhật tên và ghi chú của lần kiểm thử thành công!'],
+                'run_deleted'      => ['bg' => '#fef2f2', 'border' => '#fecaca', 'color' => '#991b1b', 'text' => 'Đã xóa bản ghi lần kiểm thử khỏi lịch sử.'],
+                'runs_cleared'     => ['bg' => '#fef2f2', 'border' => '#fecaca', 'color' => '#991b1b', 'text' => 'Đã xóa sạch toàn bộ lịch sử các lần kiểm thử.'],
             ];
             $fl = $flashMap[$tMsg] ?? null;
           ?>
@@ -8630,7 +8630,7 @@ if ($view === 'tester') {
               <div id="matrixTopBadgeWrap">
                 <?php if ($executedTestCount === 0): ?>
                   <span style="background: #f1f5f9; color: #475569; font-weight: 800; font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                    ⏸ ĐANG CHỜ KIỂM THỬ THỦ CÔNG (0/24 ĐÃ CHẠY)
+                    ĐANG CHỜ KIỂM THỬ THỦ CÔNG (0/24 ĐÃ CHẠY)
                   </span>
                 <?php elseif ($failedTestCount > 0): ?>
                   <span style="background: #fee2e2; color: #b91c1c; font-weight: 800; font-size: 12px; padding: 6px 12px; border-radius: 8px;">
@@ -8645,9 +8645,10 @@ if ($view === 'tester') {
             </div>
 
             <!-- BẢNG ĐIỀU KHIỂN ĐẶT TÊN & KHỞI CHẠY KIỂM THỬ THỦ CÔNG -->
-            <form method="POST" action="/?action=run_manual_24_tests" style="background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%); border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+            <form method="POST" action="/?action=run_manual_24_tests" onsubmit="return confirmFormWithHold(event, this, { title: 'Xác Nhận Thực Thi & Lưu Kiểm Thử', message: 'Bạn có chắc chắn muốn thực thi và lưu kết quả phiên kiểm thử thủ công này vào lịch sử hệ thống?', badge: 'XÁC NHẬN KIỂM THỬ' });" style="background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%); border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+              <input type="hidden" name="exec_mode" id="manualExecModeInput" value="run_all">
               <div style="font-weight: 800; font-size: 13px; color: #1e3a8a; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span>⚙ THIẾT LẬP & KHỞI CHẠY LẦN KIỂM THỬ THỦ CÔNG</span>
+                <span>THIẾT LẬP & KHỞI CHẠY LẦN KIỂM THỬ THỦ CÔNG</span>
                 <span style="font-size: 11px; font-weight: 600; color: <?= $bugIdor ? '#dc2626' : '#15803d' ?>; background: #fff; padding: 3px 10px; border-radius: 99px; border: 1px solid <?= $bugIdor ? '#fca5a5' : '#bbf7d0' ?>;">
                   Trạng thái hệ thống hiện tại: <?= $bugIdor ? 'BUG_IDOR = 1 (Đang mở lỗi)' : 'BUG_IDOR = 0 (Đã vá an toàn)' ?>
                 </span>
@@ -8682,18 +8683,18 @@ if ($view === 'tester') {
 
               <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                  <button type="submit" name="exec_mode" value="run_all" class="btn btn-primary" style="font-size: 12px; font-weight: 700; padding: 8px 16px;">
-                    ▶ Thực Thi Toàn Bộ 24 Ca & Lưu Lần Kiểm Thử
+                  <button type="submit" onclick="document.getElementById('manualExecModeInput').value='run_all';" class="btn btn-primary" style="font-size: 12px; font-weight: 700; padding: 8px 16px;">
+                    Thực Thi Toàn Bộ 24 Ca & Lưu Lần Kiểm Thử
                   </button>
-                  <button type="submit" name="exec_mode" value="save_current" class="btn btn-outline" style="font-size: 12px; font-weight: 700; background: #fff; border-color: #0284c7; color: #0369a1;">
-                    💾 Lưu Bảng Hiện Tại Thành 1 Lần Kiểm Thử
+                  <button type="submit" onclick="document.getElementById('manualExecModeInput').value='save_current';" class="btn btn-outline" style="font-size: 12px; font-weight: 700; background: #fff; border-color: #0284c7; color: #0369a1;">
+                    Lưu Bảng Hiện Tại Thành 1 Lần Kiểm Thử
                   </button>
-                  <a href="/?action=reset_manual_matrix" class="btn btn-outline" style="font-size: 12px; background: #fff;">
-                    🔄 Đặt Lại Về Chờ Chạy (Reset)
+                  <a href="/?action=reset_manual_matrix" onclick="return confirmWithHold(event, { title: 'Đặt Lại Bảng Kiểm Thử', message: 'Bạn có chắc chắn muốn đặt lại toàn bộ 24 ca kiểm thử về trạng thái Chờ chạy (PENDING)?', badge: 'XÁC NHẬN ĐẶT LẠI' });" class="btn btn-outline" style="font-size: 12px; background: #fff;">
+                    Đặt Lại Về Chờ Chạy (Reset)
                   </a>
                 </div>
                 <a href="/?view=tester&tab=compare" class="btn btn-outline" style="font-size: 12px; background: #fff; font-weight: 700; color: #4f46e5; border-color: #c7d2fe;">
-                  📊 So Sánh & Thống Kê (<?= $totalSavedRuns ?> lần chạy) &rarr;
+                  So Sánh & Thống Kê (<?= $totalSavedRuns ?> lần chạy) &rarr;
                 </a>
               </div>
             </form>
@@ -8713,7 +8714,7 @@ if ($view === 'tester') {
                 <?php endif; ?>
               </div>
               <div style="font-size: 11.5px; color: #64748b;">
-                💡 Mẹo: Bạn có thể nhấn <strong>"▶ Chạy thử"</strong> ở từng dòng để test lẻ từng ca hoặc nhấn <strong>"Thực Thi Toàn Bộ 24 Ca"</strong> ở trên.
+                Mẹo: Bạn có thể nhấn <strong>"Chạy thử"</strong> ở từng dòng để kiểm tra lẻ từng ca hoặc nhấn <strong>"Thực Thi Toàn Bộ 24 Ca"</strong> ở trên.
               </div>
             </div>
 
@@ -8779,7 +8780,7 @@ if ($view === 'tester') {
                           class="btn btn-outline"
                           style="font-size: 11px; padding: 4px 10px; font-weight: 700; color: #0284c7; border-color: #7dd3fc;"
                         >
-                          ▶ Chạy thử
+                          Chạy thử
                         </button>
                       </td>
                     </tr>
@@ -8846,15 +8847,15 @@ if ($view === 'tester') {
                 </div>
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <a href="/?action=seed_sample_test_runs" class="btn btn-primary" style="font-size: 12px; background: #4f46e5;">
-                  ⚡ Nạp 2 Lần Chạy Mẫu (Trước & Sau Vá Lỗi IDOR)
+                <a href="/?action=seed_sample_test_runs" onclick="return confirmWithHold(event, { title: 'Nạp 2 Lần Kiểm Thử Mẫu', message: 'Bạn có chắc chắn muốn khởi tạo 2 lần kiểm thử mẫu (Trước và Sau khi vá lỗi IDOR) vào lịch sử hệ thống?', badge: 'XÁC NHẬN KHỞI TẠO' });" class="btn btn-primary" style="font-size: 12px; background: #4f46e5;">
+                  Nạp 2 Lần Chạy Mẫu (Trước & Sau Vá Lỗi IDOR)
                 </a>
                 <a href="/?view=tester&tab=matrix" class="btn btn-outline" style="font-size: 12px;">
-                  ➕ Chạy Lần Kiểm Thử Mới
+                  Chạy Lần Kiểm Thử Mới
                 </a>
                 <?php if ($totalSavedRuns > 0): ?>
-                  <a href="/?action=clear_test_runs_history" onclick="return confirmWithHold(event, { title: 'Xóa Lịch Sử Kiểm Thử', message: 'Bạn có chắc chắn muốn xóa toàn bộ các bản ghi lịch sử kiểm thử đã lưu?' })" class="btn btn-outline" style="font-size: 12px; color: #b91c1c; border-color: #fca5a5;">
-                    🗑 Xóa Tất Cả Lịch Sử
+                  <a href="/?action=clear_test_runs_history" onclick="return confirmWithHold(event, { title: 'Xóa Lịch Sử Kiểm Thử', message: 'Bạn có chắc chắn muốn xóa toàn bộ các bản ghi lịch sử kiểm thử đã lưu?', badge: 'XÁC NHẬN XÓA' });" class="btn btn-outline" style="font-size: 12px; color: #b91c1c; border-color: #fca5a5;">
+                    Xóa Tất Cả Lịch Sử
                   </a>
                 <?php endif; ?>
               </div>
@@ -8893,11 +8894,11 @@ if ($view === 'tester') {
                   Hãy sang tab <strong>Kiểm Thử Phân Quyền Thủ Công (24 Cases)</strong> để đặt tên và chạy kiểm thử, hoặc nhấn nút bên dưới để tạo nhanh 2 lần chạy mẫu (Trước & Sau khi vá lỗi IDOR) phục vụ đối chiếu ngay lập tức.
                 </p>
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                  <a href="/?action=seed_sample_test_runs" class="btn btn-primary" style="background: #4f46e5;">
-                    ⚡ Tạo Nhanh 2 Lần Kiểm Thử Mẫu Để So Sánh
+                  <a href="/?action=seed_sample_test_runs" onclick="return confirmWithHold(event, { title: 'Nạp 2 Lần Kiểm Thử Mẫu', message: 'Bạn có chắc chắn muốn khởi tạo 2 lần kiểm thử mẫu (Trước và Sau khi vá lỗi IDOR) vào lịch sử hệ thống?', badge: 'XÁC NHẬN KHỞI TẠO' });" class="btn btn-primary" style="background: #4f46e5;">
+                    Tạo Nhanh 2 Lần Kiểm Thử Mẫu Để So Sánh
                   </a>
                   <a href="/?view=tester&tab=matrix" class="btn btn-outline">
-                    ▶ Đi Tới Bảng Kiểm Thử Thủ Công 24 Ca
+                    Đi Tới Bảng Kiểm Thử Thủ Công 24 Ca
                   </a>
                 </div>
               </div>
@@ -8905,7 +8906,7 @@ if ($view === 'tester') {
               <!-- BIỂU ĐỒ THANH THỐNG KÊ KẾT QUẢ QUA CÁC LẦN CHẠY -->
               <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
                 <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 12px;">
-                  📊 Biểu Đồ Tỷ Lệ PASS / FAIL Qua Các Lần Kiểm Thử (Theo Tên Đã Đặt)
+                  Biểu Đồ Tỷ Lệ PASS / FAIL Qua Các Lần Kiểm Thử (Theo Tên Đã Đặt)
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                   <?php foreach (array_slice($testRunsHistory, 0, 10) as $idx => $rChart): ?>
@@ -8980,7 +8981,7 @@ if ($view === 'tester') {
                   $stB = $itemB['status'] ?? 'PENDING';
 
                   $verdictType = 'unchanged';
-                  $verdictLabel = '= Giữ nguyên (' . $stB . ')';
+                  $verdictLabel = 'Giữ nguyên (' . $stB . ')';
                   $verdictBg = '#f1f5f9';
                   $verdictColor = '#475569';
                   $rowHighlight = '';
@@ -8990,20 +8991,20 @@ if ($view === 'tester') {
                       if ($stA === 'FAIL' && $stB === 'PASS') {
                           $fixedList[] = $cCode;
                           $verdictType = 'fixed';
-                          $verdictLabel = '✓ ĐÃ KHẮC PHỤC (FAIL → PASS)';
+                          $verdictLabel = 'ĐÃ KHẮC PHỤC (FAIL -> PASS)';
                           $verdictBg = '#dcfce7';
                           $verdictColor = '#15803d';
                           $rowHighlight = 'background: #f0fdf4;';
                       } elseif ($stA === 'PASS' && $stB === 'FAIL') {
                           $regressedList[] = $cCode;
                           $verdictType = 'regressed';
-                          $verdictLabel = '✗ PHÁT SINH LỖI (PASS → FAIL)';
+                          $verdictLabel = 'PHÁT SINH LỖI (PASS -> FAIL)';
                           $verdictBg = '#fee2e2';
                           $verdictColor = '#b91c1c';
                           $rowHighlight = 'background: #fff1f2;';
                       } else {
                           $verdictType = 'changed';
-                          $verdictLabel = '⚡ THAY ĐỔI (' . $stA . ' → ' . $stB . ')';
+                          $verdictLabel = 'THAY ĐỔI (' . $stA . ' -> ' . $stB . ')';
                           $verdictBg = '#e0f2fe';
                           $verdictColor = '#0369a1';
                           $rowHighlight = 'background: #f8fafc;';
@@ -9011,7 +9012,7 @@ if ($view === 'tester') {
                   } else {
                       $unchangedCount++;
                       if ($stB === 'FAIL') {
-                          $verdictLabel = '⚠ Vẫn còn lỗi (FAIL → FAIL)';
+                          $verdictLabel = 'Vẫn còn lỗi (FAIL -> FAIL)';
                           $verdictBg = '#fef3c7';
                           $verdictColor = '#b45309';
                       }
@@ -9041,7 +9042,7 @@ if ($view === 'tester') {
             <div class="card">
               <div class="card-head">
                 <div>
-                  <div class="card-title">⚖ So Sánh Đối Chiếu Chi Tiết Giữa 2 Lần Kiểm Thử (Run-to-Run Diff)</div>
+                  <div class="card-title">So Sánh Đối Chiếu Chi Tiết Giữa 2 Lần Kiểm Thử (Run-to-Run Diff)</div>
                   <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
                     Chọn 2 lần kiểm thử bất kỳ theo tên đã đặt để phân tích các ca đã khắc phục (FAIL &rarr; PASS) hoặc hồi quy lỗi (PASS &rarr; FAIL).
                   </div>
@@ -9091,7 +9092,7 @@ if ($view === 'tester') {
 
                   <div>
                     <button type="submit" class="btn btn-primary" style="width: 100%; padding: 9px 14px; font-size: 12.5px; font-weight: 700;">
-                      🔍 Đối Chiếu Hai Lần Chạy
+                      Đối Chiếu Hai Lần Chạy
                     </button>
                   </div>
                 </div>
@@ -9187,7 +9188,7 @@ if ($view === 'tester') {
             <div class="card">
               <div class="card-head">
                 <div>
-                  <div class="card-title">🗂 Danh Sách Lịch Sử Các Lần Kiểm Thử & Đặt Lại Tên</div>
+                  <div class="card-title">Danh Sách Lịch Sử Các Lần Kiểm Thử & Đặt Lại Tên</div>
                   <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
                     Quản lý các bản ghi kiểm thử đã lưu, cho phép đổi tên lần kiểm thử, nạp lại vào bảng Ma trận hoặc xóa.
                   </div>
@@ -9220,7 +9221,7 @@ if ($view === 'tester') {
                             <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;"><?= htmlspecialchars($rHist['note']) ?></div>
                           <?php endif; ?>
                           <!-- Form đổi tên nhanh ẩn/hiện -->
-                          <form id="rename-form-<?= htmlspecialchars($rId) ?>" method="POST" action="/?action=rename_test_run" style="display: none; margin-top: 8px; background: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                          <form id="rename-form-<?= htmlspecialchars($rId) ?>" method="POST" action="/?action=rename_test_run" onsubmit="return confirmFormWithHold(event, this, { title: 'Xác Nhận Lưu Tên Mới', message: 'Bạn có chắc chắn muốn lưu tên và ghi chú mới cho lần kiểm thử này?', badge: 'XÁC NHẬN LƯU TÊN' });" style="display: none; margin-top: 8px; background: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
                             <input type="hidden" name="run_id" value="<?= htmlspecialchars($rId) ?>">
                             <input type="text" name="new_name" value="<?= htmlspecialchars($rHist['name'] ?? '') ?>" placeholder="Tên lần kiểm thử mới..." style="width: 100%; padding: 5px 8px; font-size: 12px; border: 1px solid #94a3b8; border-radius: 4px; margin-bottom: 6px;" required>
                             <input type="text" name="new_note" value="<?= htmlspecialchars($rHist['note'] ?? '') ?>" placeholder="Ghi chú..." style="width: 100%; padding: 5px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; margin-bottom: 6px;">
@@ -9252,13 +9253,13 @@ if ($view === 'tester') {
                         <td style="white-space: nowrap;">
                           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                             <button type="button" onclick="toggleRenameRunForm('<?= htmlspecialchars($rId) ?>')" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;">
-                              ✏ Đổi tên
+                              Đổi tên
                             </button>
-                            <a href="/?action=load_run_to_matrix&run_id=<?= urlencode($rId) ?>" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; color: #0369a1;">
-                              📂 Xem trên Ma trận
+                            <a href="/?action=load_run_to_matrix&run_id=<?= urlencode($rId) ?>" onclick="return confirmWithHold(event, { title: 'Nạp Kết Quả Lên Ma Trận', message: 'Bạn có chắc chắn muốn nạp kết quả của lần kiểm thử này sang bảng Ma trận 24 ca kiểm thử?', badge: 'XÁC NHẬN NẠP' });" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; color: #0369a1;">
+                              Xem trên Ma trận
                             </a>
-                            <a href="/?action=delete_test_run&run_id=<?= urlencode($rId) ?>" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; color: #b91c1c; border-color: #fca5a5;">
-                              🗑 Xóa
+                            <a href="/?action=delete_test_run&run_id=<?= urlencode($rId) ?>" onclick="return confirmWithHold(event, { title: 'Xóa Lần Kiểm Thử', message: 'Bạn có chắc chắn muốn xóa vĩnh viễn lần kiểm thử này khỏi lịch sử?', badge: 'XÁC NHẬN XÓA' });" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; color: #b91c1c; border-color: #fca5a5;">
+                              Xóa
                             </a>
                           </div>
                         </td>
@@ -9282,7 +9283,7 @@ if ($view === 'tester') {
               </div>
               <div>
                 <a href="/?action=run_full_test_suite" onclick="return confirmWithHold(event, { title: 'Chạy Bộ 88 Kiểm Thử', message: 'Khởi chạy toàn bộ 88 kịch bản kiểm thử bảo mật & phân quyền trực tiếp trên môi trường máy chủ?' })" class="btn btn-primary">
-                  ▶ Chạy Toàn Bộ Test Suite (bash lab.sh test)
+                  Chạy Toàn Bộ Test Suite (bash lab.sh test)
                 </a>
               </div>
             </div>
@@ -10926,7 +10927,7 @@ if ($view === 'tester') {
       if (!code) return;
       if (btnEl) {
         btnEl.disabled = true;
-        btnEl.textContent = '⏳ Đang test...';
+        btnEl.textContent = 'Đang kiểm tra...';
       }
 
       fetch('/?action=run_single_test_case&ajax=1&code=' + encodeURIComponent(code), {
@@ -11008,7 +11009,7 @@ if ($view === 'tester') {
         }
         if (btnEl) {
           btnEl.disabled = false;
-          btnEl.textContent = '↻ Chạy lại';
+          btnEl.textContent = 'Chạy lại';
         }
       })
       .catch(() => {
