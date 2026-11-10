@@ -999,9 +999,20 @@ function generateLocalAiResponse(string $msg, ?array $u, array $mockRecords, boo
 // =============================================================================
 $action = $_GET['action'] ?? '';
 
-// Xử lý Chatbot AI (OpenRouter Free Model + Local Knowledge Engine)
-if ($action === 'ai_chat') {
-    header('Content-Type: application/json; charset=utf-8');
+// Xử lý Chatbot AI (OpenRouter Free Model + Real-time Streaming SSE + Local Knowledge Engine)
+if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
+    $isStreaming = ($action === 'ai_chat_stream') || !empty($_GET['stream']);
+    if ($isStreaming) {
+        header('Content-Type: text/event-stream; charset=UTF-8');
+        header('Cache-Control: no-cache, no-transform');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    } else {
+        header('Content-Type: application/json; charset=utf-8');
+    }
     
     $rawInput = file_get_contents('php://input');
     $data = json_decode((string)$rawInput, true) ?: [];
@@ -1022,13 +1033,38 @@ if ($action === 'ai_chat') {
     }
     
     if ($userMsg === '') {
+        if ($isStreaming) {
+            echo "data: [DONE]\n\n";
+            exit;
+        }
         echo json_encode(['error' => 'Vui lòng nhập nội dung câu hỏi!'], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
+    // API Key cố định do hệ thống quản lý, tuyệt đối không cho phép đổi hoặc nhận từ client
+    $serverApiKey = getenv('OPENROUTER_API_KEY') ?: '';
+    if (empty($serverApiKey)) {
+        $keyFile = __DIR__ . '/../../.local/openrouter_api_key.txt';
+        if (file_exists($keyFile)) {
+            $serverApiKey = trim((string)@file_get_contents($keyFile));
+        }
+    }
+    if (empty($serverApiKey) && file_exists(__DIR__ . '/../../.env')) {
+        $envContent = (string)@file_get_contents(__DIR__ . '/../../.env');
+        if (preg_match('/^OPENROUTER_API_KEY\s*=\s*["\']?([^"\'\r\n]+)["\']?/m', $envContent, $m)) {
+            $serverApiKey = trim($m[1]);
+        }
+    }
+    $apiKey = $serverApiKey;
+
     // BỘ LỌC AN TOÀN DUY NHẤT: CHẶN CÁC NỘI DUNG NGUY HIỂM (CHẤT CẤM, TỰ LÀM HẠI BẢN THÂN)
     $dangerCheck = checkDangerousHarmfulQuery($userMsg);
     if ($dangerCheck !== null) {
+        if ($isStreaming) {
+            echo "data: " . json_encode(['delta' => $dangerCheck, 'source' => 'safety_guard'], JSON_UNESCAPED_UNICODE) . "\n\n";
+            echo "data: [DONE]\n\n";
+            exit;
+        }
         echo json_encode([
             'reply' => $dangerCheck,
             'source' => 'safety_guard',
@@ -1044,6 +1080,41 @@ if ($action === 'ai_chat') {
     $fullName = $u ? $u['full_name'] : 'Khách vãng lai';
     $dept = $u ? ($u['department'] ?? 'Chưa xác định') : 'Không';
     
+    // Kiểm tra an ninh nghiêm ngặt: Bệnh nhân cố tình hỏi xem hồ sơ của người khác (Chống lỗ hổng IDOR)
+    if ($role === 'member' || $role === 'guest') {
+        $msgLower = function_exists('mb_strtolower') ? mb_strtolower($userMsg, 'UTF-8') : strtolower($userMsg);
+        if (
+            str_contains($msgLower, 'bn_binh') || 
+            str_contains($msgLower, 'bình') || 
+            str_contains($msgLower, 'bệnh nhân khác') || 
+            str_contains($msgLower, 'người khác') || 
+            str_contains($msgLower, 'bệnh án số 3') || 
+            str_contains($msgLower, 'bệnh án 3') || 
+            str_contains($msgLower, 'bệnh án số 4') || 
+            str_contains($msgLower, 'bệnh án 4') || 
+            str_contains($msgLower, 'hồ sơ số 3') || 
+            str_contains($msgLower, 'hồ sơ 3') || 
+            str_contains($msgLower, 'id 3') || 
+            str_contains($msgLower, 'id=3') || 
+            str_contains($msgLower, 'id 4') || 
+            str_contains($msgLower, 'id=4')
+        ) {
+            $idorWarn = generateLocalAiResponse($userMsg, $currentUser, $mockRecords);
+            if ($isStreaming) {
+                echo "data: " . json_encode(['delta' => $idorWarn, 'source' => 'safety_guard'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                echo "data: [DONE]\n\n";
+                exit;
+            }
+            echo json_encode([
+                'reply' => $idorWarn,
+                'source' => 'safety_guard',
+                'model' => $chosenModel,
+                'has_api_key' => !empty($serverApiKey)
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
+
     // Thu thập danh sách bệnh án được phép xem (Strict ABAC)
     $allowedRecordsInfo = [];
     if ($role === 'member') {
@@ -1071,35 +1142,17 @@ if ($action === 'ai_chat') {
         . "QUY TẮC AN TOÀN BẮT BUỘC (NGHIÊM CẤM TRA CỨU MỤC NGUY HIỂM):\n"
         . "- TUYỆT ĐỐI TỪ CHỐI cung cấp thông tin, hướng dẫn hoặc cách thức liên quan đến: chất cấm, ma túy, chất nổ, vũ khí nguy hiểm, hóa chất độc hại, hoặc các hành vi tự làm hại bản thân / tự tử / tự sát. Hãy từ chối kiên quyết và khuyên người dùng tìm kiếm trợ giúp khẩn cấp y tế (115, 111).\n\n"
         . "QUY TẮC TRẢ LỜI CỦA AI:\n"
-        . "1. NGUYÊN TẮC SÚC TÍCH & TỐI ƯU TỐC ĐỘ (ƯU TIÊN HÀNG ĐẦU):\n"
-        . "   - HÃY TRẢ LỜI THẬT NGẮN GỌN, SÚC TÍCH, ĐI THẲNG VÀO TRỌNG TÂM CÂU HỎI. Độ dài phản hồi lý tưởng chỉ từ 2 đến 4 câu hoặc danh sách gạch đầu dòng ngắn gọn.\n"
-        . "   - Tuyệt đối KHÔNG viết bài luận dông dài, không mở bài hay kết bài rườm rà trừ khi người dùng chủ động yêu cầu giải thích chi tiết.\n\n"
+        . "1. NGUYÊN TẮC TRẢ LỜI TOÀN DIỆN, ĐỦ Ý & GIÀU THÔNG TIN (ƯU TIÊN HÀNG ĐẦU):\n"
+        . "   - HÃY TRẢ LỜI ĐẦY ĐỦ Ý, CHI TIẾT, TOÀN DIỆN VÀ SÂU SẮC. Giải thích cặn kẽ các khía cạnh cần thiết của vấn đề, phân tích nguyên nhân, cơ chế hoặc bối cảnh liên quan để người dùng nhận được câu trả lời phong phú, hữu ích và thỏa đáng nhất.\n"
+        . "   - Trình bày mạch lạc, chia đoạn hợp lý kết hợp với các dấu gạch đầu dòng (-) khi liệt kê luận điểm hoặc phân loại, giúp người đọc nắm bắt trọn vẹn thông tin mà không bị thiếu hụt kiến thức.\n\n"
         . "2. NGOÀI CÁC MỤC GÂY NGUY HIỂM BỊ CẤM Ở TRÊN VÀ QUY TẮC BẢO VỆ BỆNH ÁN:\n"
-        . "   - BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH TỰ DO, THOẢI MÁI TRA CỨU, GIẢI ĐÁP MỌI THÔNG TIN NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, CÔNG NGHỆ, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, VĂN HÓA, ĐỊA LÝ, NGHỆ THUẬT, BÁCH KHOA TOÀN THƯ...) MÀ KHÔNG BỊ BẤT KỲ BỘ LỌC HAY GIỚI HẠN NÀO NGĂN CẢN.\n\n"
+        . "   - BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH TỰ DO, THOẢI MÁI TRA CỨU, GIẢI ĐÁP TOÀN DIỆN MỌI THÔNG TIN NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, CÔNG NGHỆ, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, VĂN HÓA, ĐỊA LÝ, NGHỆ THUẬT, BÁCH KHOA TOÀN THƯ...) MÀ KHÔNG BỊ BẤT KỲ BỘ LỌC HAY GIỚI HẠN NÀO NGĂN CẢN.\n\n"
         . "3. VỚI CÂU HỎI VỀ HỆ THỐNG MEDIRECORD EMR:\n"
-        . "   - Trả lời chính xác theo các tính năng thực tế: Trang Chủ BV (/?view=landing), Danh Sách Bệnh Án (/?view=records) kèm xem/sửa/xóa có xác nhận Giữ để mở khóa, Lập Bệnh Án Mới (/?view=create_record), Thông Báo Chung (/?view=announcements), Quản Trị Người Dùng (/?view=users), Giám Sát An Ninh & Kiểm Thử 88 ca test (/?view=tester), Trang Cá Nhân (/?view=profile) có đổi mật khẩu với xác nhận Giữ để mở khóa, Nút USER chuyển tài khoản nhanh, Nút 3D Robot Head.\n\n"
+        . "   - Trả lời chính xác và đầy đủ theo các tính năng thực tế: Trang Chủ BV (/?view=landing), Danh Sách Bệnh Án (/?view=records) kèm xem/sửa/xóa có xác nhận Giữ để mở khóa, Lập Bệnh Án Mới (/?view=create_record), Thông Báo Chung (/?view=announcements), Quản Trị Người Dùng (/?view=users), Giám Sát An Ninh & Kiểm Thử 88 ca test (/?view=tester), Trang Cá Nhân (/?view=profile) có đổi mật khẩu với xác nhận Giữ để mở khóa, Nút USER chuyển tài khoản nhanh, Nút 3D Robot Head.\n\n"
         . "4. QUY TẮC ĐỊNH DẠNG TUYỆT ĐỐI:\n"
         . "   - Tuyệt đối KHÔNG dùng thẻ HTML (như <strong>, <b>, <br>, /strong...).\n"
         . "   - Tuyệt đối KHÔNG dùng ký tự markdown phức tạp như **, ###, __.\n"
         . "   - Trình bày bằng văn bản thuần túy tiếng Việt tự nhiên, ngắt dòng rõ ràng và dùng dấu gạch đầu dòng (-) khi liệt kê danh sách.";
-
-    // API Key cố định do hệ thống quản lý, tuyệt đối không cho phép đổi hoặc nhận từ client
-    $serverApiKey = getenv('OPENROUTER_API_KEY') ?: '';
-    if (empty($serverApiKey)) {
-        $keyFile = __DIR__ . '/../../.local/openrouter_api_key.txt';
-        if (file_exists($keyFile)) {
-            $serverApiKey = trim((string)@file_get_contents($keyFile));
-        }
-    }
-    if (empty($serverApiKey) && file_exists(__DIR__ . '/../../.env')) {
-        $envContent = (string)@file_get_contents(__DIR__ . '/../../.env');
-        if (preg_match('/^OPENROUTER_API_KEY\s*=\s*["\']?([^"\'\r\n]+)["\']?/m', $envContent, $m)) {
-            $serverApiKey = trim($m[1]);
-        }
-    }
-    $apiKey = $serverApiKey;
-    $aiResponse = '';
-    $source = 'openrouter';
 
     // Tiếp nhận và làm sạch lịch sử hội thoại đa lượt (Multi-turn Conversation History)
     $clientHistory = is_array($data['history'] ?? null) ? $data['history'] : [];
@@ -1136,15 +1189,94 @@ if ($action === 'ai_chat') {
     }
     $messagesPayload[] = ['role' => 'user', 'content' => $userMsg];
 
-    if (!empty($apiKey)) {
-        $fallbackModels = [
-            'google/gemma-4-31b-it:free',
-            'openrouter/free',
-            'nvidia/nemotron-3.5-lightning:free',
-            'google/gemma-4-26b-a4b-it:free',
-            'nvidia/nemotron-3-ultra-550b-a55b:free',
-        ];
+    $fallbackModels = [
+        'google/gemma-4-31b-it:free',
+        'openrouter/free',
+        'nvidia/nemotron-3.5-lightning:free',
+        'google/gemma-4-26b-a4b-it:free',
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+    ];
 
+    // PHƯƠNG ÁN 1: STREAMING THỜI GIAN THỰC (SERVER-SENT EVENTS - TỪNG CHỮ HIỆN RA NGAY KHI AI NGHĨ)
+    if ($isStreaming) {
+        $streamSuccess = false;
+        if (!empty($apiKey)) {
+            foreach ($fallbackModels as $currentModel) {
+                $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                    'model' => $currentModel,
+                    'messages' => $messagesPayload,
+                    'temperature' => 0.5,
+                    'max_tokens' => 850,
+                    'stream' => true
+                ]));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey,
+                    'HTTP-Referer: https://medirecord-emr.abrdns.com',
+                    'X-Title: MediRecord EMR Assistant'
+                ]);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+                $streamBuffer = '';
+                curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$streamBuffer, &$streamSuccess) {
+                    $streamBuffer .= $chunk;
+                    while (($pos = strpos($streamBuffer, "\n")) !== false) {
+                        $line = trim(substr($streamBuffer, 0, $pos));
+                        $streamBuffer = substr($streamBuffer, $pos + 1);
+                        if (str_starts_with($line, 'data: ')) {
+                            $payload = substr($line, 6);
+                            if ($payload === '[DONE]') {
+                                echo "data: [DONE]\n\n";
+                                @flush();
+                                $streamSuccess = true;
+                                continue;
+                            }
+                            $json = json_decode($payload, true);
+                            $delta = $json['choices'][0]['delta']['content'] ?? '';
+                            if ($delta !== '') {
+                                $streamSuccess = true;
+                                echo "data: " . json_encode(['delta' => $delta, 'source' => 'openrouter'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                                @flush();
+                            }
+                        }
+                    }
+                    return strlen($chunk);
+                });
+
+                curl_exec($ch);
+                $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($streamSuccess && $code >= 200 && $code < 300) {
+                    break;
+                }
+            }
+        }
+
+        if (!$streamSuccess) {
+            $fallbackReply = generateLocalAiResponse($userMsg, $currentUser, $mockRecords, empty($apiKey));
+            $words = preg_split('/(\s+)/u', $fallbackReply, -1, PREG_SPLIT_DELIM_CAPTURE);
+            foreach ($words as $w) {
+                if ($w !== '') {
+                    echo "data: " . json_encode(['delta' => $w, 'source' => 'local_fallback'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    @flush();
+                    usleep(15000);
+                }
+            }
+            echo "data: [DONE]\n\n";
+            @flush();
+        }
+        exit;
+    }
+
+    // PHƯƠNG ÁN 2: PHẢN HỒI BATCH JSON TRUYỀN THỐNG (DÀNH CHO CLIENT KHÔNG DÙNG STREAM)
+    $aiResponse = '';
+    $source = 'openrouter';
+
+    if (!empty($apiKey)) {
         foreach ($fallbackModels as $currentModel) {
             $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1153,7 +1285,7 @@ if ($action === 'ai_chat') {
                 'model' => $currentModel,
                 'messages' => $messagesPayload,
                 'temperature' => 0.5,
-                'max_tokens' => 500
+                'max_tokens' => 850
             ]));
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
@@ -1161,7 +1293,7 @@ if ($action === 'ai_chat') {
                 'HTTP-Referer: https://medirecord-emr.abrdns.com',
                 'X-Title: MediRecord EMR Assistant'
             ]);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 9);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
             $res = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
@@ -1171,7 +1303,7 @@ if ($action === 'ai_chat') {
                 $reply = $parsed['choices'][0]['message']['content'] ?? '';
                 if (!empty(trim($reply))) {
                     $aiResponse = trim($reply);
-                    break; // Tự động chọn model khả dụng đầu tiên thành công!
+                    break;
                 }
             }
         }
@@ -9439,40 +9571,119 @@ if ($view === 'tester') {
 
       const botMsgDiv = botRowDiv.querySelector('.ai-msg');
 
-      fetch('/?action=ai_chat', {
+      fetch('/?action=ai_chat_stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history: historyToSend })
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.reply) {
-          typewriterStream(botMsgDiv, data.reply, data.source, avatarCtrl, () => {
-            // Nạp câu trả lời của AI vào bộ nhớ hội thoại
-            aiChatHistory.push({ role: 'assistant', content: data.reply });
-            if (aiChatHistory.length > 10) {
-              aiChatHistory = aiChatHistory.slice(-10);
-            }
-            isAiGenerating = false;
-            if (sendBtn) {
-              sendBtn.disabled = false;
-              sendBtn.innerText = 'Gửi';
-            }
-          });
-        } else if (data.error) {
-          aiChatHistory.pop(); // Rút lại tin nhắn lỗi khỏi bộ nhớ
-          botMsgDiv.textContent = '[LỖI] ' + sanitizeCleanAiText(data.error);
+      .then(async res => {
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status);
+        }
+
+        botMsgDiv.innerHTML = '';
+        let tagDiv = null;
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'ai-msg-content';
+        contentDiv.style.whiteSpace = 'pre-line';
+        contentDiv.style.wordBreak = 'break-word';
+        contentDiv.style.lineHeight = '1.6';
+
+        const cursorSpan = document.createElement('span');
+        cursorSpan.className = 'ai-typing-cursor';
+        cursorSpan.textContent = '▌';
+
+        botMsgDiv.appendChild(contentDiv);
+        botMsgDiv.appendChild(cursorSpan);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let accumulatedText = '';
+        let streamBuffer = '';
+        let currentSource = '';
+
+        window.setAiBotState('speaking');
+        if (avatarCtrl && avatarCtrl.setState) {
+          avatarCtrl.setState('speaking');
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          streamBuffer += decoder.decode(value, { stream: true });
+          const lines = streamBuffer.split('\n');
+          streamBuffer = lines.pop(); // Giữ lại phần chưa có ký tự xuống dòng
+
+          for (let line of lines) {
+            line = line.trim();
+            if (!line.startsWith('data: ')) continue;
+            const dataStr = line.slice(6);
+            if (dataStr === '[DONE]') break;
+
+            try {
+              const dataObj = JSON.parse(dataStr);
+              if (dataObj.source && dataObj.source !== currentSource) {
+                currentSource = dataObj.source;
+                if (!tagDiv) {
+                  tagDiv = document.createElement('div');
+                  tagDiv.style.cssText = 'font-size: 10px; margin-bottom: 4px; font-weight: 700;';
+                  if (currentSource === 'openrouter') {
+                    tagDiv.style.color = '#6366f1';
+                    tagDiv.textContent = '[OPENROUTER AI]';
+                  } else if (currentSource === 'safety_guard') {
+                    tagDiv.style.color = '#dc2626';
+                    tagDiv.textContent = '[CẢNH BÁO AN TOÀN]';
+                  } else {
+                    tagDiv.style.color = '#0284c7';
+                    tagDiv.textContent = '[TRỢ LÝ MEDIRECORD]';
+                  }
+                  botMsgDiv.insertBefore(tagDiv, contentDiv);
+                }
+              }
+              if (dataObj.delta) {
+                accumulatedText += dataObj.delta;
+                contentDiv.textContent = sanitizeCleanAiText(accumulatedText);
+                if (box) box.scrollTop = box.scrollHeight;
+              }
+            } catch(e) {}
+          }
+        }
+
+        if (cursorSpan && cursorSpan.parentNode) {
+          cursorSpan.parentNode.removeChild(cursorSpan);
+        }
+        if (box) box.scrollTop = box.scrollHeight;
+
+        const cleanFinal = sanitizeCleanAiText(accumulatedText);
+        if (cleanFinal.trim()) {
+          aiChatHistory.push({ role: 'assistant', content: cleanFinal });
+          if (aiChatHistory.length > 10) {
+            aiChatHistory = aiChatHistory.slice(-10);
+          }
+        } else {
+          contentDiv.textContent = '[THÔNG BÁO] Không nhận được phản hồi từ mô hình. Vui lòng thử lại!';
           window.setAiBotState('error');
           if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
-          isAiGenerating = false;
-          if (sendBtn) {
-            sendBtn.disabled = false;
-            sendBtn.innerText = 'Gửi';
-          }
+        }
+
+        window.setAiBotState('happy');
+        if (avatarCtrl && avatarCtrl.setState) {
+          avatarCtrl.setState('happy');
+        }
+        setTimeout(() => {
+          window.setAiBotState('idle');
+          if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('idle');
+        }, 1800);
+
+        isAiGenerating = false;
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.innerText = 'Gửi';
         }
       })
       .catch(err => {
-        aiChatHistory.pop(); // Rút lại tin nhắn lỗi khi mất kết nối mạng
+        aiChatHistory.pop();
         botMsgDiv.textContent = '[LỖI MẠNG] Không thể kết nối máy chủ: ' + err;
         window.setAiBotState('error');
         if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
