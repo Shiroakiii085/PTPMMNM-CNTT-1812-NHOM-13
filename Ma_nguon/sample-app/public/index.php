@@ -1013,9 +1013,9 @@ if ($action === 'ai_chat') {
     $allowedModels = [
         'google/gemma-4-31b-it:free',
         'openrouter/free',
+        'nvidia/nemotron-3.5-lightning:free',
         'google/gemma-4-26b-a4b-it:free',
         'nvidia/nemotron-3-ultra-550b-a55b:free',
-        'nvidia/nemotron-3.5-lightning:free',
     ];
     if (!in_array($chosenModel, $allowedModels, true)) {
         $chosenModel = 'google/gemma-4-31b-it:free';
@@ -1071,12 +1071,14 @@ if ($action === 'ai_chat') {
         . "QUY TẮC AN TOÀN BẮT BUỘC (NGHIÊM CẤM TRA CỨU MỤC NGUY HIỂM):\n"
         . "- TUYỆT ĐỐI TỪ CHỐI cung cấp thông tin, hướng dẫn hoặc cách thức liên quan đến: chất cấm, ma túy, chất nổ, vũ khí nguy hiểm, hóa chất độc hại, hoặc các hành vi tự làm hại bản thân / tự tử / tự sát. Hãy từ chối kiên quyết và khuyên người dùng tìm kiếm trợ giúp khẩn cấp y tế (115, 111).\n\n"
         . "QUY TẮC TRẢ LỜI CỦA AI:\n"
-        . "1. NGOÀI CÁC MỤC GÂY NGUY HIỂM BỊ CẤM Ở TRÊN VÀ QUY TẮC BẢO VỆ BỆNH ÁN:\n"
-        . "   - BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH TỰ DO, THOẢI MÁI TRA CỨU, GIẢI ĐÁP TOÀN DIỆN MỌI THÔNG TIN NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, CÔNG NGHỆ, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, VĂN HÓA, ĐỊA LÝ, NGHỆ THUẬT, BÁCH KHOA TOÀN THƯ...) MÀ KHÔNG BỊ BẤT KỲ BỘ LỌC HAY GIỚI HẠN NÀO NGĂN CẢN.\n"
-        . "   - Hãy trả lời thật thoải mái, tự do, cởi mở, chi tiết và hữu ích nhất như một trợ lý AI thông minh toàn năng (ChatGPT).\n"
-        . "2. VỚI CÂU HỎI VỀ HỆ THỐNG MEDIRECORD EMR:\n"
+        . "1. NGUYÊN TẮC SÚC TÍCH & TỐI ƯU TỐC ĐỘ (ƯU TIÊN HÀNG ĐẦU):\n"
+        . "   - HÃY TRẢ LỜI THẬT NGẮN GỌN, SÚC TÍCH, ĐI THẲNG VÀO TRỌNG TÂM CÂU HỎI. Độ dài phản hồi lý tưởng chỉ từ 2 đến 4 câu hoặc danh sách gạch đầu dòng ngắn gọn.\n"
+        . "   - Tuyệt đối KHÔNG viết bài luận dông dài, không mở bài hay kết bài rườm rà trừ khi người dùng chủ động yêu cầu giải thích chi tiết.\n\n"
+        . "2. NGOÀI CÁC MỤC GÂY NGUY HIỂM BỊ CẤM Ở TRÊN VÀ QUY TẮC BẢO VỆ BỆNH ÁN:\n"
+        . "   - BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH TỰ DO, THOẢI MÁI TRA CỨU, GIẢI ĐÁP MỌI THÔNG TIN NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, CÔNG NGHỆ, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, VĂN HÓA, ĐỊA LÝ, NGHỆ THUẬT, BÁCH KHOA TOÀN THƯ...) MÀ KHÔNG BỊ BẤT KỲ BỘ LỌC HAY GIỚI HẠN NÀO NGĂN CẢN.\n\n"
+        . "3. VỚI CÂU HỎI VỀ HỆ THỐNG MEDIRECORD EMR:\n"
         . "   - Trả lời chính xác theo các tính năng thực tế: Trang Chủ BV (/?view=landing), Danh Sách Bệnh Án (/?view=records) kèm xem/sửa/xóa có xác nhận Giữ để mở khóa, Lập Bệnh Án Mới (/?view=create_record), Thông Báo Chung (/?view=announcements), Quản Trị Người Dùng (/?view=users), Giám Sát An Ninh & Kiểm Thử 88 ca test (/?view=tester), Trang Cá Nhân (/?view=profile) có đổi mật khẩu với xác nhận Giữ để mở khóa, Nút USER chuyển tài khoản nhanh, Nút 3D Robot Head.\n\n"
-        . "3. QUY TẮC ĐỊNH DẠNG TUYỆT ĐỐI:\n"
+        . "4. QUY TẮC ĐỊNH DẠNG TUYỆT ĐỐI:\n"
         . "   - Tuyệt đối KHÔNG dùng thẻ HTML (như <strong>, <b>, <br>, /strong...).\n"
         . "   - Tuyệt đối KHÔNG dùng ký tự markdown phức tạp như **, ###, __.\n"
         . "   - Trình bày bằng văn bản thuần túy tiếng Việt tự nhiên, ngắt dòng rõ ràng và dùng dấu gạch đầu dòng (-) khi liệt kê danh sách.";
@@ -1138,9 +1140,9 @@ if ($action === 'ai_chat') {
         $fallbackModels = [
             'google/gemma-4-31b-it:free',
             'openrouter/free',
+            'nvidia/nemotron-3.5-lightning:free',
             'google/gemma-4-26b-a4b-it:free',
             'nvidia/nemotron-3-ultra-550b-a55b:free',
-            'nvidia/nemotron-3.5-lightning:free',
         ];
 
         foreach ($fallbackModels as $currentModel) {
@@ -1151,7 +1153,7 @@ if ($action === 'ai_chat') {
                 'model' => $currentModel,
                 'messages' => $messagesPayload,
                 'temperature' => 0.5,
-                'max_tokens' => 1000
+                'max_tokens' => 500
             ]));
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
@@ -1159,7 +1161,7 @@ if ($action === 'ai_chat') {
                 'HTTP-Referer: https://medirecord-emr.abrdns.com',
                 'X-Title: MediRecord EMR Assistant'
             ]);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 18);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 9);
             $res = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
