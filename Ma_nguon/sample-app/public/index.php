@@ -570,11 +570,11 @@ function tryCalculateMath(string $query): ?string {
     
     $res = evaluateMathExpression($clean);
     if ($res === 'DIV_ZERO') {
-        return "KẾT QUẢ TÍNH TOÁN:\\n\\nPhép tính '" . $clean . "' không hợp lệ vì không thể chia cho số 0.";
+        return "Phép tính " . $clean . " không thể thực hiện vì không thể chia cho số 0.";
     }
     if ($res !== null) {
         $displayRes = (round($res, 6) == round($res, 0)) ? (string)(int)$res : (string)round($res, 6);
-        return "KẾT QUẢ PHÉP TÍNH:\\n\\n" . $clean . " = " . $displayRes;
+        return "Kết quả của phép tính " . $clean . " = " . $displayRes;
     }
     return null;
 }
@@ -648,14 +648,7 @@ function fetchWikipediaKnowledge(string $query): ?string {
     $extract = $sData['extract'] ?? '';
     if (empty(trim($extract))) return null;
 
-    $desc = $sData['description'] ?? '';
-    $upTitle = function_exists('mb_strtoupper') ? mb_strtoupper($title, 'UTF-8') : $title;
-    $out = "THÔNG TIN BÁCH KHOA TOÀN THƯ: " . $upTitle;
-    if (!empty($desc)) {
-        $out .= " (" . $desc . ")";
-    }
-    $out .= "\n\n" . $extract;
-    return cleanAiResponseText($out);
+    return cleanAiResponseText($extract);
 }
 
 // BỘ LỌC AN TOÀN DUY NHẤT: CHẶN CÁC NỘI DUNG NGUY HIỂM (CHẤT CẤM, TỰ LÀM HẠI BẢN THÂN)
@@ -1014,18 +1007,18 @@ if ($action === 'ai_chat') {
     $data = json_decode((string)$rawInput, true) ?: [];
     $userMsg = trim($data['message'] ?? $_POST['message'] ?? '');
     // Cho phép đổi model nhưng KHÔNG nhận API key từ client gửi lên (cố định dùng API key hệ thống)
-    $chosenModel = trim($data['model'] ?? $_POST['model'] ?? 'qwen/qwen-2.5-7b-instruct:free');
+    $chosenModel = trim($data['model'] ?? $_POST['model'] ?? 'google/gemma-4-31b-it:free');
     
-    // Đảm bảo model thuộc danh sách các model free được hỗ trợ
+    // Đảm bảo model thuộc danh sách các model free thông minh nhất về tra cứu kiến thức
     $allowedModels = [
-        'qwen/qwen-2.5-7b-instruct:free',
-        'meta-llama/llama-3.2-3b-instruct:free',
-        'google/gemini-2.0-flash-exp:free',
-        'deepseek/deepseek-r1:free',
-        'mistralai/mistral-7b-instruct:free',
+        'google/gemma-4-31b-it:free',
+        'openrouter/free',
+        'google/gemma-4-26b-a4b-it:free',
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'nvidia/nemotron-3.5-lightning:free',
     ];
     if (!in_array($chosenModel, $allowedModels, true)) {
-        $chosenModel = 'qwen/qwen-2.5-7b-instruct:free';
+        $chosenModel = 'google/gemma-4-31b-it:free';
     }
     
     if ($userMsg === '') {
@@ -1108,11 +1101,11 @@ if ($action === 'ai_chat') {
 
     if (!empty($apiKey)) {
         $fallbackModels = [
-            'qwen/qwen-2.5-7b-instruct:free',
-            'meta-llama/llama-3.2-3b-instruct:free',
-            'google/gemini-2.0-flash-exp:free',
-            'deepseek/deepseek-r1:free',
-            'mistralai/mistral-7b-instruct:free',
+            'google/gemma-4-31b-it:free',
+            'openrouter/free',
+            'google/gemma-4-26b-a4b-it:free',
+            'nvidia/nemotron-3-ultra-550b-a55b:free',
+            'nvidia/nemotron-3.5-lightning:free',
         ];
 
         foreach ($fallbackModels as $currentModel) {
