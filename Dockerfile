@@ -1,7 +1,7 @@
 FROM php:8.2-cli-alpine
 
-# Cài đặt extension PostgreSQL cho PHP
-RUN apk add --no-cache postgresql-dev \
+# Cài đặt bash và extension PostgreSQL cho PHP
+RUN apk add --no-cache bash postgresql-dev \
     && docker-php-ext-install pgsql pdo_pgsql
 
 # Thiết lập thư mục làm việc
