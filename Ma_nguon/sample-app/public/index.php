@@ -602,7 +602,7 @@ function fetchWikipediaKnowledge(string $query): ?string {
     $ctx = stream_context_create([
         'http' => [
             'timeout' => 4,
-            'header' => "User-Agent: MediRecordAssistant/1.0 (medirecord@abrdns.com)\\r\\n"
+            'header' => "User-Agent: MediRecordAssistant/1.0 (medirecord@abrdns.com)\r\n"
         ]
     ]);
 
@@ -658,12 +658,64 @@ function fetchWikipediaKnowledge(string $query): ?string {
     return cleanAiResponseText($out);
 }
 
+// BỘ LỌC AN TOÀN DUY NHẤT: CHẶN CÁC NỘI DUNG NGUY HIỂM (CHẤT CẤM, TỰ LÀM HẠI BẢN THÂN)
+function checkDangerousHarmfulQuery(string $query): ?string {
+    $qLower = function_exists('mb_strtolower') ? mb_strtolower($query, 'UTF-8') : strtolower($query);
+    
+    // 1. Tự làm hại bản thân (Self-harm / Suicide)
+    $selfHarmKeywords = [
+        'tự tử', 'tu tu', 'tự sát', 'tu sat', 'tự hại', 'tu hai', 
+        'làm hại bản thân', 'lam hai ban than', 'hủy hoại bản thân', 'huy hoai ban than',
+        'cách chết', 'cach chet', 'muốn chết', 'muon chet', 'kết liễu cuộc sống', 'ket lieu cuoc song',
+        'cắt cổ tay', 'cat co tay', 'rạch tay', 'rach tay', 'uống thuốc ngủ tự tử', 'treo cổ', 'nhảy cầu',
+        'nhảy lầu', 'cách tự sát', 'cách tự tử', 'tự vẫn', 'tu van'
+    ];
+    foreach ($selfHarmKeywords as $kw) {
+        if (str_contains($qLower, $kw)) {
+            return "CẢNH BÁO AN TOÀN:\n\n"
+                 . "Hệ thống từ chối cung cấp thông tin hoặc hướng dẫn liên quan đến các hành vi tự làm hại bản thân hoặc tự sát.\n\n"
+                 . "Nếu bạn hoặc người thân đang trải qua giai đoạn khó khăn, khủng hoảng tâm lý hoặc có ý nghĩ tiêu cực, xin vui lòng tìm kiếm sự trợ giúp y tế ngay lập tức:\n"
+                 . "- Cấp cứu Y tế Toàn quốc: 115\n"
+                 . "- Tổng đài Quốc gia Bảo vệ Trẻ em & Tư vấn Tâm lý: 111\n"
+                 . "- Đường dây nóng hỗ trợ tâm lý Ngày Mai: 096 306 1414\n"
+                 . "- Đến ngay cơ sở y tế hoặc bệnh viện gần nhất để được các bác sĩ và chuyên gia tâm lý hỗ trợ kịp thời.";
+        }
+    }
+
+    // 2. Chất cấm, ma túy, vũ khí, chất nổ, chất độc hại nguy hiểm (Illicit substances / Weapons / Explosives / Toxins)
+    $substanceKeywords = [
+        'ma túy', 'ma tuy', 'heroin', 'hêrôin', 'héroin', 'cocain', 'côcain', 'cocaine', 
+        'thuốc lắc', 'thuoc lac', 'ma túy đá', 'ma tuy da', 'methamphetamine', 'ketamine', 'ecstasy',
+        'cần sa tổng hợp', 'can sa tong hop', 'cỏ mỹ', 'co my', 'chế tạo ma túy', 'che tao ma tuy',
+        'nấu ma túy', 'nau ma tuy', 'mua bán ma túy', 'buon ban ma tuy', 'chế tạo bom', 'che tao bom',
+        'chế tạo chất nổ', 'che tao chat no', 'chế tạo thuốc nổ', 'che tao thuoc no', 'chế tạo vũ khí',
+        'chế tạo súng', 'che tao sung', 'chế súng', 'che sung', 'thuốc nổ dẻo', 'thuốc nổ đen',
+        'xyanua', 'cyanide', 'chế tạo độc chất', 'đầu độc', 'dau doc', 'chất độc xyanua', 'ricin',
+        'vũ khí sinh học', 'vu khi sinh hoc', 'vũ khí hóa học', 'vu khi hoa hoc'
+    ];
+    foreach ($substanceKeywords as $kw) {
+        if (str_contains($qLower, $kw)) {
+            return "CẢNH BÁO AN TOÀN:\n\n"
+                 . "Hệ thống từ chối cung cấp thông tin, hướng dẫn hoặc cách thức liên quan đến chất cấm, ma túy, chất nổ, vũ khí hoặc hóa chất độc hại nguy hiểm theo quy định pháp luật và tiêu chuẩn an toàn thông tin.\n\n"
+                 . "Nếu bạn cần thông tin về điều trị cai nghiện hoặc tư vấn sức khỏe phòng chống tác hại ma túy, xin vui lòng liên hệ các trung tâm y tế, bệnh viện chuyên khoa hoặc cơ quan chức năng có thẩm quyền.";
+        }
+    }
+
+    return null;
+}
+
 function generateLocalAiResponse(string $msg, ?array $u, array $mockRecords, bool $hasNoApiKey = false): string {
     $msgLower = function_exists('mb_strtolower') ? mb_strtolower($msg, 'UTF-8') : strtolower($msg);
     $msgTrim = trim($msg);
     $role = $u ? $u['role'] : 'guest';
     $uName = $u ? $u['username'] : 'anon';
     $fullName = $u ? $u['full_name'] : 'Khách vãng lai';
+
+    // 0. Kiểm tra an toàn: Tuyệt đối không cho tra cứu các mục gây nguy hiểm (chất cấm, tự làm hại bản thân)
+    $dangerCheck = checkDangerousHarmfulQuery($msg);
+    if ($dangerCheck !== null) {
+        return $dangerCheck;
+    }
 
     // 1. Kiểm tra an ninh nghiêm ngặt: Bệnh nhân cố tình hỏi xem hồ sơ của người khác (Chống lỗ hổng IDOR)
     if ($role === 'member' || $role === 'guest') {
@@ -744,6 +796,12 @@ function generateLocalAiResponse(string $msg, ?array $u, array $mockRecords, boo
     $mathResult = tryCalculateMath($msgTrim);
     if ($mathResult !== null) {
         return $mathResult;
+    }
+
+    // 4. Tra cứu Bách khoa toàn thư Wikipedia thời gian thực (Xoá hết mọi rào cản, AI thoải mái tra cứu tri thức)
+    $wikiResult = fetchWikipediaKnowledge($msgTrim);
+    if ($wikiResult !== null && strlen($wikiResult) > 50) {
+        return $wikiResult;
     }
 
     // 4. Giải thích lỗ hổng IDOR/BOLA và an toàn thông tin
@@ -974,6 +1032,18 @@ if ($action === 'ai_chat') {
         echo json_encode(['error' => 'Vui lòng nhập nội dung câu hỏi!'], JSON_UNESCAPED_UNICODE);
         exit;
     }
+
+    // BỘ LỌC AN TOÀN DUY NHẤT: CHẶN CÁC NỘI DUNG NGUY HIỂM (CHẤT CẤM, TỰ LÀM HẠI BẢN THÂN)
+    $dangerCheck = checkDangerousHarmfulQuery($userMsg);
+    if ($dangerCheck !== null) {
+        echo json_encode([
+            'reply' => $dangerCheck,
+            'source' => 'safety_guard',
+            'model' => $chosenModel,
+            'has_api_key' => !empty($serverApiKey)
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     
     $u = $currentUser;
     $role = $u ? $u['role'] : 'guest';
@@ -1003,13 +1073,14 @@ if ($action === 'ai_chat') {
         . "- Khoa/Phòng: {$dept}\n\n"
         . "DỮ LIỆU BỆNH ÁN ĐƯỢC PHÉP TRUY CẬP (STRICT ABAC):\n"
         . (empty($allowedRecordsInfo) ? "Người dùng chưa có bệnh án cá nhân hoặc chưa đăng nhập.\n" : implode("\n", $allowedRecordsInfo) . "\n")
-        . "\nQUY TẮC BẢO MẬT DUY NHẤT (CHỐNG LỖ HỔNG IDOR):\n"
+        . "\nQUY TẮC BẢO MẬT BỆNH ÁN (CHỐNG LỖ HỔNG IDOR):\n"
         . "- Bệnh nhân CHỈ ĐƯỢC PHÉP xem bệnh án của chính mình. Tuyệt đối KHÔNG TIẾT LỘ hồ sơ bệnh án của bệnh nhân khác (ví dụ: bn_an không được xem bệnh án của bn_binh hay bệnh án số 3, 4). Khi có yêu cầu xem trộm, hãy từ chối lịch sự và giải thích về quy định bảo mật kiểm soát truy cập đối tượng ABAC/IDOR.\n\n"
+        . "QUY TẮC AN TOÀN BẮT BUỘC (NGHIÊM CẤM TRA CỨU MỤC NGUY HIỂM):\n"
+        . "- TUYỆT ĐỐI TỪ CHỐI cung cấp thông tin, hướng dẫn hoặc cách thức liên quan đến: chất cấm, ma túy, chất nổ, vũ khí nguy hiểm, hóa chất độc hại, hoặc các hành vi tự làm hại bản thân / tự tử / tự sát. Hãy từ chối kiên quyết và khuyên người dùng tìm kiếm trợ giúp khẩn cấp y tế (115, 111).\n\n"
         . "QUY TẮC TRẢ LỜI CỦA AI:\n"
-        . "1. VỚI MỌI CÂU HỎI NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, NGOẠI NGỮ, TƯ VẤN, NGHỆ THUẬT, TRÒ CHUYỆN TỰ DO...):\n"
-        . "   - Hãy trả lời THẬT THOẢI MÁI, TỰ DO, CỞI MỞ, CHI TIẾT VÀ HỮU ÍCH NHẤT như một trợ lý AI thông minh toàn năng (ChatGPT).\n"
-        . "   - KHÔNG BỊ GIỚI HẠN trong khuôn khổ bệnh viện hay website!\n"
-        . "   - Thoải mái tra cứu, giải thích hiện tượng tự nhiên, giải toán, viết code, tư vấn mẹo sống, chia sẻ kiến thức bách khoa theo đúng yêu cầu của người dùng.\n"
+        . "1. NGOÀI CÁC MỤC GÂY NGUY HIỂM BỊ CẤM Ở TRÊN VÀ QUY TẮC BẢO VỆ BỆNH ÁN:\n"
+        . "   - BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH TỰ DO, THOẢI MÁI TRA CỨU, GIẢI ĐÁP TOÀN DIỆN MỌI THÔNG TIN NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, CÔNG NGHỆ, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, VĂN HÓA, ĐỊA LÝ, NGHỆ THUẬT, BÁCH KHOA TOÀN THƯ...) MÀ KHÔNG BỊ BẤT KỲ BỘ LỌC HAY GIỚI HẠN NÀO NGĂN CẢN.\n"
+        . "   - Hãy trả lời thật thoải mái, tự do, cởi mở, chi tiết và hữu ích nhất như một trợ lý AI thông minh toàn năng (ChatGPT).\n"
         . "2. VỚI CÂU HỎI VỀ HỆ THỐNG MEDIRECORD EMR:\n"
         . "   - Trả lời chính xác theo các tính năng thực tế: Trang Chủ BV (/?view=landing), Danh Sách Bệnh Án (/?view=records) kèm xem/sửa/xóa có xác nhận Giữ để mở khóa, Lập Bệnh Án Mới (/?view=create_record), Thông Báo Chung (/?view=announcements), Quản Trị Người Dùng (/?view=users), Giám Sát An Ninh & Kiểm Thử 88 ca test (/?view=tester), Trang Cá Nhân (/?view=profile) có đổi mật khẩu với xác nhận Giữ để mở khóa, Nút USER chuyển tài khoản nhanh, Nút 3D Robot Head.\n\n"
         . "3. QUY TẮC ĐỊNH DẠNG TUYỆT ĐỐI:\n"
@@ -1017,7 +1088,7 @@ if ($action === 'ai_chat') {
         . "   - Tuyệt đối KHÔNG dùng ký tự markdown phức tạp như **, ###, __.\n"
         . "   - Trình bày bằng văn bản thuần túy tiếng Việt tự nhiên, ngắt dòng rõ ràng và dùng dấu gạch đầu dòng (-) khi liệt kê danh sách.";
 
-    // API Key cố định do hệ thống quản lý, không cho phép client ghi đè API key khác
+    // API Key cố định do hệ thống quản lý, tuyệt đối không cho phép đổi hoặc nhận từ client
     $serverApiKey = getenv('OPENROUTER_API_KEY') ?: '';
     if (empty($serverApiKey)) {
         $keyFile = __DIR__ . '/../../.local/openrouter_api_key.txt';
@@ -1031,12 +1102,7 @@ if ($action === 'ai_chat') {
             $serverApiKey = trim($m[1]);
         }
     }
-    $clientApiKey = trim((string)($data['apiKey'] ?? $_POST['apiKey'] ?? ''));
-    if (!empty($clientApiKey) && str_starts_with($clientApiKey, 'sk-')) {
-        $apiKey = $clientApiKey;
-    } else {
-        $apiKey = $serverApiKey;
-    }
+    $apiKey = $serverApiKey;
     $aiResponse = '';
     $source = 'openrouter';
 
@@ -8659,7 +8725,6 @@ if ($view === 'tester') {
         </div>
       </div>
       <div>
-        <button onclick="openAiKeyModal()" title="Cài đặt OpenRouter API Key" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent; cursor: pointer; margin-right: 6px;">Key AI</button>
         <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 3px 10px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
       </div>
     </div>
@@ -9198,6 +9263,11 @@ if ($view === 'tester') {
         tag.style.cssText = 'font-size: 10px; color: #6366f1; margin-bottom: 4px; font-weight: 700;';
         tag.textContent = '[OPENROUTER AI]';
         element.appendChild(tag);
+      } else if (source === 'safety_guard') {
+        const tag = document.createElement('div');
+        tag.style.cssText = 'font-size: 10px; color: #dc2626; margin-bottom: 4px; font-weight: 700;';
+        tag.textContent = '[CẢNH BÁO AN TOÀN]';
+        element.appendChild(tag);
       } else if (source === 'local_fallback') {
         const tag = document.createElement('div');
         tag.style.cssText = 'font-size: 10px; color: #0284c7; margin-bottom: 4px; font-weight: 700;';
@@ -9260,21 +9330,6 @@ if ($view === 'tester') {
       }
 
       streamStep();
-    }
-
-    function openAiKeyModal() {
-      const current = localStorage.getItem('openrouter_api_key') || '';
-      const key = prompt('Nhập OpenRouter API Key của bạn (bắt đầu bằng sk-or-v1-...) để sử dụng toàn bộ mô hình AI trực tuyến ngoài lề thoải mái (để trống để dùng bộ bách khoa tích hợp sẵn):', current);
-      if (key !== null) {
-        const trimmed = key.trim();
-        if (trimmed) {
-          localStorage.setItem('openrouter_api_key', trimmed);
-          alert('Đã lưu OpenRouter API Key thành công! Trợ lý AI sẽ kết nối trực tiếp với OpenRouter để trả lời mọi thông tin ngoài lề không giới hạn.');
-        } else {
-          localStorage.removeItem('openrouter_api_key');
-          alert('Đã xóa API Key tùy chỉnh. Trợ lý AI sẽ sử dụng động cơ bách khoa & tri thức tích hợp sẵn.');
-        }
-      }
     }
 
     function sendQuickPrompt(promptText) {
@@ -9340,7 +9395,7 @@ if ($view === 'tester') {
       fetch('/?action=ai_chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, apiKey: localStorage.getItem('openrouter_api_key') || '' })
+        body: JSON.stringify({ message: text })
       })
       .then(res => res.json())
       .then(data => {
