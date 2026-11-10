@@ -654,7 +654,7 @@ function fetchWikipediaKnowledge(string $query): ?string {
     if (!empty($desc)) {
         $out .= " (" . $desc . ")";
     }
-    $out .= "\\n\\n" . $extract;
+    $out .= "\n\n" . $extract;
     return cleanAiResponseText($out);
 }
 
@@ -666,7 +666,7 @@ function generateLocalAiResponse(string $msg, ?array $u, array $mockRecords, boo
     $fullName = $u ? $u['full_name'] : 'Khách vãng lai';
 
     // 1. Kiểm tra an ninh nghiêm ngặt: Bệnh nhân cố tình hỏi xem hồ sơ của người khác (Chống lỗ hổng IDOR)
-    if ($role === 'member') {
+    if ($role === 'member' || $role === 'guest') {
         if (
             str_contains($msgLower, 'bn_binh') || 
             str_contains($msgLower, 'bình') || 
