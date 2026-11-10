@@ -1099,6 +1099,41 @@ if ($action === 'ai_chat') {
     $aiResponse = '';
     $source = 'openrouter';
 
+    // Tiếp nhận và làm sạch lịch sử hội thoại đa lượt (Multi-turn Conversation History)
+    $clientHistory = is_array($data['history'] ?? null) ? $data['history'] : [];
+    $cleanHistory = [];
+    if (!empty($clientHistory)) {
+        $recentSlice = array_slice($clientHistory, -8);
+        foreach ($recentSlice as $item) {
+            if (!is_array($item)) continue;
+            $r = trim((string)($item['role'] ?? ''));
+            $c = trim((string)($item['content'] ?? ''));
+            if (($r === 'user' || $r === 'assistant') && !empty($c)) {
+                if (function_exists('mb_substr')) {
+                    $c = mb_substr($c, 0, 1000, 'UTF-8');
+                } else {
+                    $c = substr($c, 0, 1000);
+                }
+                $cleanHistory[] = [
+                    'role' => $r,
+                    'content' => cleanAiResponseText($c)
+                ];
+            }
+        }
+    }
+
+    // Ghép cấu trúc messages ngữ cảnh hoàn chỉnh bao gồm system prompt, lịch sử và câu hỏi hiện tại
+    $messagesPayload = [
+        ['role' => 'system', 'content' => $sysPrompt]
+    ];
+    foreach ($cleanHistory as $histItem) {
+        $messagesPayload[] = [
+            'role' => $histItem['role'],
+            'content' => $histItem['content']
+        ];
+    }
+    $messagesPayload[] = ['role' => 'user', 'content' => $userMsg];
+
     if (!empty($apiKey)) {
         $fallbackModels = [
             'google/gemma-4-31b-it:free',
@@ -1114,10 +1149,7 @@ if ($action === 'ai_chat') {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
                 'model' => $currentModel,
-                'messages' => [
-                    ['role' => 'system', 'content' => $sysPrompt],
-                    ['role' => 'user', 'content' => $userMsg]
-                ],
+                'messages' => $messagesPayload,
                 'temperature' => 0.5,
                 'max_tokens' => 1000
             ]));
@@ -8717,7 +8749,8 @@ if ($view === 'tester') {
           <span style="font-size: 15px; font-weight: 800; color: #fff; letter-spacing: 0.3px;">MEDIBOT</span>
         </div>
       </div>
-      <div>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button onclick="resetAiChat()" class="btn btn-outline" style="padding: 3px 8px; font-size: 11px; color: #bae6fd; border-color: rgba(186,230,253,0.35); background: transparent;" title="Xóa lịch sử và bắt đầu cuộc trò chuyện mới">Chat Mới</button>
         <button onclick="toggleAiChat()" class="btn btn-outline" style="padding: 3px 10px; font-size: 11px; color: #e0e7ff; border-color: rgba(255,255,255,0.3); background: transparent;">Đóng</button>
       </div>
     </div>
@@ -9084,6 +9117,7 @@ if ($view === 'tester') {
     // =========================================================================
     let aiChatInitialized = false;
     let isAiGenerating = false;
+    let aiChatHistory = [];
 
     // Khởi tạo các model 3D Robot Head (fayazara/robot-heads 3D Canvas)
     function init3DRobotHeads() {
@@ -9325,6 +9359,19 @@ if ($view === 'tester') {
       streamStep();
     }
 
+    function resetAiChat() {
+      if (isAiGenerating) return;
+      aiChatHistory = [];
+      const box = document.getElementById('aiChatMessages');
+      if (box) {
+        box.innerHTML = '';
+      }
+      aiChatInitialized = false;
+      initAiChatGreeting();
+      const input = document.getElementById('aiChatInput');
+      if (input) input.value = '';
+    }
+
     function sendQuickPrompt(promptText) {
       const input = document.getElementById('aiChatInput');
       if (!input) return;
@@ -9343,6 +9390,11 @@ if ($view === 'tester') {
 
       appendAiMessage('user', text);
       input.value = '';
+
+      // Chuẩn bị ngữ cảnh lịch sử trước đó (tối đa 8 lượt gần nhất)
+      const historyToSend = aiChatHistory.slice(-8);
+      // Nạp tin nhắn hiện tại của user vào lịch sử
+      aiChatHistory.push({ role: 'user', content: text });
 
       isAiGenerating = true;
       if (sendBtn) {
@@ -9388,12 +9440,17 @@ if ($view === 'tester') {
       fetch('/?action=ai_chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text, history: historyToSend })
       })
       .then(res => res.json())
       .then(data => {
         if (data.reply) {
           typewriterStream(botMsgDiv, data.reply, data.source, avatarCtrl, () => {
+            // Nạp câu trả lời của AI vào bộ nhớ hội thoại
+            aiChatHistory.push({ role: 'assistant', content: data.reply });
+            if (aiChatHistory.length > 10) {
+              aiChatHistory = aiChatHistory.slice(-10);
+            }
             isAiGenerating = false;
             if (sendBtn) {
               sendBtn.disabled = false;
@@ -9401,6 +9458,7 @@ if ($view === 'tester') {
             }
           });
         } else if (data.error) {
+          aiChatHistory.pop(); // Rút lại tin nhắn lỗi khỏi bộ nhớ
           botMsgDiv.textContent = '[LỖI] ' + sanitizeCleanAiText(data.error);
           window.setAiBotState('error');
           if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
@@ -9412,6 +9470,7 @@ if ($view === 'tester') {
         }
       })
       .catch(err => {
+        aiChatHistory.pop(); // Rút lại tin nhắn lỗi khi mất kết nối mạng
         botMsgDiv.textContent = '[LỖI MẠNG] Không thể kết nối máy chủ: ' + err;
         window.setAiBotState('error');
         if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
