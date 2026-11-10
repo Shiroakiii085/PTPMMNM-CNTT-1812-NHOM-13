@@ -7962,38 +7962,6 @@ if ($view === 'tester') {
                 </tbody>
               </table>
             </div>
-                <thead>
-                  <tr>
-                    <th>Mã Test</th>
-                    <th>Phương Thức & API</th>
-                    <th>Tài Khoản Thử Nghiệm</th>
-                    <th>Vai Trò</th>
-                    <th>Mô Tả Mục Tiêu Kiểm Thử</th>
-                    <th>Kỳ Vọng</th>
-                    <th>Kết Quả Thực Tế</th>
-                    <th>Trạng Thái</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($testCases as $tc): ?>
-                    <tr style="<?= $tc['code'] === 'R02' ? ($tc['status'] === 'FAIL' ? 'background: #fff1f2;' : 'background: #f0fdf4;') : '' ?>">
-                      <td><strong style="color: #0369a1;"><?= $tc['code'] ?></strong></td>
-                      <td><code><?= $tc['method'] ?> <?= $tc['api'] ?></code></td>
-                      <td><?= htmlspecialchars($tc['user']) ?></td>
-                      <td><span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 700;"><?= $tc['role'] ?></span></td>
-                      <td><?= htmlspecialchars($tc['desc']) ?></td>
-                      <td><code style="color: #334155;"><?= $tc['expect'] ?></code></td>
-                      <td style="font-size: 12px;"><?= htmlspecialchars($tc['actual']) ?></td>
-                      <td>
-                        <span style="font-weight: 800; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: <?= $tc['status'] === 'PASS' ? '#dcfce7' : '#fee2e2' ?>; color: <?= $tc['status'] === 'PASS' ? '#15803d' : '#b91c1c' ?>;">
-                          <?= $tc['status'] ?>
-                        </span>
-                      </td>
-                    </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
             <div id="testCasesPagination" class="pagination-wrap"></div>
           </div>
 
