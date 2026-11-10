@@ -2553,6 +2553,23 @@ if ($view === 'error') {
     .ai-mascot-card canvas:active {
       cursor: grabbing;
     }
+    @keyframes aiFadeInUp {
+      0% {
+        opacity: 0;
+        filter: blur(2px);
+        transform: translateY(2px);
+      }
+      100% {
+        opacity: 1;
+        filter: blur(0);
+        transform: translateY(0);
+      }
+    }
+    .ai-fade-token {
+      display: inline;
+      animation: aiFadeInUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+      will-change: opacity, transform, filter;
+    }
     .ai-typing-cursor {
       display: inline-block;
       color: #6366f1;
@@ -2561,6 +2578,7 @@ if ($view === 'error') {
       animation: cursorBlink 0.65s infinite;
       line-height: 1;
       font-size: 14px;
+      vertical-align: baseline;
     }
     @keyframes cursorBlink {
       0%, 100% { opacity: 1; transform: scaleY(1); }
@@ -2568,6 +2586,8 @@ if ($view === 'error') {
     }
     .ai-msg-content {
       line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .ai-chat-msg.bot {
       display: flex;
@@ -9588,7 +9608,7 @@ if ($view === 'tester') {
         let tagDiv = null;
         const contentDiv = document.createElement('div');
         contentDiv.className = 'ai-msg-content';
-        contentDiv.style.whiteSpace = 'pre-line';
+        contentDiv.style.whiteSpace = 'pre-wrap';
         contentDiv.style.wordBreak = 'break-word';
         contentDiv.style.lineHeight = '1.6';
 
@@ -9596,8 +9616,8 @@ if ($view === 'tester') {
         cursorSpan.className = 'ai-typing-cursor';
         cursorSpan.textContent = '▌';
 
+        contentDiv.appendChild(cursorSpan);
         botMsgDiv.appendChild(contentDiv);
-        botMsgDiv.appendChild(cursorSpan);
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -9605,10 +9625,83 @@ if ($view === 'tester') {
         let streamBuffer = '';
         let currentSource = '';
 
+        const tokenQueue = [];
+        let networkDone = false;
+        let isFinalized = false;
+        let typingInterval = null;
+
         window.setAiBotState('speaking');
         if (avatarCtrl && avatarCtrl.setState) {
           avatarCtrl.setState('speaking');
         }
+
+        function finalizeBotMessage() {
+          if (isFinalized) return;
+          isFinalized = true;
+          if (typingInterval) {
+            clearInterval(typingInterval);
+            typingInterval = null;
+          }
+          if (cursorSpan && cursorSpan.parentNode) {
+            cursorSpan.parentNode.removeChild(cursorSpan);
+          }
+          if (box) box.scrollTop = box.scrollHeight;
+
+          const cleanFinal = sanitizeCleanAiText(accumulatedText);
+          if (cleanFinal.trim()) {
+            contentDiv.textContent = cleanFinal;
+            aiChatHistory.push({ role: 'assistant', content: cleanFinal });
+            if (aiChatHistory.length > 10) {
+              aiChatHistory = aiChatHistory.slice(-10);
+            }
+          } else {
+            contentDiv.textContent = '[THÔNG BÁO] Không nhận được phản hồi từ mô hình. Vui lòng thử lại!';
+            window.setAiBotState('error');
+            if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
+          }
+
+          window.setAiBotState('happy');
+          if (avatarCtrl && avatarCtrl.setState) {
+            avatarCtrl.setState('happy');
+          }
+          setTimeout(() => {
+            window.setAiBotState('idle');
+            if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('idle');
+          }, 1800);
+
+          isAiGenerating = false;
+          if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerText = 'Gửi';
+          }
+        }
+
+        function drainQueue() {
+          if (tokenQueue.length === 0) {
+            if (networkDone) {
+              finalizeBotMessage();
+            }
+            return;
+          }
+
+          // Điều tiết tốc độ gõ chữ thích ứng: gõ đều từng từ/ký tự mượt mà kèm hiệu ứng fade
+          const count = tokenQueue.length > 30 ? 4 : (tokenQueue.length > 10 ? 2 : 1);
+          for (let i = 0; i < count && tokenQueue.length > 0; i++) {
+            const token = tokenQueue.shift();
+            accumulatedText += token;
+
+            const span = document.createElement('span');
+            span.className = 'ai-fade-token';
+            span.textContent = token;
+            contentDiv.insertBefore(span, cursorSpan);
+          }
+
+          if (box) {
+            box.scrollTop = box.scrollHeight;
+          }
+        }
+
+        typingInterval = setInterval(drainQueue, 22);
 
         while (true) {
           const { done, value } = await reader.read();
@@ -9645,47 +9738,25 @@ if ($view === 'tester') {
                 }
               }
               if (dataObj.delta) {
-                accumulatedText += dataObj.delta;
-                contentDiv.textContent = sanitizeCleanAiText(accumulatedText);
-                if (box) box.scrollTop = box.scrollHeight;
+                // Phân tách các từ và khoảng trắng để hiển thị dần dần và mượt mà
+                const pieces = dataObj.delta.match(/(\r?\n|[^\S\r\n]+|\S+)/g) || [dataObj.delta];
+                for (let p of pieces) {
+                  tokenQueue.push(p);
+                }
               }
             } catch(e) {}
           }
         }
 
-        if (cursorSpan && cursorSpan.parentNode) {
-          cursorSpan.parentNode.removeChild(cursorSpan);
-        }
-        if (box) box.scrollTop = box.scrollHeight;
-
-        const cleanFinal = sanitizeCleanAiText(accumulatedText);
-        if (cleanFinal.trim()) {
-          aiChatHistory.push({ role: 'assistant', content: cleanFinal });
-          if (aiChatHistory.length > 10) {
-            aiChatHistory = aiChatHistory.slice(-10);
-          }
-        } else {
-          contentDiv.textContent = '[THÔNG BÁO] Không nhận được phản hồi từ mô hình. Vui lòng thử lại!';
-          window.setAiBotState('error');
-          if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('error');
-        }
-
-        window.setAiBotState('happy');
-        if (avatarCtrl && avatarCtrl.setState) {
-          avatarCtrl.setState('happy');
-        }
-        setTimeout(() => {
-          window.setAiBotState('idle');
-          if (avatarCtrl && avatarCtrl.setState) avatarCtrl.setState('idle');
-        }, 1800);
-
-        isAiGenerating = false;
-        if (sendBtn) {
-          sendBtn.disabled = false;
-          sendBtn.innerText = 'Gửi';
+        networkDone = true;
+        if (tokenQueue.length === 0) {
+          finalizeBotMessage();
         }
       })
       .catch(err => {
+        if (typeof typingInterval !== 'undefined' && typingInterval) {
+          clearInterval(typingInterval);
+        }
         aiChatHistory.pop();
         botMsgDiv.textContent = '[LỖI MẠNG] Không thể kết nối máy chủ: ' + err;
         window.setAiBotState('error');
