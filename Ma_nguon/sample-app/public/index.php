@@ -1018,18 +1018,18 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
     $data = json_decode((string)$rawInput, true) ?: [];
     $userMsg = trim($data['message'] ?? $_POST['message'] ?? '');
     // Cho phép đổi model nhưng KHÔNG nhận API key từ client gửi lên (cố định dùng API key hệ thống)
-    $chosenModel = trim($data['model'] ?? $_POST['model'] ?? 'google/gemma-4-31b-it:free');
+    $chosenModel = trim($data['model'] ?? $_POST['model'] ?? 'nvidia/nemotron-3.5-lightning:free');
     
-    // Đảm bảo model thuộc danh sách các model free thông minh nhất về tra cứu kiến thức
+    // Đảm bảo model thuộc danh sách các model free thông minh và ổn định ít bị nghẽn
     $allowedModels = [
-        'google/gemma-4-31b-it:free',
-        'openrouter/free',
         'nvidia/nemotron-3.5-lightning:free',
         'google/gemma-4-26b-a4b-it:free',
         'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'google/gemma-4-31b-it:free',
+        'openrouter/free',
     ];
     if (!in_array($chosenModel, $allowedModels, true)) {
-        $chosenModel = 'google/gemma-4-31b-it:free';
+        $chosenModel = 'nvidia/nemotron-3.5-lightning:free';
     }
     
     if ($userMsg === '') {
@@ -1190,11 +1190,11 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
     $messagesPayload[] = ['role' => 'user', 'content' => $userMsg];
 
     $fallbackModels = [
-        'google/gemma-4-31b-it:free',
-        'openrouter/free',
         'nvidia/nemotron-3.5-lightning:free',
         'google/gemma-4-26b-a4b-it:free',
         'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'google/gemma-4-31b-it:free',
+        'openrouter/free',
     ];
 
     // PHƯƠNG ÁN 1: STREAMING THỜI GIAN THỰC (SERVER-SENT EVENTS - TỪNG CHỮ HIỆN RA NGAY KHI AI NGHĨ)
@@ -1202,6 +1202,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
         $streamSuccess = false;
         if (!empty($apiKey)) {
             foreach ($fallbackModels as $currentModel) {
+                $streamTokenCount = 0;
                 $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
                 curl_setopt($ch, CURLOPT_POST, true);
@@ -1209,7 +1210,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                     'model' => $currentModel,
                     'messages' => $messagesPayload,
                     'temperature' => 0.5,
-                    'max_tokens' => 850,
+                    'max_tokens' => 700,
                     'stream' => true
                 ]));
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1218,10 +1219,11 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                     'HTTP-Referer: https://medirecord-emr.abrdns.com',
                     'X-Title: MediRecord EMR Assistant'
                 ]);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 6);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 18);
 
                 $streamBuffer = '';
-                curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$streamBuffer, &$streamSuccess) {
+                curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$streamBuffer, &$streamTokenCount) {
                     $streamBuffer .= $chunk;
                     while (($pos = strpos($streamBuffer, "\n")) !== false) {
                         $line = trim(substr($streamBuffer, 0, $pos));
@@ -1229,15 +1231,12 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                         if (str_starts_with($line, 'data: ')) {
                             $payload = substr($line, 6);
                             if ($payload === '[DONE]') {
-                                echo "data: [DONE]\n\n";
-                                @flush();
-                                $streamSuccess = true;
                                 continue;
                             }
                             $json = json_decode($payload, true);
                             $delta = $json['choices'][0]['delta']['content'] ?? '';
                             if ($delta !== '') {
-                                $streamSuccess = true;
+                                $streamTokenCount++;
                                 echo "data: " . json_encode(['delta' => $delta, 'source' => 'openrouter'], JSON_UNESCAPED_UNICODE) . "\n\n";
                                 @flush();
                             }
@@ -1250,7 +1249,10 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                 $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 curl_close($ch);
 
-                if ($streamSuccess && $code >= 200 && $code < 300) {
+                if ($streamTokenCount > 0 && $code >= 200 && $code < 300) {
+                    $streamSuccess = true;
+                    echo "data: [DONE]\n\n";
+                    @flush();
                     break;
                 }
             }
@@ -1285,7 +1287,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                 'model' => $currentModel,
                 'messages' => $messagesPayload,
                 'temperature' => 0.5,
-                'max_tokens' => 850
+                'max_tokens' => 700
             ]));
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
@@ -1293,6 +1295,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                 'HTTP-Referer: https://medirecord-emr.abrdns.com',
                 'X-Title: MediRecord EMR Assistant'
             ]);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
             curl_setopt($ch, CURLOPT_TIMEOUT, 12);
             $res = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
