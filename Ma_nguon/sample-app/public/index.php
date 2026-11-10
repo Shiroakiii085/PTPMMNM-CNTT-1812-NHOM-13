@@ -1142,9 +1142,10 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
         . "QUY TẮC AN TOÀN BẮT BUỘC (NGHIÊM CẤM TRA CỨU MỤC NGUY HIỂM):\n"
         . "- TUYỆT ĐỐI TỪ CHỐI cung cấp thông tin, hướng dẫn hoặc cách thức liên quan đến: chất cấm, ma túy, chất nổ, vũ khí nguy hiểm, hóa chất độc hại, hoặc các hành vi tự làm hại bản thân / tự tử / tự sát. Hãy từ chối kiên quyết và khuyên người dùng tìm kiếm trợ giúp khẩn cấp y tế (115, 111).\n\n"
         . "QUY TẮC TRẢ LỜI CỦA AI:\n"
-        . "1. NGUYÊN TẮC TRẢ LỜI TOÀN DIỆN, ĐỦ Ý & GIÀU THÔNG TIN (ƯU TIÊN HÀNG ĐẦU):\n"
-        . "   - HÃY TRẢ LỜI ĐẦY ĐỦ Ý, CHI TIẾT, TOÀN DIỆN VÀ SÂU SẮC. Giải thích cặn kẽ các khía cạnh cần thiết của vấn đề, phân tích nguyên nhân, cơ chế hoặc bối cảnh liên quan để người dùng nhận được câu trả lời phong phú, hữu ích và thỏa đáng nhất.\n"
-        . "   - Trình bày mạch lạc, chia đoạn hợp lý kết hợp với các dấu gạch đầu dòng (-) khi liệt kê luận điểm hoặc phân loại, giúp người đọc nắm bắt trọn vẹn thông tin mà không bị thiếu hụt kiến thức.\n\n"
+        . "1. NGUYÊN TẮC ĐIỀU TIẾT DUNG LƯỢNG, TOÀN DIỆN & TRỌN VẸN Ý (ƯU TIÊN BẮT BUỘC SỐ 1):\n"
+        . "   - HÃY TRẢ LỜI ĐỦ Ý, CHI TIẾT VÀ SÂU SẮC, phân tích rõ ràng nguyên nhân, cơ chế hoặc dữ liệu cần thiết với bố cục khoa học (kết hợp các dấu gạch đầu dòng - khi liệt kê luận điểm).\n"
+        . "   - KIỂM SOÁT DUNG LƯỢNG CHỦ ĐỘNG: Phân bổ dung lượng câu trả lời trong khoảng 300 đến 450 từ (tối đa không quá 550 từ). Hãy luôn chủ động dành không gian dự phòng để viết phần kết luận hoặc tóm lược trọn vẹn.\n"
+        . "   - TUYỆT ĐỐI KHÔNG mở thêm nhánh ý mới khi dung lượng đã dài; LUÔN CHỦ ĐỘNG KẾT BÀI bằng câu chốt hoặc lời khuyên hoàn chỉnh. TUYỆT ĐỐI KHÔNG BAO GIỜ để câu văn bị đứt ngang, cụt lửng hay dang dở; luôn kết thúc bằng dấu chấm câu đàng hoàng (., !, ?).\n\n"
         . "2. NGOÀI CÁC MỤC GÂY NGUY HIỂM BỊ CẤM Ở TRÊN VÀ QUY TẮC BẢO VỆ BỆNH ÁN:\n"
         . "   - BẠN ĐƯỢC PHÉP VÀ KHUYẾN KHÍCH TỰ DO, THOẢI MÁI TRA CỨU, GIẢI ĐÁP TOÀN DIỆN MỌI THÔNG TIN NGOÀI LỀ (KHOA HỌC, ĐỜI SỐNG, CÔNG NGHỆ, LẬP TRÌNH, TOÁN HỌC, LỊCH SỬ, VĂN HÓA, ĐỊA LÝ, NGHỆ THUẬT, BÁCH KHOA TOÀN THƯ...) MÀ KHÔNG BỊ BẤT KỲ BỘ LỌC HAY GIỚI HẠN NÀO NGĂN CẢN.\n\n"
         . "3. VỚI CÂU HỎI VỀ HỆ THỐNG MEDIRECORD EMR:\n"
@@ -1210,7 +1211,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                     'model' => $currentModel,
                     'messages' => $messagesPayload,
                     'temperature' => 0.5,
-                    'max_tokens' => 700,
+                    'max_tokens' => 1000,
                     'stream' => true
                 ]));
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1220,7 +1221,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                     'X-Title: MediRecord EMR Assistant'
                 ]);
                 curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 6);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 18);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 25);
 
                 $streamBuffer = '';
                 curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $chunk) use (&$streamBuffer, &$streamTokenCount) {
@@ -1287,7 +1288,7 @@ if ($action === 'ai_chat' || $action === 'ai_chat_stream') {
                 'model' => $currentModel,
                 'messages' => $messagesPayload,
                 'temperature' => 0.5,
-                'max_tokens' => 700
+                'max_tokens' => 1000
             ]));
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
